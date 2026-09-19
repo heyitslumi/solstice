@@ -1,5 +1,6 @@
 import {
   ArrowClockwise,
+  CaretRight,
   Cpu,
   DotsThreeVertical,
   GearSix,
@@ -8,11 +9,12 @@ import {
   LinuxLogo,
   Play,
   Plus,
-  Power,
+  Square,
   Terminal,
 } from '@phosphor-icons/react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
@@ -197,41 +199,16 @@ export function DashboardPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-center">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => togglePower(srv.id)}
-                        className={`text-[12px] ${
-                          isRunning ? 'hover:text-amber-400' : 'hover:text-emerald-400'
-                        }`}
-                      >
-                        {isRunning ? (
-                          <>
-                            <Power size={14} aria-hidden />
-                            Stop
-                          </>
-                        ) : (
-                          <>
-                            <Play size={14} aria-hidden />
-                            Start
-                          </>
-                        )}
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={!isRunning}
-                        title={isRunning ? 'Connect to interactive console' : 'Start server to open console'}
-                      >
-                        <Terminal size={14} aria-hidden />
-                        Console
-                      </Button>
-
+                    <div className="flex items-center gap-1.5 self-end sm:self-center">
                       <DropdownMenu.Root>
                         <DropdownMenu.Trigger asChild>
-                          <Button size="icon" variant="ghost" className="size-8">
+                          <Button
+                            size="icon"
+                            variant="secondary"
+                            className="size-8 rounded-control"
+                            aria-label="Power Action"
+                            title="Power Action"
+                          >
                             <DotsThreeVertical size={16} weight="bold" aria-hidden />
                           </Button>
                         </DropdownMenu.Trigger>
@@ -239,22 +216,68 @@ export function DashboardPage() {
                           <DropdownMenu.Content
                             align="end"
                             sideOffset={4}
-                            className="z-50 min-w-[10rem] rounded-control border border-border bg-surface p-1 shadow-xl"
+                            className="z-50 min-w-[9.5rem] rounded-control border border-border bg-surface p-1 shadow-xl"
                           >
                             <DropdownMenu.Item
-                              className="flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-surface-2"
-                              onSelect={() => togglePower(srv.id)}
+                              disabled={isRunning}
+                              className={`flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 text-[13px] outline-none ${
+                                isRunning
+                                  ? 'text-fg-subtle/50 opacity-40 cursor-not-allowed'
+                                  : 'text-fg data-[highlighted]:bg-surface-2'
+                              }`}
+                              onSelect={() => {
+                                if (!isRunning) togglePower(srv.id)
+                              }}
+                            >
+                              <Play size={14} weight="fill" aria-hidden />
+                              Start
+                            </DropdownMenu.Item>
+
+                            <DropdownMenu.Item
+                              disabled={!isRunning}
+                              className={`flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 text-[13px] outline-none ${
+                                !isRunning
+                                  ? 'text-fg-subtle/50 opacity-40 cursor-not-allowed'
+                                  : 'text-fg data-[highlighted]:bg-surface-2'
+                              }`}
+                              onSelect={() => {
+                                if (isRunning) {
+                                  // toggle restart mock
+                                  setServers((prev) =>
+                                    prev.map((s) => (s.id === srv.id ? { ...s, status: 'running' } : s)),
+                                  )
+                                }
+                              }}
                             >
                               <ArrowClockwise size={14} aria-hidden />
                               Restart
                             </DropdownMenu.Item>
-                            <DropdownMenu.Item className="flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 text-[13px] text-fg outline-none data-[highlighted]:bg-surface-2">
-                              <GearSix size={14} aria-hidden />
-                              Settings
+
+                            <DropdownMenu.Item
+                              disabled={!isRunning}
+                              className={`flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 text-[13px] outline-none ${
+                                !isRunning
+                                  ? 'text-danger/40 opacity-40 cursor-not-allowed'
+                                  : 'text-danger data-[highlighted]:bg-danger-surface'
+                              }`}
+                              onSelect={() => {
+                                if (isRunning) togglePower(srv.id)
+                              }}
+                            >
+                              <Square size={14} weight="fill" className="text-danger" aria-hidden />
+                              Stop
                             </DropdownMenu.Item>
                           </DropdownMenu.Content>
                         </DropdownMenu.Portal>
                       </DropdownMenu.Root>
+
+                      <Link
+                        to={`/servers/${srv.id}`}
+                        aria-label={`Open ${srv.name}`}
+                        className="flex size-8 items-center justify-center rounded-control text-fg-subtle transition-colors duration-150 hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
+                      >
+                        <CaretRight size={16} weight="bold" aria-hidden />
+                      </Link>
                     </div>
                   </article>
                 )
