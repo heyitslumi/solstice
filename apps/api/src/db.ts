@@ -3,7 +3,15 @@ import { Pool } from 'pg'
 const connectionString =
   process.env.DATABASE_URL ?? 'postgres://solstice:password@127.0.0.1:5433/solstice'
 
-export const pool = new Pool({ connectionString })
+export const pool = new Pool({
+  connectionString,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30000,
+})
+
+pool.on('error', (err) => {
+  console.error('[db] idle client pool error:', err.message)
+})
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS users (

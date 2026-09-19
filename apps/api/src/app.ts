@@ -348,6 +348,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
   const app = new Hono()
   const store = options.rateLimitStore ?? createRateLimitStore()
 
+  app.onError((err, c) => {
+    console.error(`[api error] ${c.req.method} ${c.req.url}:`, err)
+    return c.json({ message: 'Internal server error.' }, 500)
+  })
+
   app.post('/api/auth/register', async (c) => {
     const limit = await store.hit(`register:${clientKey(c)}`, 10, 15 * 60 * 1000)
     if (!limit.allowed) {
