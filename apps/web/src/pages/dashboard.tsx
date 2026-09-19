@@ -1,8 +1,10 @@
 import {
   ArrowClockwise,
+  ArrowsDownUp,
   CaretRight,
   Cpu,
   DotsThreeVertical,
+  Gauge,
   GearSix,
   HardDrive,
   HardDrives,
@@ -33,6 +35,9 @@ interface MockServer {
   disk: string
   uptime: string
   region: string
+  cpuUsage: number
+  ramUsage: number
+  bandwidth: string
 }
 
 const MOCK_SERVERS: MockServer[] = [
@@ -49,6 +54,9 @@ const MOCK_SERVERS: MockServer[] = [
     disk: '80 GB NVMe',
     uptime: '14d 6h 32m',
     region: 'Frankfurt (fra-01)',
+    cpuUsage: 18,
+    ramUsage: 42,
+    bandwidth: '2.4 TB',
   },
   {
     id: 'inst-3e41a8',
@@ -63,6 +71,9 @@ const MOCK_SERVERS: MockServer[] = [
     disk: '25 GB NVMe',
     uptime: '4d 18h 12m',
     region: 'Frankfurt (fra-01)',
+    cpuUsage: 6,
+    ramUsage: 28,
+    bandwidth: '410 GB',
   },
 ]
 
@@ -196,6 +207,51 @@ export function DashboardPage() {
                           <span>·</span>
                           <span className="text-fg">{srv.ip4}</span>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Middle: Live telemetry metrics that make purposeful use of horizontal screen real estate */}
+                    <div className="hidden grid-cols-3 gap-6 rounded-control border border-border/50 bg-surface-2/30 px-4 py-2.5 xl:grid">
+                      <div className="flex flex-col gap-1 min-w-[7.5rem]">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="flex items-center gap-1 text-fg-subtle">
+                            <Cpu size={12} aria-hidden />
+                            CPU Load
+                          </span>
+                          <span className="font-mono text-fg">{isRunning ? `${srv.cpuUsage}%` : '0%'}</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+                          <div
+                            className="h-full rounded-full bg-accent transition-all duration-300"
+                            style={{ width: isRunning ? `${srv.cpuUsage}%` : '0%' }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1 min-w-[7.5rem]">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="flex items-center gap-1 text-fg-subtle">
+                            <Gauge size={12} aria-hidden />
+                            Memory
+                          </span>
+                          <span className="font-mono text-fg">{isRunning ? `${srv.ramUsage}%` : '0%'}</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+                          <div
+                            className="h-full rounded-full bg-sky-500 transition-all duration-300"
+                            style={{ width: isRunning ? `${srv.ramUsage}%` : '0%' }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col justify-center min-w-[6.5rem]">
+                        <span className="flex items-center gap-1 text-[11px] text-fg-subtle">
+                          <ArrowsDownUp size={12} aria-hidden />
+                          Bandwidth
+                        </span>
+                        <span className="font-mono text-[12px] font-medium text-fg">
+                          {srv.bandwidth}
+                        </span>
                       </div>
                     </div>
 
