@@ -1,0 +1,21 @@
+{
+  "name": "solstice-host",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @solstice/web",
+    "dev:api": "npm run dev --workspace @solstice/api",
+    "dev:all": "npm run dev:api & npm run dev",
+    "build": "npm run build --workspace @solstice/web",
+    "lint": "npm run lint --workspace @solstice/web",
+    "test": "npm run test --workspace @solstice/api",
+    "typecheck": "npm run build --workspace @solstice/web && tsc -p apps/api/tsconfig.json"
+  },
+  "devDependencies": {
+    "agentation-mcp": "^1.2.0"
+  }
+}

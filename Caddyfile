@@ -1,0 +1,16 @@
+# Serves the Vite dev server on the public dev host with automatic TLS.
+#
+# Basic auth gates the WHOLE site, because a Vite dev server exposes source
+# files, Vite's internals and the API — none of which should be reachable
+# unauthenticated on a public hostname.
+#
+# Rotate the password with:
+#   caddy hash-password --plaintext '<new password>'
+# then replace the hash below and run: sudo systemctl reload caddy-dev
+vps.dev.solstice.host {
+	basic_auth {
+		solstice $2a$14$b7mTUZ1YU7S6dfPuHwJq9un9ZGk0RpWT7dxzWXJLFCb64KRoW/DE.
+	}
+
+	reverse_proxy [::1]:5173
+}

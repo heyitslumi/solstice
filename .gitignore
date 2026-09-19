@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.playwright-mcp/
+.omo/
+
+# Local database (PGlite data directory)
+apps/api/data/
+
+*.local
+.DS_Store
+*.log
+
+# Secrets. `.env.example` is the committed template.
+.env
+.env.*
+!.env.example

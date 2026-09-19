@@ -1,0 +1,22 @@
+{
+  "name": "@solstice/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --watch src/index.ts",
+    "start": "node --env-file-if-exists=.env src/index.ts",
+    "test": "node --env-file-if-exists=.env --test src/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.5",
+    "@simplewebauthn/server": "^14.0.2",
+    "hono": "^4.10.2",
+    "nodemailer": "^10.0.10",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
+    "@types/pg": "^8.23.1"
+  }
+}
