@@ -46,9 +46,9 @@ export function DashboardPage() {
         </Button>
       }
     >
-      <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid w-full gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
         <Panel title="Your servers">
-          <div className="flex flex-col items-center gap-3 px-5 py-16 text-center">
+          <div className="flex flex-col items-center justify-center gap-3 px-5 py-24 text-center">
             <span className="flex size-11 items-center justify-center rounded-control bg-surface-2 text-fg-subtle">
               <Terminal size={20} aria-hidden />
             </span>
