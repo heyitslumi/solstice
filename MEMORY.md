@@ -72,3 +72,6 @@ The LAN address is `192.168.50.20` behind gateway `192.168.50.1`, while the publ
 ## An LSP diagnostic inside a file is real; one past its end is stale
 Check the reported line against the file's length before dismissing it: `api.ts:227` in a 225-line file is a leftover from an older, longer version, while `app-shell.tsx:114 ')' expected` in a 200-line file is the truth. The second kind was dismissed as stale for several turns while the app sat blank, because `app-shell.tsx` wraps every authenticated route, so a single JSX imbalance takes the whole app down at once — Vite serves a 500 and `#root` stays empty.
 
+## WSL2 idle timeout will kill background services
+On Windows with WSL2, the Linux VM shuts down when idle after ~15-30s if no foreground shell is active (`vmIdleTimeout`). This shuts down systemd, Postgres, and the API, causing Vite's proxy to return `502 Bad Gateway`. Fix: set `vmIdleTimeout=-1` in `%USERPROFILE%\.wslconfig` and keep a hidden background process running (`wsl -d Debian -- sleep infinity`).
+
