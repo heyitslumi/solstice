@@ -227,20 +227,23 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
           })}
 
           {user?.isAdmin ? (
-            <Link
-              to="/admin"
-              onClick={(e) => handleLinkClick(e, '/admin')}
-              aria-current={pathname === '/admin' ? 'page' : undefined}
-              className={cn(
-                'mt-4 flex items-center gap-2.5 border-t border-border pt-4 text-[13px] transition-colors duration-150',
-                pathname === '/admin'
-                  ? 'font-medium text-sun-500'
-                  : 'text-fg-muted hover:text-sun-500',
-              )}
-            >
-              <ShieldStar size={17} aria-hidden />
-              Admin
-            </Link>
+            <>
+              <div className="my-2 h-px bg-border" />
+              <Link
+                to="/admin"
+                onClick={(e) => handleLinkClick(e, '/admin')}
+                aria-current={pathname.startsWith('/admin') ? 'page' : undefined}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] transition-colors duration-150',
+                  pathname.startsWith('/admin')
+                    ? 'bg-surface-2 font-medium text-fg'
+                    : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+                )}
+              >
+                <ShieldStar size={17} aria-hidden />
+                Admin
+              </Link>
+            </>
           ) : null}
         </nav>
       )}
