@@ -16,6 +16,23 @@ export interface ApiUser {
 
 export type LoginResponse = { ok: true; needsName?: boolean }
 
+export interface ApiActivity {
+  id: string
+  action: string
+  details: string
+  ipAddress: string | null
+  createdAt: string
+}
+
+export interface ApiEmailLog {
+  id: string
+  recipient: string
+  subject: string
+  bodyText: string
+  status: string
+  createdAt: string
+}
+
 export interface ApiSession {
   createdAt: string
   expiresAt: string
@@ -180,11 +197,47 @@ export const api = {
     return request<{ sessions: { id: string; isCurrent: boolean; userAgent: string | null; createdAt: string; expiresAt: string }[] }>('/api/auth/sessions')
   },
 
+  listActivities(params?: { limit?: number; offset?: number }) {
+    const q = new URLSearchParams()
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.offset) q.set('offset', String(params.offset))
+    const query = q.toString() ? `?${q.toString()}` : ''
+    return request<{ total: number; activities: ApiActivity[] }>(`/api/auth/activity${query}`)
+  },
+
+  listEmails(params?: { limit?: number; offset?: number }) {
+    const q = new URLSearchParams()
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.offset) q.set('offset', String(params.offset))
+    const query = q.toString() ? `?${q.toString()}` : ''
+    return request<{ total: number; emails: ApiEmailLog[] }>(`/api/auth/emails${query}`)
+  },
+
+  clearEmails() {
+    return request<{ ok: true }>('/api/auth/emails', { method: 'DELETE' })
+  },
+
+  deleteEmail(id: string) {
+    return request<{ ok: true }>(`/api/auth/emails/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  },
+
   revokeSession(id: string) {
     return request<{ ok: true }>(`/api/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
   },
 
-  deleteAccount() {
-    return request<{ ok: true }>('/api/auth/account', { method: 'DELETE' })
+  requestAccountDeletion() {
+    return post<{ ok: true; email: string }>('/api/auth/delete-account/request')
+  },
+
+  deleteAccount(input: { code: string; confirmation: string }) {
+    return request<{ ok: true }>('/api/auth/account', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  },
+
+  exportData() {
+    return request<Record<string, unknown>>('/api/auth/export-data')
   },
 }

@@ -24,7 +24,7 @@ function initials(name: string) {
 const ITEM =
   'flex cursor-default items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] outline-none'
 
-export function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
+export function UserMenu({ onNavigate }: { onNavigate?: (to?: string) => void }) {
   const { user, signOut } = useSession()
   const { theme, setTheme } = useTheme()
   const navigate = useNavigate()
@@ -36,6 +36,12 @@ export function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
       <div className="flex items-center gap-1.5 rounded-control border border-border bg-surface-2/40 p-1.5">
         <Link
           to="/account"
+          onClick={(e) => {
+            if (onNavigate) {
+              e.preventDefault()
+              onNavigate('/account')
+            }
+          }}
           className="flex min-w-0 flex-1 items-center gap-2.5 rounded-control px-1 py-1 transition-colors duration-150 hover:bg-surface-2"
         >
           {user?.avatarUrl ? (
@@ -73,8 +79,11 @@ export function UserMenu({ onNavigate }: { onNavigate?: () => void }) {
           <DropdownMenu.Item
             className={`${ITEM} text-fg data-[highlighted]:bg-surface-2`}
             onSelect={() => {
-              onNavigate?.()
-              navigate('/account')
+              if (onNavigate) {
+                onNavigate('/account')
+              } else {
+                navigate('/account')
+              }
             }}
           >
             <UserCircle size={16} aria-hidden />

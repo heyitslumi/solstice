@@ -37,6 +37,7 @@ import {
   verifyRegistration,
 } from './passkeys.ts'
 import { createMemoryStore, createSqlStore, type RateLimitStore } from './rate-limit.ts'
+import { generateNumericCode, hashSecret, matchesSecret } from './secret.ts'
 import {
   SESSION_COOKIE,
   SESSION_TTL_LONG_MS,
@@ -110,6 +111,28 @@ function publicUser(row: UserRow) {
     avatarUrl: row.avatar_url ?? null,
     emailVerifiedAt: row.email_verified_at ? toIso(row.email_verified_at) : null,
     createdAt: toIso(row.created_at),
+  }
+}
+
+export async function logActivity(userId: string, action: string, details: string, ip?: string) {
+  try {
+    await query(
+      'INSERT INTO activity_logs (id, user_id, action, details, ip_address) VALUES ($1, $2, $3, $4, $5)',
+      [randomUUID(), userId, action, details, ip ?? null],
+    )
+  } catch (err) {
+    console.error('[activity-log] failed:', err)
+  }
+}
+
+export async function logEmail(recipient: string, subject: string, bodyText: string, userId?: string) {
+  try {
+    await query(
+      'INSERT INTO email_logs (id, user_id, recipient, subject, body_text, status) VALUES ($1, $2, $3, $4, $5, $6)',
+      [randomUUID(), userId ?? null, recipient, subject, bodyText, 'sent'],
+    )
+  } catch (err) {
+    console.error('[email-log] failed:', err)
   }
 }
 
@@ -195,10 +218,12 @@ async function sendVerificationCode(user: UserRow) {
     `?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(verification.linkToken)}`
 
   try {
-    const sent = await sendMail({
+    const mailMsg = {
       to: user.email,
       ...verificationEmail(verification.code, link),
-    })
+    }
+    const sent = await sendMail(mailMsg)
+    await logEmail(user.email, mailMsg.subject, mailMsg.text, user.id)
     console.log(
       sent.filePath
         ? `[verify email] ${user.email} -> ${sent.filePath}`
@@ -222,6 +247,7 @@ async function confirmAccount(c: Context, userId: string, remember: boolean) {
     c.req.header('user-agent'),
   )
   setSessionCookie(c, session.token, session.expiresAt, remember)
+  await logActivity(userId, 'login', 'User verified email and signed in', clientKey(c))
 
   return publicUser(confirmed)
 }
@@ -259,7 +285,9 @@ function loginEmail(link: string, code: string) {
 }
 
 async function sendLoginEmail(user: UserRow, link: string, code: string) {
-  const sent = await sendMail({ to: user.email, ...loginEmail(link, code) })
+  const mailMsg = { to: user.email, ...loginEmail(link, code) }
+  const sent = await sendMail(mailMsg)
+  await logEmail(user.email, mailMsg.subject, mailMsg.text, user.id)
   console.log(
     sent.filePath
       ? `[login] ${user.email} -> ${sent.filePath}`
@@ -322,6 +350,29 @@ function emailChangeDoneEmail(oldEmail: string, newEmail: string) {
       `<p>The sign-in address on your Solstice account is now <strong>${newEmail}</strong>.</p>`,
       `<p>${oldEmail} no longer reaches this account.</p>`,
       '<p>If this was not you, sign in at the new address and move it back.</p>',
+    ].join('\n'),
+  }
+}
+
+function deletionEmail(code: string) {
+  return {
+    subject: 'Confirm deletion of your Solstice account',
+    text: [
+      'You requested to permanently delete your Solstice account.',
+      '',
+      'Enter this code to confirm deletion:',
+      '',
+      code,
+      '',
+      'This code expires in 15 minutes. Once confirmed, all your instances, SSH keys, sessions, and data will be destroyed immediately.',
+      'If you did not make this request, you can ignore this email and your account remains safe.',
+    ].join('\n'),
+    html: [
+      '<p>You requested to permanently delete your Solstice account.</p>',
+      '<p>Enter this code to confirm deletion:</p>',
+      `<p style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:26px;letter-spacing:0.18em"><strong>${code}</strong></p>`,
+      '<p>This code expires in 15 minutes. Once confirmed, all your instances, SSH keys, sessions, and data will be destroyed immediately.</p>',
+      '<p>If you did not make this request, you can ignore this email and your account remains safe.</p>',
     ].join('\n'),
   }
 }
@@ -497,6 +548,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       c.req.header('user-agent'),
     )
     setSessionCookie(c, session.token, session.expiresAt, remember)
+    await logActivity(user.id, 'login', 'User signed in via email code', clientKey(c))
 
     const updated = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [user.id])
     return c.json({ user: publicUser(updated ?? user) })
@@ -527,6 +579,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         c.req.header('user-agent'),
       )
       setSessionCookie(c, session.token, session.expiresAt, outcome.remember)
+      await logActivity(user.id, 'login', 'User signed in via magic link', clientKey(c))
       return c.json({ user: publicUser(user) })
     }
 
@@ -542,6 +595,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         c.req.header('user-agent'),
       )
       setSessionCookie(c, session.token, session.expiresAt, false)
+      await logActivity(user.id, 'login', 'User verified email via link', clientKey(c))
       return c.json({ user: publicUser(user) })
     }
 
@@ -733,6 +787,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
       if (!created) return c.json({ message: 'Could not verify that passkey.' }, 400)
 
+      await logActivity(user.id, 'create_passkey', `Registered passkey "${name}"`, clientKey(c))
+
       const rows = await listPasskeys(user.id)
       const row = rows.find((entry) => entry.id === created.id)
 
@@ -811,6 +867,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         c.req.header('user-agent'),
       )
       setSessionCookie(c, session.token, session.expiresAt, remember)
+      await logActivity(user.id, 'login', `User signed in with passkey "${row.name}"`, clientKey(c))
 
       return c.json({ user: publicUser(user) })
     } catch (error) {
@@ -825,6 +882,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     const removed = await deletePasskey(user.id, c.req.param('id'))
     if (!removed) return c.json({ message: 'That passkey is not on this account.' }, 404)
+
+    await logActivity(user.id, 'delete_passkey', `Removed passkey ${c.req.param('id')}`, clientKey(c))
 
     return c.json({ ok: true })
   })
@@ -870,7 +929,9 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     // On the critical path, unlike the warning below: the caller is sitting at a
     // prompt waiting for this message, so it fails the request rather than logging.
     try {
-      const sent = await sendMail({ to: newEmail, ...emailChangeCodeEmail(change.code, newEmail) })
+      const codeMsg = { to: newEmail, ...emailChangeCodeEmail(change.code, newEmail) }
+      const sent = await sendMail(codeMsg)
+      await logEmail(newEmail, codeMsg.subject, codeMsg.text, user.id)
       console.log(
         sent.filePath
           ? `[change email] ${newEmail} -> ${sent.filePath}`
@@ -882,10 +943,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
 
     try {
-      await sendMail({
+      const warnMsg = {
         to: user.email,
         ...emailChangeNoticeEmail(user.email, newEmail, cancelLink),
-      })
+      }
+      await sendMail(warnMsg)
+      await logEmail(user.email, warnMsg.subject, warnMsg.text, user.id)
     } catch (error) {
       console.error('[change email] could not warn the old address', error)
     }
@@ -950,10 +1013,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     setSessionCookie(c, session.token, session.expiresAt, false)
 
     try {
-      await sendMail({
+      const doneMsg = {
         to: previousEmail,
         ...emailChangeDoneEmail(previousEmail, claimed.newEmail),
-      })
+      }
+      await sendMail(doneMsg)
+      await logEmail(previousEmail, doneMsg.subject, doneMsg.text, user.id)
     } catch (error) {
       console.error('[change email] could not confirm to the old address', error)
     }
@@ -1032,6 +1097,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     )
     if (!updated) return c.json({ message: 'Could not update the account.' }, 500)
 
+    if (nextName !== user.name) {
+      await logActivity(user.id, 'update_profile', `Updated name to "${nextName}"`, clientKey(c))
+    }
+    if (nextAvatarUrl !== user.avatar_url) {
+      await logActivity(user.id, 'update_avatar', nextAvatarUrl ? 'Updated avatar photo' : 'Removed avatar photo', clientKey(c))
+    }
+
     return c.json({ user: publicUser(updated) })
   })
 
@@ -1069,11 +1141,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!user) return c.json({ message: 'Not signed in.' }, 401)
 
     await destroySessionById(tokenHash)
+    await logActivity(user.id, 'revoke_session', 'Revoked device session', clientKey(c))
     return c.json({ ok: true })
   })
 
-  app.delete('/api/auth/account', async (c) => {
-    const limit = await store.hit(`delete-account:${clientKey(c)}`, 3, 60 * 60 * 1000)
+  app.post('/api/auth/delete-account/request', async (c) => {
+    const limit = await store.hit(`delete-req:${clientKey(c)}`, 5, 15 * 60 * 1000)
     if (!limit.allowed) {
       return c.json({ message: 'Too many attempts. Try again shortly.' }, 429)
     }
@@ -1084,9 +1157,225 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
     if (!user) return c.json({ message: 'Not signed in.' }, 401)
 
+    const code = generateNumericCode(CODE_LENGTH)
+    const expiresAt = new Date(Date.now() + CODE_TTL_MS)
+
+    await query(
+      `INSERT INTO account_deletions (user_id, code_hash, attempts, created_at, expires_at)
+       VALUES ($1, $2, 0, now(), $3)
+       ON CONFLICT (user_id) DO UPDATE SET
+         code_hash = EXCLUDED.code_hash,
+         attempts = 0,
+         created_at = now(),
+         expires_at = EXCLUDED.expires_at`,
+      [user.id, hashSecret(code), expiresAt.toISOString()],
+    )
+
+    const mailMsg = { to: user.email, ...deletionEmail(code) }
+    try {
+      const sent = await sendMail(mailMsg)
+      await logEmail(user.email, mailMsg.subject, mailMsg.text, user.id)
+      console.log(
+        sent.filePath
+          ? `[delete account] ${user.email} -> ${sent.filePath}`
+          : `[delete account] emailed ${user.email}`,
+      )
+    } catch (err) {
+      console.error('[delete account] failed to send mail', err)
+      return c.json({ message: 'Could not send deletion confirmation code.' }, 500)
+    }
+
+    return c.json({ ok: true, email: user.email })
+  })
+
+  app.delete('/api/auth/account', async (c) => {
+    const limit = await store.hit(`delete-account:${clientKey(c)}`, 10, 60 * 60 * 1000)
+    if (!limit.allowed) {
+      return c.json({ message: 'Too many attempts. Try again shortly.' }, 429)
+    }
+
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+    if (!user) return c.json({ message: 'Not signed in.' }, 401)
+
+    const body = await readJson(c).catch(() => ({}))
+    const code = str(body.code).trim()
+    const confirmation = str(body.confirmation ?? body.confirmText).trim()
+
+    if (confirmation !== 'DELETE') {
+      return c.json({ message: 'You must type DELETE in all capitals to confirm.' }, 400)
+    }
+
+    if (!code) {
+      return c.json({ message: 'Enter the verification code sent to your email.' }, 400)
+    }
+
+    const delRow = await queryOne<{
+      code_hash: string
+      attempts: number
+      expires_at: Date
+    }>('SELECT code_hash, attempts, expires_at FROM account_deletions WHERE user_id = $1', [user.id])
+
+    if (!delRow) {
+      return c.json({ message: 'No deletion request found. Please request a new code.' }, 400)
+    }
+
+    if (new Date(delRow.expires_at).getTime() < Date.now()) {
+      await query('DELETE FROM account_deletions WHERE user_id = $1', [user.id])
+      return c.json({ message: 'That code has expired. Please request a new code.' }, 400)
+    }
+
+    if (delRow.attempts >= 5) {
+      await query('DELETE FROM account_deletions WHERE user_id = $1', [user.id])
+      return c.json({ message: 'Too many incorrect attempts. Request a new code.' }, 400)
+    }
+
+    if (!matchesSecret(delRow.code_hash, code)) {
+      await query('UPDATE account_deletions SET attempts = attempts + 1 WHERE user_id = $1', [user.id])
+      return c.json({ message: 'That verification code is not correct.' }, 400)
+    }
+
+    await query('DELETE FROM email_logs WHERE user_id = $1 OR lower(recipient) = lower($2)', [user.id, user.email])
+    await query('DELETE FROM activity_logs WHERE user_id = $1', [user.id])
     await query('DELETE FROM users WHERE id = $1', [user.id])
     deleteCookie(c, SESSION_COOKIE, { path: '/' })
     return c.json({ ok: true })
+  })
+
+  app.get('/api/auth/activity', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+    if (!user) return c.json({ message: 'Not signed in.' }, 401)
+
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20), 1), 100)
+    const offset = Math.max(Number(c.req.query('offset') ?? 0), 0)
+
+    const countRow = await queryOne<{ total: string }>(
+      'SELECT count(*) AS total FROM activity_logs WHERE user_id = $1',
+      [user.id],
+    )
+    const rows = await query<{
+      id: string
+      action: string
+      details: string
+      ip_address: string | null
+      created_at: Date
+    }>(
+      'SELECT id, action, details, ip_address, created_at FROM activity_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [user.id, limit, offset],
+    )
+
+    return c.json({
+      total: Number(countRow?.total ?? 0),
+      activities: rows.map((r) => ({
+        id: r.id,
+        action: r.action,
+        details: r.details,
+        ipAddress: r.ip_address,
+        createdAt: toIso(r.created_at),
+      })),
+    })
+  })
+
+  app.get('/api/auth/emails', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+    if (!user) return c.json({ message: 'Not signed in.' }, 401)
+
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20), 1), 100)
+    const offset = Math.max(Number(c.req.query('offset') ?? 0), 0)
+
+    const countRow = await queryOne<{ total: string }>(
+      'SELECT count(*) AS total FROM email_logs WHERE user_id = $1',
+      [user.id],
+    )
+    const rows = await query<{
+      id: string
+      recipient: string
+      subject: string
+      body_text: string
+      status: string
+      created_at: Date
+    }>(
+      'SELECT id, recipient, subject, body_text, status, created_at FROM email_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [user.id, limit, offset],
+    )
+
+    return c.json({
+      total: Number(countRow?.total ?? 0),
+      emails: rows.map((r) => ({
+        id: r.id,
+        recipient: r.recipient,
+        subject: r.subject,
+        bodyText: r.body_text,
+        status: r.status,
+        createdAt: toIso(r.created_at),
+      })),
+    })
+  })
+
+  app.delete('/api/auth/emails', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+    if (!user) return c.json({ message: 'Not signed in.' }, 401)
+
+    await query('DELETE FROM email_logs WHERE user_id = $1', [user.id])
+    await logActivity(user.id, 'clear_emails', 'Cleared sent email history', clientKey(c))
+    return c.json({ ok: true })
+  })
+
+  app.delete('/api/auth/emails/:id', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+    if (!user) return c.json({ message: 'Not signed in.' }, 401)
+
+    const emailId = c.req.param('id')
+    await query('DELETE FROM email_logs WHERE id = $1 AND user_id = $2', [emailId, user.id])
+    return c.json({ ok: true })
+  })
+
+  app.get('/api/auth/export-data', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+    if (!user) return c.json({ message: 'Not signed in.' }, 401)
+
+    const userPasskeys = await listPasskeys(user.id)
+    const userSessions = await listSessions(user.id)
+    const userActivities = await query(
+      'SELECT id, action, details, ip_address, created_at FROM activity_logs WHERE user_id = $1 ORDER BY created_at DESC',
+      [user.id],
+    )
+    const userEmails = await query(
+      'SELECT id, recipient, subject, body_text, status, created_at FROM email_logs WHERE user_id = $1 ORDER BY created_at DESC',
+      [user.id],
+    )
+
+    await logActivity(user.id, 'export_data', 'User requested full GDPR data export', clientKey(c))
+
+    return c.json({
+      exportedAt: new Date().toISOString(),
+      account: publicUser(user),
+      passkeys: userPasskeys.map(publicPasskey),
+      sessions: userSessions.map((s) => ({
+        userAgent: s.user_agent,
+        createdAt: toIso(s.created_at),
+        expiresAt: toIso(s.expires_at),
+      })),
+      activity: userActivities,
+      emails: userEmails,
+    })
   })
 
   app.get('/api/health', async (c) => {

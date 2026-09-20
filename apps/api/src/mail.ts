@@ -15,6 +15,7 @@ export interface SentMail {
   id: string
   to: string
   subject: string
+  text?: string
   filePath?: string
 }
 
@@ -157,7 +158,7 @@ export async function sendMail(message: MailMessage): Promise<SentMail> {
       html: message.html,
     })
 
-    return { id, to: message.to, subject: message.subject }
+    return { id, to: message.to, subject: message.subject, text: message.text }
   }
 
   const dir = mailboxDir()
@@ -167,7 +168,7 @@ export async function sendMail(message: MailMessage): Promise<SentMail> {
   const filePath = join(dir, `${stamp}-${id}.eml`)
   await writeFile(filePath, buildMessage(message, id, date), 'utf8')
 
-  return { id, to: message.to, subject: message.subject, filePath }
+  return { id, to: message.to, subject: message.subject, text: message.text, filePath }
 }
 
 export async function listMailbox(limit = 50): Promise<MailboxEntry[]> {

@@ -7,8 +7,8 @@ import {
   SquaresFour,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useState, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useRef, useState, type ReactNode } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { UserMenu } from '@/components/user-menu'
 import { Button } from '@/components/ui/button'
@@ -31,14 +31,24 @@ const NAV: NavItem[] = [
   { label: 'Usage', icon: <ChartLineUp size={17} aria-hidden /> },
 ]
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) {
   const { pathname } = useLocation()
+
+  function handleLinkClick(e: React.MouseEvent<HTMLAnchorElement>, to?: string) {
+    if (!onNavigate) return
+    if (!to || pathname === to) {
+      onNavigate()
+      return
+    }
+    e.preventDefault()
+    onNavigate(to)
+  }
 
   return (
     <div className="flex h-full flex-col gap-7 px-3 py-5">
       <Link
         to="/dashboard"
-        onClick={onNavigate}
+        onClick={(e) => handleLinkClick(e, '/dashboard')}
         className="flex items-center gap-2.5 rounded-control px-2 py-1"
       >
         <img src="/brand/solstice-mark.png" alt="" className="h-7 w-auto shrink-0" />
@@ -75,7 +85,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <Link
               key={item.label}
               to={item.to}
-              onClick={onNavigate}
+              onClick={(e) => handleLinkClick(e, item.to)}
               aria-current={active ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] transition-colors duration-150',
@@ -108,6 +118,33 @@ interface AppShellProps {
 export function AppShell({ title, description, actions, children }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const reduceMotion = useReducedMotion()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const pendingNavRef = useRef<string | null>(null)
+
+  function handleNavigate(to?: string) {
+    if (to && to !== pathname) {
+      pendingNavRef.current = to
+      setTimeout(() => {
+        if (pendingNavRef.current) {
+          const dest = pendingNavRef.current
+          pendingNavRef.current = null
+          navigate(dest)
+        }
+      }, 350)
+    } else {
+      pendingNavRef.current = null
+    }
+    setMenuOpen(false)
+  }
+
+  function handleExitComplete() {
+    if (pendingNavRef.current) {
+      const dest = pendingNavRef.current
+      pendingNavRef.current = null
+      navigate(dest)
+    }
+  }
 
   return (
     <div className="flex h-[100dvh] overflow-hidden">
@@ -123,40 +160,34 @@ export function AppShell({ title, description, actions, children }: AppShellProp
         <SidebarContent />
       </aside>
 
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={handleExitComplete}>
         {menuOpen ? (
-          <motion.button
-            key="drawer-backdrop"
-            type="button"
-            aria-label="Close menu"
-            className="fixed inset-0 z-50 cursor-default bg-black/55 lg:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.2, ease: EASE_OUT_EXPO }}
-            onClick={() => {
-              setMenuOpen(false)
-            }}
-          />
-        ) : null}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {menuOpen ? (
-          <motion.aside
-            key="drawer-panel"
-            className="fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-surface lg:hidden"
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ duration: reduceMotion ? 0 : 0.32, ease: EASE_OUT_EXPO }}
-          >
-            <SidebarContent
-              onNavigate={() => {
+          <>
+            <motion.button
+              key="drawer-backdrop"
+              type="button"
+              aria-label="Close menu"
+              className="fixed inset-0 z-50 cursor-default bg-black/55 lg:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.2, ease: EASE_OUT_EXPO }}
+              onClick={() => {
+                pendingNavRef.current = null
                 setMenuOpen(false)
               }}
             />
-          </motion.aside>
+            <motion.aside
+              key="drawer-panel"
+              className="fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-surface lg:hidden"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ duration: reduceMotion ? 0 : 0.32, ease: EASE_OUT_EXPO }}
+            >
+              <SidebarContent onNavigate={handleNavigate} />
+            </motion.aside>
+          </>
         ) : null}
       </AnimatePresence>
 

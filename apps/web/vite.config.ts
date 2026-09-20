@@ -69,10 +69,11 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: '0.0.0.0',
       // Vite rejects requests whose Host header it does not recognise, so the
       // public dev domain has to be listed explicitly. The leading dot covers the
       // random tunnel subdomains.
-      allowedHosts: ['vps.dev.solstice.host', '.kimaki.dev'],
+      allowedHosts: ['vps.dev.solstice.host', '.kimaki.dev', 'elysia', 'elysia.tailscale.net', '.tailscale.net', '100.64.0.10', '.trycloudflare.com'],
       proxy: {
         '/api': {
           target: env.API_URL || process.env.API_URL || 'http://127.0.0.1:8788',

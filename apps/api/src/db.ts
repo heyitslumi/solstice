@@ -144,9 +144,35 @@ const SCHEMA = `
 
   /* Tables created before the emailed link existed lack the column. Nullable,
      so accounts issued a code-only row do not collide. */
-  ALTER TABLE login_challenges ADD COLUMN IF NOT EXISTS link_hash text;
-  CREATE UNIQUE INDEX IF NOT EXISTS login_challenges_link_idx
-    ON login_challenges (link_hash);
+  CREATE TABLE IF NOT EXISTS activity_logs (
+    id         uuid PRIMARY KEY,
+    user_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    action     text NOT NULL,
+    details    text NOT NULL,
+    ip_address text,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS activity_logs_user_idx ON activity_logs (user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS email_logs (
+    id         uuid PRIMARY KEY,
+    user_id    uuid REFERENCES users(id) ON DELETE CASCADE,
+    recipient  text NOT NULL,
+    subject    text NOT NULL,
+    body_text  text NOT NULL,
+    status     text NOT NULL DEFAULT 'sent',
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS email_logs_user_idx ON email_logs (user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS email_logs_recipient_idx ON email_logs (recipient, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS account_deletions (
+    user_id    uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    code_hash  text NOT NULL,
+    attempts   integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz NOT NULL
+  );
 `
 
 async function hasColumn(table: string, column: string) {
