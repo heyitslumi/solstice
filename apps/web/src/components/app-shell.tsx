@@ -20,6 +20,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { UserMenu } from '@/components/user-menu'
 import { Button } from '@/components/ui/button'
+import { useAppConfig } from '@/lib/config'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
@@ -73,6 +74,7 @@ const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
 function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) {
   const { pathname, search } = useLocation()
   const { user } = useSession()
+  const { config } = useAppConfig()
   const isAdminArea = pathname.startsWith('/admin')
 
   function handleLinkClick(e: React.MouseEvent<HTMLAnchorElement>, to?: string) {
@@ -93,10 +95,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
         onClick={(e) => handleLinkClick(e, isAdminArea ? '/admin' : '/dashboard')}
         className="flex items-center gap-2.5 rounded-control px-2 py-1"
       >
-        <img src="/brand/solstice-mark.png" alt="" className="h-7 w-auto shrink-0" />
-        <span className="flex flex-col gap-0.5">
-          <span className="text-[12px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
-            Solstice
+        <img
+          src={config.icon || '/brand/solstice-mark.png'}
+          alt=""
+          className="h-7 w-auto max-w-[28px] max-h-[28px] shrink-0 object-contain"
+        />
+        <span className="flex flex-col gap-0.5 min-w-0">
+          <span className="truncate text-[12px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
+            {config.name || 'Solstice'}
           </span>
           <span className="text-[8px] leading-none font-semibold tracking-[0.32em] text-sun-500 uppercase">
             {isAdminArea ? 'Control Plane' : 'VPS Hosting'}

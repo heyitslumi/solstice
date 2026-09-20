@@ -9,6 +9,7 @@ import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { CheckboxField, TextField } from '@/components/ui/field'
 import { EMAIL_PATTERN, api } from '@/lib/api'
+import { useAppConfig } from '@/lib/config'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +18,7 @@ const CODE_LENGTH = 6
 export function LoginPage() {
   const navigate = useNavigate()
   const { refresh } = useSession()
+  const { config } = useAppConfig()
   const [searchParams] = useSearchParams()
 
   const [email, setEmail] = useState('')
@@ -268,9 +270,15 @@ export function LoginPage() {
   return (
     <div className="auth-stack flex flex-col gap-7">
       <AuthHeading
-        title="Sign in"
+        title={`Sign in to ${config.name || 'Solstice'}`}
         description="Access your servers, snapshots and network allocations."
       />
+
+      {!config.enableRegistration ? (
+        <div className="rounded-control border border-sun-500/30 bg-sun-500/10 px-3.5 py-2.5 text-[12px] text-fg-muted">
+          Public registration is disabled. Only existing accounts can sign in.
+        </div>
+      ) : null}
 
       {formError ? <Alert tone="danger">{formError}</Alert> : null}
 

@@ -4,13 +4,19 @@ import { useLocation } from 'react-router-dom'
 import { AuthFooter } from '@/components/auth/auth-footer'
 import { BrandPanel } from '@/components/auth/brand-panel'
 import { ThemeToggle } from '@/components/auth/theme-toggle'
+import { useAppConfig } from '@/lib/config'
 
 function CompactBrand() {
+  const { config } = useAppConfig()
   return (
     <div className="flex items-center gap-2.5 lg:hidden">
-      <img src="/brand/solstice-mark.png" alt="" className="h-7 w-auto shrink-0" />
+      <img
+        src={config.icon || '/brand/solstice-mark.png'}
+        alt=""
+        className="h-7 w-auto max-w-[28px] max-h-[28px] shrink-0 object-contain"
+      />
       <span className="text-[13px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
-        Solstice
+        {config.name || 'Solstice'}
       </span>
     </div>
   )

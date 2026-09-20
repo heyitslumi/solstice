@@ -26,6 +26,16 @@ export interface AdminInstance extends ApiInstance {
   ownerName: string
 }
 
+export interface PublicConfig {
+  name: string
+  language: string
+  icon: string
+  banner: string
+  url: string
+  enableRegistration: boolean
+  requireEmailVerification: boolean
+}
+
 export interface AdminSettings {
   application: {
     name: string
@@ -467,12 +477,48 @@ export const api = {
     return request<AdminStats>('/api/admin/stats')
   },
 
+  config() {
+    return request<PublicConfig>('/api/config')
+  },
+
   adminSettings() {
     return request<AdminSettings>('/api/admin/settings')
   },
 
   adminUpdateApplicationSettings(input: Partial<AdminSettings['application']>) {
     return request<{ ok: true }>('/api/admin/settings/application', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  },
+
+  adminUpdateStorageSettings(input: Partial<AdminSettings['storage']>) {
+    return request<{ ok: true }>('/api/admin/settings/storage', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  },
+
+  adminUpdateMailSettings(input: Partial<AdminSettings['mail']>) {
+    return request<{ ok: true }>('/api/admin/settings/mail', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  },
+
+  adminUpdateWebauthnSettings(input: Partial<AdminSettings['webauthn']>) {
+    return request<{ ok: true }>('/api/admin/settings/webauthn', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  },
+
+  adminUpdateRatelimitsSettings(input: Partial<AdminSettings['ratelimits']>) {
+    return request<{ ok: true }>('/api/admin/settings/ratelimits', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),

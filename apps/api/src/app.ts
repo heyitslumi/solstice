@@ -82,7 +82,19 @@ function createRateLimitStore(): RateLimitStore {
   return process.env.RATE_LIMIT_STORE === 'memory' ? createMemoryStore() : createSqlStore()
 }
 
-function publicOrigin() {
+async function getSystemSettings(): Promise<Record<string, string>> {
+  try {
+    const rows = await query<{ key: string; value: string }>('SELECT key, value FROM system_settings')
+    return Object.fromEntries(rows.map((r) => [r.key, r.value]))
+  } catch {
+    return {}
+  }
+}
+
+function publicOrigin(config?: Record<string, string>) {
+  if (config?.['app_url'] && config['app_url'].startsWith('http')) {
+    return config['app_url'].replace(/\/+$/, '')
+  }
   return (process.env.PUBLIC_ORIGIN ?? 'http://localhost:5173').replace(/\/+$/, '')
 }
 
@@ -203,11 +215,11 @@ function findUserByEmail(email: string) {
 
 const CODE_TTL_MINUTES = Math.round(CODE_TTL_MS / 60_000)
 
-function verificationEmail(code: string, link: string) {
+function verificationEmail(code: string, link: string, appName = 'Solstice') {
   return {
-    subject: 'Confirm your Solstice email',
+    subject: `Confirm your ${appName} email`,
     text: [
-      'Confirm this address to finish setting up your Solstice account.',
+      `Confirm this address to finish setting up your ${appName} account.`,
       '',
       'Open this link:',
       link,
@@ -219,7 +231,7 @@ function verificationEmail(code: string, link: string) {
       `The link and code expire in ${CODE_TTL_MINUTES} minutes. If you did not create an account, you can ignore this email.`,
     ].join('\n'),
     html: [
-      '<p>Confirm this address to finish setting up your Solstice account.</p>',
+      `<p>Confirm this address to finish setting up your ${appName} account.</p>`,
       `<p><a href="${link}">Confirm my email</a></p>`,
       '<p>Or enter this code on the confirmation page:</p>',
       `<p style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:26px;letter-spacing:0.18em"><strong>${code}</strong></p>`,
@@ -228,16 +240,19 @@ function verificationEmail(code: string, link: string) {
   }
 }
 
-async function sendVerificationCode(user: UserRow) {
+async function sendVerificationCode(user: UserRow, config?: Record<string, string>) {
+  const cfg = config ?? (await getSystemSettings())
+  const appName = cfg['app_name'] || 'Solstice'
+  const origin = publicOrigin(cfg)
   const verification = await createEmailVerification(user.id)
   const link =
-    `${publicOrigin()}/verify-email` +
+    `${origin}/verify-email` +
     `?email=${encodeURIComponent(user.email)}&token=${encodeURIComponent(verification.linkToken)}`
 
   try {
     const mailMsg = {
       to: user.email,
-      ...verificationEmail(verification.code, link),
+      ...verificationEmail(verification.code, link, appName),
     }
     const sent = await sendMail(mailMsg)
     await logEmail(user.email, mailMsg.subject, mailMsg.text, user.id)
@@ -277,11 +292,11 @@ async function requireCurrentUser(c: Context) {
 
 const LOGIN_CODE_TTL_MINUTES = Math.round(LOGIN_CODE_TTL_MS / 60_000)
 
-function loginEmail(link: string, code: string) {
+function loginEmail(link: string, code: string, appName = 'Solstice') {
   return {
-    subject: 'Sign in to Solstice',
+    subject: `Sign in to ${appName}`,
     text: [
-      'Sign in to your Solstice account:',
+      `Sign in to your ${appName} account:`,
       '',
       link,
       '',
@@ -292,7 +307,7 @@ function loginEmail(link: string, code: string) {
       `The link and code expire in ${LOGIN_CODE_TTL_MINUTES} minutes. If you were not signing in, you can ignore this email.`,
     ].join('\n'),
     html: [
-      '<p>Sign in to your Solstice account:</p>',
+      `<p>Sign in to your ${appName} account:</p>`,
       `<p><a href="${link}">Sign in</a></p>`,
       '<p>Or enter this code on the sign-in page:</p>',
       `<p style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:26px;letter-spacing:0.18em"><strong>${code}</strong></p>`,
@@ -301,8 +316,8 @@ function loginEmail(link: string, code: string) {
   }
 }
 
-async function sendLoginEmail(user: UserRow, link: string, code: string) {
-  const mailMsg = { to: user.email, ...loginEmail(link, code) }
+async function sendLoginEmail(user: UserRow, link: string, code: string, appName = 'Solstice') {
+  const mailMsg = { to: user.email, ...loginEmail(link, code, appName) }
   const sent = await sendMail(mailMsg)
   await logEmail(user.email, mailMsg.subject, mailMsg.text, user.id)
   console.log(
@@ -396,14 +411,17 @@ function deletionEmail(code: string) {
 
 /* Sends a fresh sign-in challenge (link + code) for a verified account. The
    caller decides whether the account exists and whether the response leaks it. */
-async function dispatchLoginChallenge(user: UserRow, remember: boolean) {
+async function dispatchLoginChallenge(user: UserRow, remember: boolean, config?: Record<string, string>) {
+  const cfg = config ?? (await getSystemSettings())
+  const appName = cfg['app_name'] || 'Solstice'
+  const origin = publicOrigin(cfg)
   const challenge = await createLoginChallenge(user.id, remember)
   const link =
-    `${publicOrigin()}/login` +
+    `${origin}/login` +
     `?token=${encodeURIComponent(challenge.linkToken)}`
 
   try {
-    await sendLoginEmail(user, link, challenge.code)
+    await sendLoginEmail(user, link, challenge.code, appName)
   } catch (error) {
     console.error('[login] could not send mail', error)
     return false
@@ -427,6 +445,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       return c.json({ message: 'Too many attempts. Try again shortly.' }, 429)
     }
 
+    const config = await getSystemSettings()
+    if (config['app_enable_registration'] === 'false') {
+      return c.json({ message: 'Registration is currently disabled.' }, 403)
+    }
+
     const body = await readJson(c)
     const name = str(body.name).trim()
     const email = str(body.email).trim()
@@ -446,19 +469,34 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       return c.json({ fieldErrors: { email: 'That email is already registered.' } }, 409)
     }
 
+    const requireVerification = config['app_require_email_verification'] !== 'false'
     const id = randomUUID()
     const created = await queryOne<UserRow>(
       `INSERT INTO users (id, email, name, email_verified_at)
-       VALUES ($1, $2, $3, NULL) RETURNING *`,
-      [id, email, name],
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [id, email, name, requireVerification ? null : new Date().toISOString()],
     )
     if (!created) return c.json({ message: 'Could not create the account.' }, 500)
 
-    await sendVerificationCode(created)
+    if (requireVerification) {
+      await sendVerificationCode(created, config)
+      return c.json({ email: created.email }, 201)
+    }
 
-    // Deliberately no session: the account stays inert until the emailed code
-    // comes back, so registering with an address you do not own gets you nothing.
-    return c.json({ email: created.email }, 201)
+    const session = await createSession(
+      created.id,
+      SESSION_TTL_SHORT_MS,
+      c.req.header('user-agent'),
+    )
+    setCookie(c, SESSION_COOKIE, session.token, {
+      path: '/',
+      httpOnly: true,
+      secure: isProduction(),
+      sameSite: 'Lax',
+      maxAge: Math.round(SESSION_TTL_SHORT_MS / 1000),
+    })
+
+    return c.json({ email: created.email, autoVerified: true }, 201)
   })
 
   app.post('/api/auth/login', async (c) => {
@@ -475,29 +513,39 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       return c.json({ fieldErrors: { email: 'Enter a valid email address.' } }, 422)
     }
 
+    const config = await getSystemSettings()
     let user = await findUserByEmail(email)
 
     if (!user) {
+      if (config['app_enable_registration'] === 'false') {
+        return c.json({ message: 'Account not found. Registration is disabled.' }, 403)
+      }
+
       const name = str(body.name).trim()
       if (!name) {
         return c.json({ needsName: true, message: 'Please enter your full name to proceed.' }, 200)
       }
 
+      const requireVerification = config['app_require_email_verification'] !== 'false'
       const id = randomUUID()
       user = await queryOne<UserRow>(
         `INSERT INTO users (id, email, name, email_verified_at)
-         VALUES ($1, $2, $3, NULL) RETURNING *`,
-        [id, email, name],
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [id, email, name, requireVerification ? null : new Date().toISOString()],
       )
       if (!user) return c.json({ message: 'Could not create the account.' }, 500)
     }
 
+    const requireVerification = config['app_require_email_verification'] !== 'false'
+    if (!requireVerification && !user.email_verified_at) {
+      await query('UPDATE users SET email_verified_at = now() WHERE id = $1', [user.id])
+      user.email_verified_at = new Date()
+    }
+
     if (user.email_verified_at) {
-      await dispatchLoginChallenge(user, body.remember === true)
+      await dispatchLoginChallenge(user, body.remember === true, config)
     } else {
-      // The account is unconfirmed (newly created or pending verification).
-      // Send the email verification code/link to verify it's them.
-      await sendVerificationCode(user)
+      await sendVerificationCode(user, config)
     }
 
     return c.json({ ok: true })
@@ -2297,6 +2345,19 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     })
   })
 
+  app.get('/api/config', async (c) => {
+    const config = await getSystemSettings()
+    return c.json({
+      name: config['app_name'] || 'Solstice',
+      language: config['app_language'] || 'en',
+      icon: config['app_icon'] || '/brand/solstice-mark.png',
+      banner: config['app_banner'] || '',
+      url: config['app_url'] || publicOrigin(config),
+      enableRegistration: config['app_enable_registration'] !== 'false',
+      requireEmailVerification: config['app_require_email_verification'] !== 'false',
+    })
+  })
+
   app.get('/api/admin/settings', async (c) => {
     const admin = await requireAdmin(c)
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
@@ -2310,7 +2371,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         language: config['app_language'] || 'en',
         icon: config['app_icon'] || '/brand/solstice-mark.png',
         banner: config['app_banner'] || '',
-        url: config['app_url'] || publicOrigin(),
+        url: config['app_url'] || publicOrigin(config),
         requireEmailVerification: config['app_require_email_verification'] !== 'false',
         enableRegistration: config['app_enable_registration'] !== 'false',
         environment: process.env.NODE_ENV || 'development',
@@ -2318,26 +2379,29 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean),
       },
       mail: {
-        transport: mailTransportName(),
-        mailFrom: process.env.MAIL_FROM || 'Solstice Host <no-reply@lumis.tf>',
-        smtpHost: 'smtp.fastmail.com',
-        smtpPort: 587,
-        requireTls: Boolean(process.env.SMTP_REQUIRE_TLS),
+        transport: config['mail_smtp_host'] ? 'smtp' : mailTransportName(),
+        mailFrom: config['mail_from'] || process.env.MAIL_FROM || 'Solstice Host <no-reply@lumis.tf>',
+        smtpHost: config['mail_smtp_host'] || 'smtp.fastmail.com',
+        smtpPort: Number(config['mail_smtp_port']) || 587,
+        requireTls:
+          config['mail_require_tls'] !== undefined
+            ? config['mail_require_tls'] === 'true'
+            : Boolean(process.env.SMTP_REQUIRE_TLS),
       },
       storage: {
-        incusSocket: '/var/lib/incus/unix.socket',
-        storagePool: 'default',
-        mailDir: process.env.MAIL_DIR || './data/mail',
+        incusSocket: config['incus_socket'] || '/var/lib/incus/unix.socket',
+        storagePool: config['storage_pool'] || 'default',
+        mailDir: config['mail_dir'] || process.env.MAIL_DIR || './data/mail',
       },
       webauthn: {
-        rpName: config['app_name'] || 'Solstice',
-        rpId: new URL(publicOrigin()).hostname,
-        origin: publicOrigin(),
+        rpName: config['webauthn_rp_name'] || config['app_name'] || 'Solstice',
+        rpId: config['webauthn_rp_id'] || new URL(publicOrigin(config)).hostname,
+        origin: config['webauthn_origin'] || publicOrigin(config),
       },
       ratelimits: {
         store: process.env.RATE_LIMIT_STORE || 'memory',
-        windowMs: 60000,
-        maxRequestsPerMin: 60,
+        windowMs: Number(config['ratelimit_window_ms']) || 60000,
+        maxRequestsPerMin: Number(config['ratelimit_max_requests']) || 60,
       },
     })
   })
@@ -2384,6 +2448,152 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       admin.user.id,
       'admin_update_settings',
       'Updated panel application settings',
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
+  })
+
+  app.patch('/api/admin/settings/storage', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const body = await c.req.json<Record<string, any>>().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return c.json({ message: 'Invalid settings body.' }, 400)
+    }
+
+    const mapping: Record<string, string> = {
+      incusSocket: 'incus_socket',
+      storagePool: 'storage_pool',
+      mailDir: 'mail_dir',
+    }
+
+    for (const [key, dbKey] of Object.entries(mapping)) {
+      if (key in body) {
+        const val = String(body[key] ?? '').trim()
+        await query(
+          `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [dbKey, val],
+        )
+      }
+    }
+
+    await logActivity(
+      admin.user.id,
+      'admin_update_settings',
+      'Updated storage settings',
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
+  })
+
+  app.patch('/api/admin/settings/mail', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const body = await c.req.json<Record<string, any>>().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return c.json({ message: 'Invalid settings body.' }, 400)
+    }
+
+    const mapping: Record<string, string> = {
+      mailFrom: 'mail_from',
+      smtpHost: 'mail_smtp_host',
+      smtpPort: 'mail_smtp_port',
+      requireTls: 'mail_require_tls',
+    }
+
+    for (const [key, dbKey] of Object.entries(mapping)) {
+      if (key in body) {
+        let val = body[key]
+        if (typeof val === 'boolean') val = String(val)
+        else val = String(val ?? '').trim()
+        await query(
+          `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [dbKey, val],
+        )
+      }
+    }
+
+    await logActivity(
+      admin.user.id,
+      'admin_update_settings',
+      'Updated mail settings',
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
+  })
+
+  app.patch('/api/admin/settings/webauthn', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const body = await c.req.json<Record<string, any>>().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return c.json({ message: 'Invalid settings body.' }, 400)
+    }
+
+    const mapping: Record<string, string> = {
+      rpName: 'webauthn_rp_name',
+      rpId: 'webauthn_rp_id',
+      origin: 'webauthn_origin',
+    }
+
+    for (const [key, dbKey] of Object.entries(mapping)) {
+      if (key in body) {
+        const val = String(body[key] ?? '').trim()
+        await query(
+          `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [dbKey, val],
+        )
+      }
+    }
+
+    await logActivity(
+      admin.user.id,
+      'admin_update_settings',
+      'Updated webauthn settings',
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
+  })
+
+  app.patch('/api/admin/settings/ratelimits', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const body = await c.req.json<Record<string, any>>().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return c.json({ message: 'Invalid settings body.' }, 400)
+    }
+
+    const mapping: Record<string, string> = {
+      windowMs: 'ratelimit_window_ms',
+      maxRequestsPerMin: 'ratelimit_max_requests',
+    }
+
+    for (const [key, dbKey] of Object.entries(mapping)) {
+      if (key in body) {
+        const val = String(body[key] ?? '').trim()
+        await query(
+          `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [dbKey, val],
+        )
+      }
+    }
+
+    await logActivity(
+      admin.user.id,
+      'admin_update_settings',
+      'Updated ratelimit settings',
       clientKey(c),
     )
 

@@ -1,11 +1,22 @@
+import { useAppConfig } from '@/lib/config'
 import { PointerParallax } from './pointer-parallax'
 
 const SUPPORTING_COPY =
   'Provision containers and virtual machines, snapshot them, and track usage from a single panel.'
 
 export function BrandPanel() {
+  const { config } = useAppConfig()
+
   return (
     <aside className="relative hidden overflow-hidden bg-brand-surface lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
+      {config.banner ? (
+        <img
+          src={config.banner}
+          alt=""
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-15"
+        />
+      ) : null}
+
       <PointerParallax className="absolute inset-0 mix-blend-screen">
         <div className="absolute -right-56 -bottom-80 size-[46rem] rounded-full sun-gradient opacity-25 blur-[100px]" />
         <div className="absolute -right-28 -bottom-64 size-[32rem] rounded-full sun-gradient opacity-45 blur-[30px]" />
@@ -19,10 +30,14 @@ export function BrandPanel() {
       <div aria-hidden className="pointer-events-none absolute inset-0 hairline-grid text-brand-ink/[0.035]" />
 
       <div className="relative flex items-center gap-3.5">
-        <img src="/brand/solstice-mark.png" alt="" className="h-11 w-auto shrink-0" />
+        <img
+          src={config.icon || '/brand/solstice-mark.png'}
+          alt=""
+          className="h-11 w-auto max-w-[44px] max-h-[44px] shrink-0 object-contain"
+        />
         <div className="flex flex-col gap-1">
           <span className="text-[15px] leading-none font-semibold tracking-[0.26em] text-brand-ink uppercase">
-            Solstice
+            {config.name || 'Solstice'}
           </span>
           <span className="text-[9px] leading-none font-medium tracking-[0.4em] text-sun-500 uppercase">
             VPS Hosting
@@ -39,7 +54,7 @@ export function BrandPanel() {
         </p>
         <p className="flex items-center gap-2 pt-1 font-mono text-[11px] tracking-wide text-brand-ink/35">
           <span aria-hidden className="size-1.5 rounded-full bg-sun-500" />
-          solstice.host
+          {config.url ? new URL(config.url).host : 'solstice.host'}
         </p>
       </div>
     </aside>
