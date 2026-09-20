@@ -2313,7 +2313,6 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         url: config['app_url'] || publicOrigin(),
         requireEmailVerification: config['app_require_email_verification'] !== 'false',
         enableRegistration: config['app_enable_registration'] !== 'false',
-        enableTelemetry: config['app_enable_telemetry'] !== 'false',
         environment: process.env.NODE_ENV || 'development',
         trustProxy: Boolean(process.env.TRUST_PROXY),
         adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean),
@@ -2360,7 +2359,6 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       url: 'app_url',
       requireEmailVerification: 'app_require_email_verification',
       enableRegistration: 'app_enable_registration',
-      enableTelemetry: 'app_enable_telemetry',
     }
 
     for (const [key, dbKey] of Object.entries(mapping)) {

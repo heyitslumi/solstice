@@ -35,7 +35,6 @@ export interface AdminSettings {
     url: string
     requireEmailVerification: boolean
     enableRegistration: boolean
-    enableTelemetry: boolean
     environment: string
     trustProxy: boolean
     adminEmails: string[]
