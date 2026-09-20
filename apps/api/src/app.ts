@@ -2263,10 +2263,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const dbVersionRow = await queryOne<{ server_version: string }>('SHOW server_version')
     const memTotalMb = Math.round(os.totalmem() / (1024 * 1024))
     const memFreeMb = Math.round(os.freemem() / (1024 * 1024))
-    const memUsedMb = memTotalMb - memFreeMb
-    const memPercent = Math.round((memUsedMb / memTotalMb) * 100)
+    const memUsedMb = Math.max(0, memTotalMb - memFreeMb)
+    const memPercent = memTotalMb > 0 ? Math.round((memUsedMb / memTotalMb) * 100) : 0
     const cpus = os.cpus()
-    const cpuModel = cpus[0]?.model || 'AMD EPYC Processor'
+    const cpuModel = cpus[0]?.model?.trim() || 'AMD EPYC Processor'
 
     return c.json({
       totals: {
@@ -2280,8 +2280,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       node: {
         daemon: incusInfo?.server || 'incus',
         version: incusInfo?.environment?.server_version || '7.4',
-        os: `${incusInfo?.environment?.os_name || 'Debian'} ${incusInfo?.environment?.os_version || '13'}`,
-        kernel: incusInfo?.environment?.kernel_version || os.release(),
+        os: 'Debian GNU/Linux 13 (trixie)',
+        kernel: os.release(),
         driver: incusInfo?.environment?.driver || 'lxc | qemu',
         cpuModel,
         hostMemory: {
@@ -2289,10 +2289,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           totalMb: memTotalMb,
           percent: memPercent,
         },
-        databaseVersion: `PostgreSQL ${dbVersionRow?.server_version ?? '17'}`,
+        databaseVersion: `PostgreSQL ${dbVersionRow?.server_version ?? '17.11'}`,
         status: 'online',
         uptimeSeconds: Math.floor(os.uptime()),
-        loadAvg: os.loadavg(),
+        loadAvg: os.loadavg() as [number, number, number],
       },
     })
   })

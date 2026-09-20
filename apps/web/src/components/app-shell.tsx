@@ -9,14 +9,11 @@ import {
   HardDrives,
   Heartbeat,
   House,
-  Key,
   List,
   MegaphoneSimple,
   PuzzlePiece,
-  ShieldCheck,
   ShieldStar,
   SquaresFour,
-  Users,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useRef, useState, type ReactNode } from 'react'
@@ -60,17 +57,8 @@ const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
   {
     title: 'INFRASTRUCTURE',
     items: [
-      { label: 'Instances', icon: <HardDrives size={16} aria-hidden />, to: '/admin?tab=instances' },
       { label: 'Nodes & Telemetry', icon: <Cpu size={16} aria-hidden />, to: '/admin?tab=overview' },
       { label: 'Network Pools', icon: <Globe size={16} aria-hidden /> },
-    ],
-  },
-  {
-    title: 'USERS & ACCESS',
-    items: [
-      { label: 'Users', icon: <Users size={16} aria-hidden />, to: '/admin?tab=users' },
-      { label: 'Roles & Permissions', icon: <ShieldCheck size={16} aria-hidden /> },
-      { label: 'SSH Public Keys', icon: <Key size={16} aria-hidden /> },
     ],
   },
   {
