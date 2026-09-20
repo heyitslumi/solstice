@@ -33,12 +33,8 @@ export interface AdminSettings {
     icon: string
     banner: string
     url: string
-    twoFactorRequirement: 'none' | 'optional' | 'enforced'
-    acceptedTwoFactorMethods: string[]
-    emailTwoFactor: boolean
     requireEmailVerification: boolean
     enableRegistration: boolean
-    enablePasswordLogin: boolean
     enableTelemetry: boolean
     environment: string
     trustProxy: boolean

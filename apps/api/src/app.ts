@@ -2311,14 +2311,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         icon: config['app_icon'] || '/brand/solstice-mark.png',
         banner: config['app_banner'] || '',
         url: config['app_url'] || publicOrigin(),
-        twoFactorRequirement: config['app_two_factor_requirement'] || 'none',
-        acceptedTwoFactorMethods: config['app_accepted_two_factor_methods']
-          ? JSON.parse(config['app_accepted_two_factor_methods'])
-          : ['passkey', 'email'],
-        emailTwoFactor: config['app_email_two_factor'] !== 'false',
         requireEmailVerification: config['app_require_email_verification'] !== 'false',
         enableRegistration: config['app_enable_registration'] !== 'false',
-        enablePasswordLogin: config['app_enable_password_login'] === 'true',
         enableTelemetry: config['app_enable_telemetry'] !== 'false',
         environment: process.env.NODE_ENV || 'development',
         trustProxy: Boolean(process.env.TRUST_PROXY),
@@ -2364,12 +2358,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       icon: 'app_icon',
       banner: 'app_banner',
       url: 'app_url',
-      twoFactorRequirement: 'app_two_factor_requirement',
-      acceptedTwoFactorMethods: 'app_accepted_two_factor_methods',
-      emailTwoFactor: 'app_email_two_factor',
       requireEmailVerification: 'app_require_email_verification',
       enableRegistration: 'app_enable_registration',
-      enablePasswordLogin: 'app_enable_password_login',
       enableTelemetry: 'app_enable_telemetry',
     }
 
@@ -2378,8 +2368,6 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         let val = body[key]
         if (typeof val === 'boolean') {
           val = String(val)
-        } else if (Array.isArray(val)) {
-          val = JSON.stringify(val)
         } else if (val === null || val === undefined) {
           val = ''
         } else {
