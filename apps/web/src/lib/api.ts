@@ -59,7 +59,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<Result<
         ...init.headers,
       },
     })
-  } catch {
+  } catch (err) {
+    console.error('[api network error]', path, err)
     return { ok: false, error: { message: 'Could not reach the server. Check your connection.' } }
   }
 

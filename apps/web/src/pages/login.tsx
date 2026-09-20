@@ -1,6 +1,6 @@
 import { CircleNotch, Key } from '@phosphor-icons/react'
 import { browserSupportsWebAuthn, startAuthentication } from '@simplewebauthn/browser'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { AuthForm } from '@/components/auth/auth-form'
@@ -44,17 +44,19 @@ export function LoginPage() {
     navigate('/dashboard', { replace: true })
   }
 
+  const attempted = useRef(false)
+
   useEffect(() => {
-    let cancelled = false
     const token = searchParams.get('token')
 
-    if (!token) return
+    // StrictMode runs effects twice in dev and login tokens are single-use;
+    // a second request would burn it and report the link invalid.
+    if (!token || attempted.current) return
+    attempted.current = true
 
     setLinking(true)
     void (async () => {
       const result = await api.loginLink({ token })
-
-      if (cancelled) return
       setLinking(false)
 
       if (!result.ok) {
@@ -66,11 +68,6 @@ export function LoginPage() {
 
       await completeSignIn()
     })()
-
-    return () => {
-      cancelled = true
-    }
-    // The token only matters once; resubmitting the same one would replay it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
@@ -103,6 +100,7 @@ export function LoginPage() {
     setPending(false)
 
     if (!result.ok) {
+      console.error('[login error]', result.error)
       setErrors(result.error.fieldErrors ?? {})
       setFormError(result.error.message ?? 'Something went wrong. Try again.')
       return
