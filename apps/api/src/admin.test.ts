@@ -27,6 +27,11 @@ describe('admin endpoint guards', () => {
     assert.equal(res.status, 403)
   })
 
+  it('rejects unauthenticated GET /api/admin/settings with 403', async () => {
+    const res = await app.request('/api/admin/settings')
+    assert.equal(res.status, 403)
+  })
+
   it('rejects unauthenticated POST /api/admin/instances with 403', async () => {
     const res = await app.request('/api/admin/instances', {
       method: 'POST',

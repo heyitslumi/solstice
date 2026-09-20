@@ -26,6 +26,38 @@ export interface AdminInstance extends ApiInstance {
   ownerName: string
 }
 
+export interface AdminSettings {
+  application: {
+    name: string
+    environment: string
+    publicOrigin: string
+    trustProxy: boolean
+    adminEmails: string[]
+  }
+  mail: {
+    transport: string
+    mailFrom: string
+    smtpHost: string
+    smtpPort: number
+    requireTls: boolean
+  }
+  storage: {
+    incusSocket: string
+    storagePool: string
+    mailDir: string
+  }
+  webauthn: {
+    rpName: string
+    rpId: string
+    origin: string
+  }
+  ratelimits: {
+    store: string
+    windowMs: number
+    maxRequestsPerMin: number
+  }
+}
+
 export interface AdminStats {
   totals: {
     users: number
@@ -428,5 +460,9 @@ export const api = {
 
   adminStats() {
     return request<AdminStats>('/api/admin/stats')
+  },
+
+  adminSettings() {
+    return request<AdminSettings>('/api/admin/settings')
   },
 }

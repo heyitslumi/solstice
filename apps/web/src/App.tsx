@@ -8,6 +8,7 @@ import { SessionLoading } from '@/components/session-loading'
 import { useSession } from '@/lib/session'
 import { AccountPage } from '@/pages/account'
 import { AdminPage } from '@/pages/admin'
+import { AdminSettingsPage } from '@/pages/admin-settings'
 import { CancelEmailChangePage } from '@/pages/cancel-email-change'
 import { DashboardPage } from '@/pages/dashboard'
 import { AupPage } from '@/pages/legal/aup'
@@ -85,6 +86,16 @@ function App() {
             <RequireAuth>
               <RequireAdmin>
                 <AdminPage />
+              </RequireAdmin>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <RequireAuth>
+              <RequireAdmin>
+                <AdminSettingsPage />
               </RequireAdmin>
             </RequireAuth>
           }

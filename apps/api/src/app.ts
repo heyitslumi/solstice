@@ -2297,6 +2297,43 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     })
   })
 
+  app.get('/api/admin/settings', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    return c.json({
+      application: {
+        name: 'Solstice Control Plane',
+        environment: process.env.NODE_ENV || 'development',
+        publicOrigin: publicOrigin(),
+        trustProxy: Boolean(process.env.TRUST_PROXY),
+        adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean),
+      },
+      mail: {
+        transport: mailTransportName(),
+        mailFrom: process.env.MAIL_FROM || 'Solstice Host <no-reply@lumis.tf>',
+        smtpHost: 'smtp.fastmail.com',
+        smtpPort: 587,
+        requireTls: Boolean(process.env.SMTP_REQUIRE_TLS),
+      },
+      storage: {
+        incusSocket: '/var/lib/incus/unix.socket',
+        storagePool: 'default',
+        mailDir: process.env.MAIL_DIR || './data/mail',
+      },
+      webauthn: {
+        rpName: 'Solstice',
+        rpId: new URL(publicOrigin()).hostname,
+        origin: publicOrigin(),
+      },
+      ratelimits: {
+        store: process.env.RATE_LIMIT_STORE || 'memory',
+        windowMs: 60000,
+        maxRequestsPerMin: 60,
+      },
+    })
+  })
+
   app.notFound((c) => c.json({ message: 'Not found.' }, 404))
 
   app.onError((error, c) => {

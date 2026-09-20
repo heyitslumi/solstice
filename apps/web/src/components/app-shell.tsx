@@ -62,7 +62,7 @@ const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
   {
     title: 'SYSTEM',
     items: [
-      { label: 'Platform Settings', icon: <Gear size={16} aria-hidden /> },
+      { label: 'Settings', icon: <Gear size={16} aria-hidden />, to: '/admin/settings' },
       { label: 'Announcements', icon: <MegaphoneSimple size={16} aria-hidden /> },
       { label: 'Audit Logs', icon: <Database size={16} aria-hidden /> },
       { label: 'Plugins & Hooks', icon: <PuzzlePiece size={16} aria-hidden /> },
@@ -129,7 +129,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
                   const active = item.to
                     ? item.to === '/admin'
                       ? currentFull === '/admin' || currentFull === '/admin?tab=overview'
-                      : currentFull === item.to
+                      : item.to === '/admin/settings'
+                        ? pathname.startsWith('/admin/settings')
+                        : currentFull === item.to
                     : false
 
                   if (!item.to) {
