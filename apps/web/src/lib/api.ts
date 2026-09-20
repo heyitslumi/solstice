@@ -11,7 +11,31 @@ export interface ApiUser {
   name: string
   avatarUrl: string | null
   emailVerifiedAt: string | null
+  isAdmin?: boolean
   createdAt: string
+}
+
+export interface AdminUser extends ApiUser {
+  instanceCount: number
+  sshKeyCount: number
+}
+
+export interface AdminInstance extends ApiInstance {
+  ownerId: string
+  ownerEmail: string
+  ownerName: string
+}
+
+export interface AdminStats {
+  totals: {
+    users: number
+    admins: number
+    instances: number
+    cores: number
+    memory: string
+    diskGb: number
+  }
+  node: ApiNodeStats['node']
 }
 
 export type LoginResponse = { ok: true; needsName?: boolean }
@@ -343,5 +367,50 @@ export const api = {
 
   deleteSshKey(id: string) {
     return request<{ ok: true }>(`/api/auth/ssh-keys/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  },
+
+  /* ── Admin endpoints ─────────────────────────────────────────────────── */
+
+  adminListUsers() {
+    return request<AdminUser[]>('/api/admin/users')
+  },
+
+  adminUpdateUserRole(id: string, isAdmin: boolean) {
+    return request<ApiUser>(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isAdmin }),
+    })
+  },
+
+  adminDeleteUser(id: string) {
+    return request<{ ok: true }>(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  },
+
+  adminListInstances() {
+    return request<AdminInstance[]>('/api/admin/instances')
+  },
+
+  adminCreateInstance(input: {
+    userId: string
+    name: string
+    type: 'kvm' | 'lxc'
+    os: string
+    cores?: number
+    memoryMb?: number
+    diskGb?: number
+  }) {
+    return post<ApiInstance>('/api/admin/instances', input)
+  },
+
+  adminInstanceAction(id: string, action: 'start' | 'stop' | 'restart') {
+    return post<{ ok: true; action: string }>(`/api/admin/instances/${encodeURIComponent(id)}/action`, { action })
+  },
+
+  adminDeleteInstance(id: string) {
+    return request<{ ok: true }>(`/api/admin/instances/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  },
+
+  adminStats() {
+    return request<AdminStats>('/api/admin/stats')
   },
 }

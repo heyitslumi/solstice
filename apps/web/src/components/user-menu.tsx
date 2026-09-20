@@ -3,6 +3,7 @@ import {
   Check,
   DotsThreeVertical,
   Moon,
+  ShieldStar,
   SignOut,
   Sun,
   UserCircle,
@@ -89,6 +90,22 @@ export function UserMenu({ onNavigate }: { onNavigate?: (to?: string) => void })
             <UserCircle size={16} aria-hidden />
             Account
           </DropdownMenu.Item>
+
+          {user?.isAdmin ? (
+            <DropdownMenu.Item
+              className={`${ITEM} text-fg data-[highlighted]:bg-surface-2`}
+              onSelect={() => {
+                if (onNavigate) {
+                  onNavigate('/admin')
+                } else {
+                  navigate('/admin')
+                }
+              }}
+            >
+              <ShieldStar size={16} aria-hidden />
+              Admin Panel
+            </DropdownMenu.Item>
+          ) : null}
 
           <DropdownMenu.Sub>
             <DropdownMenu.SubTrigger

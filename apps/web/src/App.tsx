@@ -2,10 +2,12 @@ import { Agentation } from 'agentation'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { AuthLayout } from '@/components/auth/auth-layout'
+import { RequireAdmin } from '@/components/require-admin'
 import { RequireAuth } from '@/components/require-auth'
 import { SessionLoading } from '@/components/session-loading'
 import { useSession } from '@/lib/session'
 import { AccountPage } from '@/pages/account'
+import { AdminPage } from '@/pages/admin'
 import { CancelEmailChangePage } from '@/pages/cancel-email-change'
 import { DashboardPage } from '@/pages/dashboard'
 import { AupPage } from '@/pages/legal/aup'
@@ -74,6 +76,16 @@ function App() {
           element={
             <RequireAuth>
               <AccountPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <RequireAuth>
+              <RequireAdmin>
+                <AdminPage />
+              </RequireAdmin>
             </RequireAuth>
           }
         />

@@ -197,6 +197,10 @@ const SCHEMA = `
     created_at  timestamptz NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS ssh_keys_user_idx ON ssh_keys (user_id, created_at DESC);
+
+  /* Platform administrators. Seeded from ADMIN_EMAILS on every boot so the
+     first operator never has to touch SQL by hand. */
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin boolean NOT NULL DEFAULT false;
 `
 
 async function hasColumn(table: string, column: string) {
@@ -219,6 +223,16 @@ export async function migrate() {
   // in rather than locking people out of accounts they already own.
   if (!hadVerifiedColumn) {
     await query('UPDATE users SET email_verified_at = created_at WHERE email_verified_at IS NULL')
+  }
+
+  /* Seed operators from ADMIN_EMAILS (comma-separated). Runs every boot so a
+     newly added address takes effect on the next deploy without touching SQL. */
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+  for (const email of adminEmails) {
+    await query('UPDATE users SET is_admin = true WHERE lower(email) = $1', [email])
   }
 }
 
@@ -248,6 +262,7 @@ export interface UserRow {
   password_hash: string | null
   avatar_url?: string | null
   email_verified_at: Date | string | null
+  is_admin: boolean
   created_at: Date | string
 }
 

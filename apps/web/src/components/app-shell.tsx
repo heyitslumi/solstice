@@ -4,6 +4,7 @@ import {
   Globe,
   HardDrives,
   List,
+  ShieldStar,
   SquaresFour,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
@@ -12,6 +13,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { UserMenu } from '@/components/user-menu'
 import { Button } from '@/components/ui/button'
+import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
 /** Matches --ease-out-expo in index.css so the drawer moves like the rest of the app. */
@@ -33,6 +35,7 @@ const NAV: NavItem[] = [
 
 function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) {
   const { pathname } = useLocation()
+  const { user } = useSession()
 
   function handleLinkClick(e: React.MouseEvent<HTMLAnchorElement>, to?: string) {
     if (!onNavigate) return
@@ -99,6 +102,23 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
             </Link>
           )
         })}
+
+        {user?.isAdmin ? (
+          <Link
+            to="/admin"
+            onClick={(e) => handleLinkClick(e, '/admin')}
+            aria-current={pathname === '/admin' ? 'page' : undefined}
+            className={cn(
+              'mt-4 flex items-center gap-2.5 border-t border-border pt-4 text-[13px] transition-colors duration-150',
+              pathname === '/admin'
+                ? 'font-medium text-sun-500'
+                : 'text-fg-muted hover:text-sun-500',
+            )}
+          >
+            <ShieldStar size={17} aria-hidden />
+            Admin
+          </Link>
+        ) : null}
       </nav>
 
         <div className="mt-auto">

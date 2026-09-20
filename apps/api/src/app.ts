@@ -111,8 +111,23 @@ function publicUser(row: UserRow) {
     name: row.name,
     avatarUrl: row.avatar_url ?? null,
     emailVerifiedAt: row.email_verified_at ? toIso(row.email_verified_at) : null,
+    isAdmin: !!row.is_admin,
     createdAt: toIso(row.created_at),
   }
+}
+
+/** Resolve the signed-in user and reject unless they are a platform admin. */
+async function requireAdmin(c: Context) {
+  const token = getCookie(c, SESSION_COOKIE)
+  if (!token) return null
+
+  const session = await readSession(token)
+  if (!session) return null
+
+  const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+  if (!user || !user.is_admin) return null
+
+  return { session, user }
 }
 
 export async function logActivity(userId: string, action: string, details: string, ip?: string) {
@@ -1888,6 +1903,381 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       })
     })
   }
+
+  /* ── Admin panel ─────────────────────────────────────────────────────── */
+
+  app.get('/api/admin/users', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const rows = await query<
+      UserRow & { instance_count: number; ssh_key_count: number }
+    >(
+      `SELECT u.*,
+              (SELECT COUNT(*)::int FROM instances i WHERE i.user_id = u.id) AS instance_count,
+              (SELECT COUNT(*)::int FROM ssh_keys k WHERE k.user_id = u.id) AS ssh_key_count
+         FROM users u
+        ORDER BY u.created_at ASC`,
+    )
+
+    return c.json(
+      rows.map((u) => ({
+        ...publicUser(u),
+        instanceCount: u.instance_count,
+        sshKeyCount: u.ssh_key_count,
+      })),
+    )
+  })
+
+  app.patch('/api/admin/users/:id', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const targetId = c.req.param('id')
+    const body = await c.req.json<{ isAdmin?: boolean }>().catch(() => null)
+    if (body == null || typeof body.isAdmin !== 'boolean') {
+      return c.json({ message: 'isAdmin must be a boolean.' }, 400)
+    }
+
+    // Never let an operator strip their own rights and lock everyone out.
+    if (targetId === admin.user.id && !body.isAdmin) {
+      return c.json({ message: 'You cannot revoke your own admin access.' }, 400)
+    }
+
+    const updated = await queryOne<UserRow>(
+      'UPDATE users SET is_admin = $1 WHERE id = $2 RETURNING *',
+      [body.isAdmin, targetId],
+    )
+    if (!updated) return c.json({ message: 'User not found.' }, 404)
+
+    await logActivity(
+      admin.user.id,
+      'update_user_role',
+      `${body.isAdmin ? 'Granted' : 'Revoked'} admin access for ${updated.email}`,
+      clientKey(c),
+    )
+
+    return c.json(publicUser(updated))
+  })
+
+  app.delete('/api/admin/users/:id', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const targetId = c.req.param('id')
+    if (targetId === admin.user.id) {
+      return c.json({ message: 'You cannot delete your own account here.' }, 400)
+    }
+
+    const target = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [targetId])
+    if (!target) return c.json({ message: 'User not found.' }, 404)
+
+    // Cascade away their instances in Incus first; the DB rows follow via FK cascade.
+    const ownedInstances = await query<InstanceRow>(
+      'SELECT name FROM instances WHERE user_id = $1',
+      [targetId],
+    )
+    for (const inst of ownedInstances) {
+      try {
+        await incus.setInstanceState(inst.name, 'stop', true).catch(() => {})
+        await incus.deleteInstance(inst.name)
+      } catch (err: any) {
+        console.warn(`[admin] Incus cleanup warning for "${inst.name}":`, err?.message)
+      }
+    }
+
+    await query('DELETE FROM users WHERE id = $1', [targetId])
+
+    await logActivity(
+      admin.user.id,
+      'delete_user',
+      `Deleted user ${target.email} and ${ownedInstances.length} instance(s)`,
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
+  })
+
+  app.get('/api/admin/instances', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const rows = await query<InstanceRow & { owner_email: string; owner_name: string }>(
+      `SELECT i.*, u.email AS owner_email, u.name AS owner_name
+         FROM instances i
+         JOIN users u ON u.id = i.user_id
+        ORDER BY i.created_at DESC`,
+    )
+
+    let incusMap = new Map<string, IncusInstance>()
+    try {
+      const incusList = await incus.listInstances()
+      incusMap = new Map(incusList.map((i) => [i.name, i]))
+    } catch (err) {
+      console.error('[admin] Failed to list Incus instances:', err)
+    }
+
+    const instances = rows.map((row) => {
+      const live = incusMap.get(row.name)
+      const isRunning = live?.status?.toLowerCase() === 'running'
+
+      let ip4 = '—'
+      let totalBytes = 0
+      if (live?.state?.network) {
+        for (const [ifaceName, iface] of Object.entries(live.state.network)) {
+          if (ifaceName === 'lo') continue
+          totalBytes += (iface.counters?.bytes_received || 0) + (iface.counters?.bytes_sent || 0)
+          for (const addr of iface.addresses || []) {
+            if (addr.family === 'inet' && addr.scope === 'global' && ip4 === '—') {
+              ip4 = addr.address
+            }
+          }
+        }
+      }
+
+      const memBytes = live?.state?.memory?.usage || 0
+      const totalMemBytes = (row.memory_mb || 1024) * 1024 * 1024
+      const ramUsage =
+        isRunning && totalMemBytes > 0
+          ? Math.min(100, Math.round((memBytes / totalMemBytes) * 100))
+          : 0
+
+      const cpuCount = live?.state?.cpu?.usage ?? 0
+      const cores = row.cores || 1
+      const cpuUsage = isRunning ? Math.min(100, Math.round((cpuCount / (cores * 1e9)) * 100)) : 0
+
+      return {
+        id: row.id,
+        name: row.name,
+        type: row.type as 'kvm' | 'lxc',
+        os: row.os,
+        status: isRunning ? ('running' as const) : ('stopped' as const),
+        ip4,
+        cores: row.cores,
+        memory: formatMemory(row.memory_mb),
+        disk: `${row.disk_gb} GB`,
+        cpuUsage,
+        ramUsage,
+        bandwidth: formatBytes(totalBytes),
+        ownerId: row.user_id,
+        ownerEmail: row.owner_email,
+        ownerName: row.owner_name,
+        createdAt: toIso(row.created_at),
+      }
+    })
+
+    return c.json(instances)
+  })
+
+  app.post('/api/admin/instances', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const body = await c.req
+      .json<{
+        userId?: string
+        name?: string
+        type?: 'kvm' | 'lxc'
+        os?: string
+        cores?: number
+        memoryMb?: number
+        diskGb?: number
+      }>()
+      .catch(() => null)
+
+    if (!body?.userId || typeof body.userId !== 'string') {
+      return c.json({ message: 'Target user is required.' }, 400)
+    }
+    if (!body.name || typeof body.name !== 'string') {
+      return c.json({ message: 'Instance name is required.' }, 400)
+    }
+
+    const owner = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [body.userId])
+    if (!owner) return c.json({ message: 'Target user not found.' }, 404)
+
+    const cleanName = body.name.trim().toLowerCase()
+    if (!/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(cleanName)) {
+      return c.json(
+        { message: 'Name must be 3-32 characters, lowercase alphanumeric and hyphens only.' },
+        400,
+      )
+    }
+
+    const type = body.type === 'kvm' ? 'kvm' : 'lxc'
+    const osKey = body.os || 'debian-12'
+    const osConfig = OS_MAP[osKey] || { name: 'Debian 12 Bookworm', alias: 'debian/12' }
+    const cores = Math.max(1, Math.min(8, Number(body.cores) || 1))
+    const memoryMb = Math.max(512, Math.min(16384, Number(body.memoryMb) || 1024))
+    const diskGb = Math.max(5, Math.min(200, Number(body.diskGb) || 10))
+
+    const existing = await queryOne('SELECT id FROM instances WHERE name = $1', [cleanName])
+    if (existing) {
+      return c.json({ message: 'An instance with this name already exists.' }, 409)
+    }
+
+    const instanceId = randomUUID()
+
+    const ownerSshKeys = await query<SshKeyRow>(
+      'SELECT public_key FROM ssh_keys WHERE user_id = $1',
+      [owner.id],
+    )
+    const sshPublicKeys = ownerSshKeys.map((k) => k.public_key)
+
+    try {
+      await incus.createInstance({
+        name: cleanName,
+        type: type === 'kvm' ? 'virtual-machine' : 'container',
+        imageAlias: osConfig.alias,
+        cpu: cores,
+        memory: `${memoryMb}MiB`,
+        disk: `${diskGb}GiB`,
+        sshKeys: sshPublicKeys,
+      })
+
+      await incus.setInstanceState(cleanName, 'start').catch((e) => {
+        console.warn('[admin] Failed to start newly created instance:', e)
+      })
+
+      await query(
+        `INSERT INTO instances (id, user_id, name, type, os, image_alias, cores, memory_mb, disk_gb)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [instanceId, owner.id, cleanName, type, osConfig.name, osConfig.alias, cores, memoryMb, diskGb],
+      )
+
+      await logActivity(
+        admin.user.id,
+        'admin_create_instance',
+        `Provisioned ${type.toUpperCase()} instance "${cleanName}" for ${owner.email}`,
+        clientKey(c),
+      )
+
+      return c.json(
+        {
+          id: instanceId,
+          name: cleanName,
+          type,
+          os: osConfig.name,
+          status: 'running',
+          cores,
+          memoryMb,
+          diskGb,
+          ownerId: owner.id,
+        },
+        201,
+      )
+    } catch (err: any) {
+      console.error('[admin] Incus instance creation failed:', err)
+      return c.json({ message: err?.message || 'Failed to provision instance.' }, 500)
+    }
+  })
+
+  app.post('/api/admin/instances/:id/action', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const instance = await queryOne<InstanceRow>('SELECT * FROM instances WHERE id = $1', [
+      c.req.param('id'),
+    ])
+    if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+
+    const body = await c.req.json<{ action?: string }>().catch(() => null)
+    const action = body?.action
+    if (action !== 'start' && action !== 'stop' && action !== 'restart') {
+      return c.json({ message: 'Action must be start, stop, or restart.' }, 400)
+    }
+
+    try {
+      await incus.setInstanceState(instance.name, action)
+      await logActivity(
+        admin.user.id,
+        `admin_${action}_instance`,
+        `${action.toUpperCase()} on instance "${instance.name}"`,
+        clientKey(c),
+      )
+      return c.json({ ok: true, action })
+    } catch (err: any) {
+      console.error(`[admin] Failed to ${action} instance:`, err)
+      return c.json({ message: err?.message || `Failed to ${action} instance.` }, 500)
+    }
+  })
+
+  app.delete('/api/admin/instances/:id', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const instance = await queryOne<InstanceRow>('SELECT * FROM instances WHERE id = $1', [
+      c.req.param('id'),
+    ])
+    if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+
+    try {
+      await incus.setInstanceState(instance.name, 'stop', true).catch(() => {})
+      await incus.deleteInstance(instance.name)
+    } catch (err: any) {
+      console.warn('[admin] Incus deletion warning:', err?.message)
+    }
+
+    await query('DELETE FROM instances WHERE id = $1', [instance.id])
+    await logActivity(
+      admin.user.id,
+      'admin_delete_instance',
+      `Deleted instance "${instance.name}"`,
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
+  })
+
+  app.get('/api/admin/stats', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const totals = await queryOne<{
+      users: number
+      admins: number
+      instances: number
+      running: number
+      cores: number
+      memory_mb: number
+      disk_gb: number
+    }>(
+      `SELECT
+         (SELECT COUNT(*)::int FROM users)                                    AS users,
+         (SELECT COUNT(*)::int FROM users WHERE is_admin)                     AS admins,
+         (SELECT COUNT(*)::int FROM instances)                                AS instances,
+         (SELECT COUNT(*)::int FROM instances)                                AS running,
+         COALESCE(SUM(cores), 0)::int                                         AS cores,
+         COALESCE(SUM(memory_mb), 0)::int                                     AS memory_mb,
+         COALESCE(SUM(disk_gb), 0)::int                                       AS disk_gb
+       FROM instances`,
+    )
+
+    let incusInfo: any = null
+    try {
+      incusInfo = await incus.getSystemInfo()
+    } catch (e) {
+      console.error('[admin] Failed to get Incus system info:', e)
+    }
+
+    return c.json({
+      totals: {
+        users: totals?.users ?? 0,
+        admins: totals?.admins ?? 0,
+        instances: totals?.instances ?? 0,
+        cores: totals?.cores ?? 0,
+        memory: formatMemory(totals?.memory_mb ?? 0),
+        diskGb: totals?.disk_gb ?? 0,
+      },
+      node: {
+        daemon: incusInfo?.server || 'incus',
+        version: incusInfo?.environment?.server_version || '7.4',
+        os: `${incusInfo?.environment?.os_name || 'Debian'} ${incusInfo?.environment?.os_version || '13'}`,
+        kernel: incusInfo?.environment?.kernel_version || 'Linux',
+        driver: incusInfo?.environment?.driver || 'lxc | qemu',
+        status: 'online',
+      },
+    })
+  })
 
   app.notFound((c) => c.json({ message: 'Not found.' }, 404))
 
