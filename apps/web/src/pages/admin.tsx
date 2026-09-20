@@ -104,7 +104,7 @@ export function AdminPage() {
           <div className="flex items-center gap-1 rounded-control bg-surface-2 p-1">
             <button
               type="button"
-              onClick={() => setSearchParams({ tab: 'overview' })}
+              onClick={() => setSearchParams({})}
               className={cn(
                 'flex items-center gap-2 rounded-control px-3 py-1.5 text-[13px] font-medium transition-colors',
                 tab === 'overview'

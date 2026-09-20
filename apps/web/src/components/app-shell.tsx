@@ -2,7 +2,6 @@ import {
   ArrowBendUpLeft,
   ChartLineUp,
   ClockCounterClockwise,
-  Cpu,
   Database,
   Gear,
   Globe,
@@ -50,14 +49,13 @@ const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
   {
     title: 'OVERVIEW & HEALTH',
     items: [
-      { label: 'Control Center', icon: <House size={16} aria-hidden />, to: '/admin?tab=overview' },
+      { label: 'Control Center', icon: <House size={16} aria-hidden />, to: '/admin' },
       { label: 'System Health', icon: <Heartbeat size={16} aria-hidden />, to: '/admin?tab=health' },
     ],
   },
   {
     title: 'INFRASTRUCTURE',
     items: [
-      { label: 'Nodes & Telemetry', icon: <Cpu size={16} aria-hidden />, to: '/admin?tab=overview' },
       { label: 'Network Pools', icon: <Globe size={16} aria-hidden /> },
     ],
   },
@@ -127,7 +125,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
               </span>
               <div className="flex flex-col gap-0.5">
                 {section.items.map((item) => {
-                  const active = item.to ? (pathname + search) === item.to : false
+                  const currentFull = pathname + (search || '')
+                  const active = item.to
+                    ? item.to === '/admin'
+                      ? currentFull === '/admin' || currentFull === '/admin?tab=overview'
+                      : currentFull === item.to
+                    : false
 
                   if (!item.to) {
                     return (
