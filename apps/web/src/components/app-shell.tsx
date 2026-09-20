@@ -7,6 +7,7 @@ import {
   Gear,
   Globe,
   HardDrives,
+  Heartbeat,
   House,
   Key,
   List,
@@ -50,10 +51,17 @@ interface AdminNavSection {
 
 const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
   {
+    title: 'OVERVIEW & HEALTH',
+    items: [
+      { label: 'Control Center', icon: <House size={16} aria-hidden />, to: '/admin?tab=overview' },
+      { label: 'System Health', icon: <Heartbeat size={16} aria-hidden />, to: '/admin?tab=health' },
+    ],
+  },
+  {
     title: 'INFRASTRUCTURE',
     items: [
       { label: 'Instances', icon: <HardDrives size={16} aria-hidden />, to: '/admin?tab=instances' },
-      { label: 'Nodes & Telemetry', icon: <Cpu size={16} aria-hidden />, to: '/admin?tab=node' },
+      { label: 'Nodes & Telemetry', icon: <Cpu size={16} aria-hidden />, to: '/admin?tab=overview' },
       { label: 'Network Pools', icon: <Globe size={16} aria-hidden /> },
     ],
   },
@@ -121,22 +129,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
           >
             <ArrowBendUpLeft size={15} weight="bold" aria-hidden />
             Exit to Client Area
-          </Link>
-
-          {/* Admin Dashboard Root */}
-          <Link
-            to="/admin"
-            onClick={(e) => handleLinkClick(e, '/admin')}
-            aria-current={pathname === '/admin' && (!search || search === '?tab=instances') ? 'page' : undefined}
-            className={cn(
-              'flex items-center gap-2.5 rounded-control border px-3 py-2 text-[13px] font-medium transition-colors',
-              pathname === '/admin' && (!search || search === '?tab=instances')
-                ? 'border-sun-500/40 bg-sun-500/10 text-sun-500'
-                : 'border-transparent text-fg-muted hover:bg-surface-2 hover:text-fg',
-            )}
-          >
-            <House size={16} aria-hidden />
-            Control Center
           </Link>
 
           {/* Categorized Admin Sections */}

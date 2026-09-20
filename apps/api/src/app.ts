@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import os from 'node:os'
 
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { Hono, type Context } from 'hono'
@@ -2259,6 +2260,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       console.error('[admin] Failed to get Incus system info:', e)
     }
 
+    const dbVersionRow = await queryOne<{ server_version: string }>('SHOW server_version')
+    const memTotalMb = Math.round(os.totalmem() / (1024 * 1024))
+    const memFreeMb = Math.round(os.freemem() / (1024 * 1024))
+    const memUsedMb = memTotalMb - memFreeMb
+    const memPercent = Math.round((memUsedMb / memTotalMb) * 100)
+    const cpus = os.cpus()
+    const cpuModel = cpus[0]?.model || 'AMD EPYC Processor'
+
     return c.json({
       totals: {
         users: totals?.users ?? 0,
@@ -2272,9 +2281,18 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         daemon: incusInfo?.server || 'incus',
         version: incusInfo?.environment?.server_version || '7.4',
         os: `${incusInfo?.environment?.os_name || 'Debian'} ${incusInfo?.environment?.os_version || '13'}`,
-        kernel: incusInfo?.environment?.kernel_version || 'Linux',
+        kernel: incusInfo?.environment?.kernel_version || os.release(),
         driver: incusInfo?.environment?.driver || 'lxc | qemu',
+        cpuModel,
+        hostMemory: {
+          usedMb: memUsedMb,
+          totalMb: memTotalMb,
+          percent: memPercent,
+        },
+        databaseVersion: `PostgreSQL ${dbVersionRow?.server_version ?? '17'}`,
         status: 'online',
+        uptimeSeconds: Math.floor(os.uptime()),
+        loadAvg: os.loadavg(),
       },
     })
   })

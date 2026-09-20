@@ -35,7 +35,23 @@ export interface AdminStats {
     memory: string
     diskGb: number
   }
-  node: ApiNodeStats['node']
+  node: {
+    daemon: string
+    version: string
+    os: string
+    kernel: string
+    driver: string
+    cpuModel?: string
+    hostMemory?: {
+      usedMb: number
+      totalMb: number
+      percent: number
+    }
+    databaseVersion?: string
+    status: string
+    uptimeSeconds?: number
+    loadAvg?: [number, number, number]
+  }
 }
 
 export type LoginResponse = { ok: true; needsName?: boolean }
