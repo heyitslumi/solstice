@@ -14,6 +14,7 @@ import {
 } from '@phosphor-icons/react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
@@ -28,7 +29,13 @@ import { cn } from '@/lib/utils'
 
 export function AdminPage() {
   const { user: currentUser } = useSession()
-  const [tab, setTab] = useState<'instances' | 'users'>('instances')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const tab = tabParam === 'users' ? 'users' : tabParam === 'node' ? 'node' : 'instances'
+
+  function setTab(next: 'instances' | 'users' | 'node') {
+    setSearchParams({ tab: next })
+  }
   const [instances, setInstances] = useState<AdminInstance[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -216,6 +223,19 @@ export function AdminPage() {
             >
               <Users size={15} aria-hidden />
               Users ({users.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('node')}
+              className={cn(
+                'flex items-center gap-2 rounded-control px-3 py-1.5 text-[13px] font-medium transition-colors',
+                tab === 'node'
+                  ? 'bg-surface text-fg shadow-sm'
+                  : 'text-fg-muted hover:text-fg',
+              )}
+            >
+              <Cpu size={15} aria-hidden />
+              Node Health
             </button>
           </div>
 
@@ -475,6 +495,55 @@ export function AdminPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </section>
+        ) : null}
+
+        {/* Tab 3: Node & System Telemetry */}
+        {tab === 'node' ? (
+          <section className="flex flex-col gap-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface p-5">
+                <h3 className="text-[14px] font-semibold text-fg">Incus Daemon Host</h3>
+                <dl className="grid grid-cols-2 gap-y-3 font-mono text-[12px]">
+                  <dt className="text-fg-subtle">Engine</dt>
+                  <dd className="text-fg">{stats?.node.daemon}</dd>
+                  <dt className="text-fg-subtle">Version</dt>
+                  <dd className="text-sun-500 font-semibold">{stats?.node.version}</dd>
+                  <dt className="text-fg-subtle">Operating System</dt>
+                  <dd className="text-fg">{stats?.node.os}</dd>
+                  <dt className="text-fg-subtle">Kernel</dt>
+                  <dd className="text-fg truncate">{stats?.node.kernel}</dd>
+                  <dt className="text-fg-subtle">Driver Support</dt>
+                  <dd className="text-fg">{stats?.node.driver}</dd>
+                  <dt className="text-fg-subtle">Socket Status</dt>
+                  <dd className="text-emerald-500 font-semibold">Online (/var/lib/incus/unix.socket)</dd>
+                </dl>
+              </div>
+
+              <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface p-5">
+                <h3 className="text-[14px] font-semibold text-fg">Resource Allocations</h3>
+                <div className="flex flex-col gap-3 text-[13px]">
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="text-fg-subtle">Total vCPU Cores Committed</span>
+                    <span className="font-mono font-semibold text-fg">{stats?.totals.cores} Cores</span>
+                  </div>
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="text-fg-subtle">Total RAM Allocated</span>
+                    <span className="font-mono font-semibold text-fg">{stats?.totals.memory}</span>
+                  </div>
+                  <div className="flex justify-between border-b border-border pb-2">
+                    <span className="text-fg-subtle">Total Disk Storage Provisioned</span>
+                    <span className="font-mono font-semibold text-fg">{stats?.totals.diskGb} GB</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-fg-subtle">Managed Workloads</span>
+                    <span className="font-mono font-semibold text-sun-500">
+                      {instances.length} ({instances.filter((i) => i.status === 'running').length} active)
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         ) : null}

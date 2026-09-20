@@ -1,11 +1,21 @@
 import {
+  ArrowBendUpLeft,
   ChartLineUp,
   ClockCounterClockwise,
+  Cpu,
+  Database,
+  Gear,
   Globe,
   HardDrives,
+  House,
+  Key,
   List,
+  MegaphoneSimple,
+  PuzzlePiece,
+  ShieldCheck,
   ShieldStar,
   SquaresFour,
+  Users,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useRef, useState, type ReactNode } from 'react'
@@ -25,7 +35,7 @@ interface NavItem {
   to?: string
 }
 
-const NAV: NavItem[] = [
+const CLIENT_NAV: NavItem[] = [
   { label: 'Overview', icon: <SquaresFour size={17} aria-hidden />, to: '/dashboard' },
   { label: 'Servers', icon: <HardDrives size={17} aria-hidden /> },
   { label: 'Snapshots', icon: <ClockCounterClockwise size={17} aria-hidden /> },
@@ -33,13 +43,47 @@ const NAV: NavItem[] = [
   { label: 'Usage', icon: <ChartLineUp size={17} aria-hidden /> },
 ]
 
+interface AdminNavSection {
+  title: string
+  items: NavItem[]
+}
+
+const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
+  {
+    title: 'INFRASTRUCTURE',
+    items: [
+      { label: 'Instances', icon: <HardDrives size={16} aria-hidden />, to: '/admin?tab=instances' },
+      { label: 'Nodes & Telemetry', icon: <Cpu size={16} aria-hidden />, to: '/admin?tab=node' },
+      { label: 'Network Pools', icon: <Globe size={16} aria-hidden /> },
+    ],
+  },
+  {
+    title: 'USERS & ACCESS',
+    items: [
+      { label: 'Users', icon: <Users size={16} aria-hidden />, to: '/admin?tab=users' },
+      { label: 'Roles & Permissions', icon: <ShieldCheck size={16} aria-hidden /> },
+      { label: 'SSH Public Keys', icon: <Key size={16} aria-hidden /> },
+    ],
+  },
+  {
+    title: 'SYSTEM',
+    items: [
+      { label: 'Platform Settings', icon: <Gear size={16} aria-hidden /> },
+      { label: 'Announcements', icon: <MegaphoneSimple size={16} aria-hidden /> },
+      { label: 'Audit Logs', icon: <Database size={16} aria-hidden /> },
+      { label: 'Plugins & Hooks', icon: <PuzzlePiece size={16} aria-hidden /> },
+    ],
+  },
+]
+
 function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) {
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const { user } = useSession()
+  const isAdminArea = pathname.startsWith('/admin')
 
   function handleLinkClick(e: React.MouseEvent<HTMLAnchorElement>, to?: string) {
     if (!onNavigate) return
-    if (!to || pathname === to) {
+    if (!to || (pathname + search) === to) {
       onNavigate()
       return
     }
@@ -48,83 +92,163 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
   }
 
   return (
-    <div className="flex h-full flex-col gap-7 px-3 py-5">
+    <div className="flex h-full flex-col gap-6 px-3 py-5">
+      {/* Brand header */}
       <Link
-        to="/dashboard"
-        onClick={(e) => handleLinkClick(e, '/dashboard')}
+        to={isAdminArea ? '/admin' : '/dashboard'}
+        onClick={(e) => handleLinkClick(e, isAdminArea ? '/admin' : '/dashboard')}
         className="flex items-center gap-2.5 rounded-control px-2 py-1"
       >
         <img src="/brand/solstice-mark.png" alt="" className="h-7 w-auto shrink-0" />
-        <span className="flex flex-col gap-1">
+        <span className="flex flex-col gap-0.5">
           <span className="text-[12px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
             Solstice
           </span>
-          <span className="text-[8px] leading-none font-medium tracking-[0.36em] text-sun-500 uppercase">
-            VPS Hosting
+          <span className="text-[8px] leading-none font-semibold tracking-[0.32em] text-sun-500 uppercase">
+            {isAdminArea ? 'Control Plane' : 'VPS Hosting'}
           </span>
         </span>
       </Link>
 
-      <nav className="flex flex-col gap-0.5">
-        {NAV.map((item) => {
-          if (!item.to) {
-            return (
-              <span
-                key={item.label}
-                className="flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] text-fg-subtle"
-              >
-                {item.icon}
-                {item.label}
-                <span className="ml-auto font-mono text-[10px] tracking-wide text-fg-subtle/70 uppercase">
-                  soon
-                </span>
-              </span>
-            )
-          }
+      {/* Admin Mode Sidebar */}
+      {isAdminArea ? (
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto pr-1">
+          {/* Back to Client App */}
+          <Link
+            to="/dashboard"
+            onClick={(e) => handleLinkClick(e, '/dashboard')}
+            className="flex items-center gap-2.5 rounded-control border border-border bg-surface-2/40 px-3 py-2 text-[12px] font-medium text-fg-muted transition-colors hover:border-sun-500/50 hover:bg-surface-2 hover:text-fg"
+          >
+            <ArrowBendUpLeft size={15} weight="bold" aria-hidden />
+            Exit to Client Area
+          </Link>
 
-          const active = pathname === item.to
-
-          return (
-            <Link
-              key={item.label}
-              to={item.to}
-              onClick={(e) => handleLinkClick(e, item.to)}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] transition-colors duration-150',
-                active
-                  ? 'bg-surface-2 font-medium text-fg'
-                  : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
-              )}
-            >
-              {item.icon}
-              {item.label}
-            </Link>
-          )
-        })}
-
-        {user?.isAdmin ? (
+          {/* Admin Dashboard Root */}
           <Link
             to="/admin"
             onClick={(e) => handleLinkClick(e, '/admin')}
-            aria-current={pathname === '/admin' ? 'page' : undefined}
+            aria-current={pathname === '/admin' && (!search || search === '?tab=instances') ? 'page' : undefined}
             className={cn(
-              'mt-4 flex items-center gap-2.5 border-t border-border pt-4 text-[13px] transition-colors duration-150',
-              pathname === '/admin'
-                ? 'font-medium text-sun-500'
-                : 'text-fg-muted hover:text-sun-500',
+              'flex items-center gap-2.5 rounded-control border px-3 py-2 text-[13px] font-medium transition-colors',
+              pathname === '/admin' && (!search || search === '?tab=instances')
+                ? 'border-sun-500/40 bg-sun-500/10 text-sun-500'
+                : 'border-transparent text-fg-muted hover:bg-surface-2 hover:text-fg',
             )}
           >
-            <ShieldStar size={17} aria-hidden />
-            Admin
+            <House size={16} aria-hidden />
+            Control Center
           </Link>
-        ) : null}
-      </nav>
 
-        <div className="mt-auto">
-          <UserMenu onNavigate={onNavigate} />
+          {/* Categorized Admin Sections */}
+          {ADMIN_NAV_SECTIONS.map((section) => (
+            <div key={section.title} className="flex flex-col gap-1">
+              <span className="px-2.5 text-[9px] font-bold tracking-[0.18em] text-fg-subtle uppercase">
+                {section.title}
+              </span>
+              <div className="flex flex-col gap-0.5">
+                {section.items.map((item) => {
+                  const active = item.to ? (pathname + search) === item.to : false
+
+                  if (!item.to) {
+                    return (
+                      <span
+                        key={item.label}
+                        className="flex items-center gap-2.5 rounded-control px-2.5 py-1.5 text-[12px] text-fg-subtle/70"
+                      >
+                        {item.icon}
+                        {item.label}
+                        <span className="ml-auto font-mono text-[9px] tracking-wide text-fg-subtle/50 uppercase">
+                          soon
+                        </span>
+                      </span>
+                    )
+                  }
+
+                  return (
+                    <Link
+                      key={item.label}
+                      to={item.to}
+                      onClick={(e) => handleLinkClick(e, item.to)}
+                      aria-current={active ? 'page' : undefined}
+                      className={cn(
+                        'flex items-center gap-2.5 rounded-control px-2.5 py-1.5 text-[12px] transition-colors',
+                        active
+                          ? 'bg-surface-2 font-medium text-fg'
+                          : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+                      )}
+                    >
+                      {item.icon}
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </div>
+      ) : (
+        /* Regular Client Sidebar */
+        <nav className="flex flex-col gap-0.5">
+          {CLIENT_NAV.map((item) => {
+            if (!item.to) {
+              return (
+                <span
+                  key={item.label}
+                  className="flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] text-fg-subtle"
+                >
+                  {item.icon}
+                  {item.label}
+                  <span className="ml-auto font-mono text-[10px] tracking-wide text-fg-subtle/70 uppercase">
+                    soon
+                  </span>
+                </span>
+              )
+            }
+
+            const active = pathname === item.to
+
+            return (
+              <Link
+                key={item.label}
+                to={item.to}
+                onClick={(e) => handleLinkClick(e, item.to)}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[13px] transition-colors duration-150',
+                  active
+                    ? 'bg-surface-2 font-medium text-fg'
+                    : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+                )}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            )
+          })}
+
+          {user?.isAdmin ? (
+            <Link
+              to="/admin"
+              onClick={(e) => handleLinkClick(e, '/admin')}
+              aria-current={pathname === '/admin' ? 'page' : undefined}
+              className={cn(
+                'mt-4 flex items-center gap-2.5 border-t border-border pt-4 text-[13px] transition-colors duration-150',
+                pathname === '/admin'
+                  ? 'font-medium text-sun-500'
+                  : 'text-fg-muted hover:text-sun-500',
+              )}
+            >
+              <ShieldStar size={17} aria-hidden />
+              Admin
+            </Link>
+          ) : null}
+        </nav>
+      )}
+
+      <div className="mt-auto">
+        <UserMenu onNavigate={onNavigate} />
       </div>
+    </div>
   )
 }
 
