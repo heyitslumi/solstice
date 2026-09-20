@@ -5,15 +5,12 @@ import {
   CheckCircle,
   Copy,
   Cpu,
-  DotsThreeVertical,
   Gauge,
   Play,
   Square,
-  Trash,
 } from '@phosphor-icons/react'
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
@@ -42,7 +39,6 @@ function Panel({
 
 export function ServerDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
 
   const [instance, setInstance] = useState<ApiInstanceDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -74,26 +70,6 @@ export function ServerDetailPage() {
       const res = await api.instanceAction(id, action)
       if (res.ok) {
         await loadInstance()
-      }
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  async function handleDelete() {
-    if (!id || !instance) return
-    if (
-      !window.confirm(
-        `Are you sure you want to permanently delete "${instance.name}"? All data will be lost.`,
-      )
-    ) {
-      return
-    }
-    setActionLoading(true)
-    try {
-      const res = await api.deleteInstance(id)
-      if (res.ok) {
-        navigate('/dashboard')
       }
     } finally {
       setActionLoading(false)
@@ -198,29 +174,6 @@ export function ServerDetailPage() {
               Start
             </Button>
           )}
-
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <Button size="icon" variant="secondary" className="size-8" disabled={actionLoading}>
-                <DotsThreeVertical size={16} weight="bold" />
-              </Button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                align="end"
-                className="z-50 min-w-[9.5rem] rounded-control border border-border bg-surface p-1 shadow-xl"
-              >
-                <DropdownMenu.Item
-                  disabled={actionLoading}
-                  className="flex cursor-default items-center gap-2 rounded-control px-2.5 py-1.5 text-[13px] text-danger outline-none data-[highlighted]:bg-danger-surface"
-                  onSelect={handleDelete}
-                >
-                  <Trash size={14} />
-                  Delete Instance
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
         </div>
       }
     >
@@ -391,23 +344,6 @@ export function ServerDetailPage() {
                 </dd>
               </div>
             </dl>
-          </Panel>
-
-          <Panel title="Danger Zone">
-            <div className="flex flex-col gap-3 p-5">
-              <p className="text-xs text-fg-subtle">
-                Permanently destroy this instance. Storage volumes and state will be erased.
-              </p>
-              <Button
-                variant="secondary"
-                disabled={actionLoading}
-                onClick={handleDelete}
-                className="w-full justify-center text-danger hover:bg-danger-surface"
-              >
-                <Trash size={16} />
-                Delete Instance
-              </Button>
-            </div>
           </Panel>
         </div>
       </div>
