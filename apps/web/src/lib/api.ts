@@ -33,6 +33,67 @@ export interface ApiEmailLog {
   createdAt: string
 }
 
+export interface ApiInstance {
+  id: string
+  name: string
+  type: 'kvm' | 'lxc'
+  os: string
+  status: 'running' | 'stopped'
+  ip4: string
+  ip6: string
+  cores: number
+  memory: string
+  disk: string
+  uptime: string
+  region: string
+  cpuUsage: number
+  ramUsage: number
+  bandwidth: string
+  createdAt: string
+}
+
+export interface ApiNetworkInterface {
+  interface: string
+  hwaddr: string
+  state: string
+  ip4: string
+  ip6: string
+  rxFormatted: string
+  txFormatted: string
+}
+
+export interface ApiInstanceDetail extends ApiInstance {
+  memoryMb: number
+  diskGb: number
+  imageAlias: string
+  networkInterfaces: ApiNetworkInterface[]
+}
+
+export interface ApiSshKey {
+  id: string
+  name: string
+  publicKey: string
+  fingerprint: string
+  createdAt: string
+}
+
+export interface ApiNodeStats {
+  resources: {
+    totalInstances: number
+    totalCores: number
+    totalMemory: string
+    totalDiskGb: number
+  }
+  node: {
+    daemon: string
+    version: string
+    os: string
+    kernel: string
+    driver: string
+    status: string
+  }
+}
+
 export interface ApiSession {
   createdAt: string
   expiresAt: string
@@ -239,5 +300,48 @@ export const api = {
 
   exportData() {
     return request<Record<string, unknown>>('/api/auth/export-data')
+  },
+
+  listInstances() {
+    return request<{ instances: ApiInstance[] }>('/api/instances')
+  },
+
+  createInstance(input: {
+    name: string
+    type: 'kvm' | 'lxc'
+    os: string
+    cores?: number
+    memoryMb?: number
+    diskGb?: number
+  }) {
+    return post<ApiInstance>('/api/instances', input)
+  },
+
+  instanceAction(id: string, action: 'start' | 'stop' | 'restart') {
+    return post<{ ok: true; action: string }>(`/api/instances/${encodeURIComponent(id)}/action`, { action })
+  },
+
+  deleteInstance(id: string) {
+    return request<{ ok: true }>(`/api/instances/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  },
+
+  getInstance(id: string) {
+    return request<{ instance: ApiInstanceDetail }>(`/api/instances/${encodeURIComponent(id)}`)
+  },
+
+  getInstanceStats() {
+    return request<ApiNodeStats>('/api/instances/stats')
+  },
+
+  listSshKeys() {
+    return request<{ keys: ApiSshKey[] }>('/api/auth/ssh-keys')
+  },
+
+  addSshKey(input: { name: string; publicKey: string }) {
+    return post<ApiSshKey>('/api/auth/ssh-keys', input)
+  },
+
+  deleteSshKey(id: string) {
+    return request<{ ok: true }>(`/api/auth/ssh-keys/${encodeURIComponent(id)}`, { method: 'DELETE' })
   },
 }

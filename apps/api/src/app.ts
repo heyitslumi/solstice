@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { Hono, type Context } from 'hono'
@@ -9,7 +9,8 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/server'
 
-import { query, queryOne, toIso, type UserRow } from './db.ts'
+import { query, queryOne, toIso, type InstanceRow, type SshKeyRow, type UserRow } from './db.ts'
+import { incus, type IncusInstance } from './incus/client.ts'
 import {
   CHANGE_CODE_LENGTH,
   CHANGE_CODE_TTL_MS,
@@ -1200,7 +1201,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
     if (!user) return c.json({ message: 'Not signed in.' }, 401)
 
-    const body = await readJson(c).catch(() => ({}))
+    const body = (await readJson(c).catch(() => ({}))) as Record<string, unknown>
     const code = str(body.code).trim()
     const confirmation = str(body.confirmation ?? body.confirmText).trim()
 
@@ -1376,6 +1377,483 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       activity: userActivities,
       emails: userEmails,
     })
+  })
+
+  const OS_MAP: Record<string, { name: string; alias: string }> = {
+    'debian-12': { name: 'Debian 12 Bookworm', alias: 'debian/12' },
+    'ubuntu-24': { name: 'Ubuntu 24.04 LTS', alias: 'ubuntu/24.04' },
+    'alpine-edge': { name: 'Alpine Linux Edge', alias: 'alpine/edge' },
+  }
+
+  function formatBytes(bytes: number): string {
+    if (!bytes || bytes <= 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
+  }
+
+  function formatMemory(memoryMb: number): string {
+    if (memoryMb >= 1024) {
+      const gb = memoryMb / 1024
+      return `${Number.isInteger(gb) ? gb : gb.toFixed(1)} GB`
+    }
+    return `${memoryMb} MB`
+  }
+
+  app.get('/api/instances', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const dbRows = await query<InstanceRow>(
+      'SELECT * FROM instances WHERE user_id = $1 ORDER BY created_at DESC',
+      [session.user_id],
+    )
+
+    let incusMap = new Map<string, IncusInstance>()
+    try {
+      const incusList = await incus.listInstances()
+      incusMap = new Map(incusList.map((i) => [i.name, i]))
+    } catch (err) {
+      console.error('Failed to list Incus instances:', err)
+    }
+
+    const instances = dbRows.map((row) => {
+      const live = incusMap.get(row.name)
+      const isRunning = live?.status?.toLowerCase() === 'running'
+
+      let ip4 = '—'
+      let ip6 = '—'
+      let totalBytes = 0
+
+      if (live?.state?.network) {
+        for (const [ifaceName, iface] of Object.entries(live.state.network)) {
+          if (ifaceName === 'lo') continue
+          totalBytes += (iface.counters?.bytes_received || 0) + (iface.counters?.bytes_sent || 0)
+          for (const addr of iface.addresses || []) {
+            if (addr.family === 'inet' && addr.scope === 'global' && ip4 === '—') {
+              ip4 = addr.address
+            } else if (addr.family === 'inet6' && addr.scope === 'global' && ip6 === '—') {
+              ip6 = addr.address
+            }
+          }
+        }
+      }
+
+      const memBytes = live?.state?.memory?.usage || 0
+      const totalMemBytes = (row.memory_mb || 1024) * 1024 * 1024
+      const ramUsage =
+        isRunning && totalMemBytes > 0
+          ? Math.min(100, Math.round((memBytes / totalMemBytes) * 100))
+          : 0
+
+      return {
+        id: row.id,
+        name: row.name,
+        type: row.type as 'kvm' | 'lxc',
+        os: row.os,
+        status: (isRunning ? 'running' : 'stopped') as 'running' | 'stopped',
+        ip4,
+        ip6,
+        cores: row.cores,
+        memory: formatMemory(row.memory_mb),
+        disk: `${row.disk_gb} GB NVMe`,
+        uptime: isRunning ? 'Active' : 'Stopped',
+        region: 'Frankfurt (fra-01)',
+        cpuUsage: isRunning ? 5 : 0,
+        ramUsage,
+        bandwidth: formatBytes(totalBytes),
+        createdAt: toIso(row.created_at),
+      }
+    })
+
+    return c.json({ instances })
+  })
+
+  app.post('/api/instances', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const user = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+    if (!user) return c.json({ message: 'Not signed in.' }, 401)
+
+    const body = await c.req
+      .json<{
+        name?: string
+        type?: 'kvm' | 'lxc'
+        os?: string
+        cores?: number
+        memoryMb?: number
+        diskGb?: number
+      }>()
+      .catch(() => null)
+
+    if (!body || typeof body.name !== 'string') {
+      return c.json({ message: 'Instance name is required.' }, 400)
+    }
+
+    const cleanName = body.name.trim().toLowerCase()
+    if (!/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(cleanName)) {
+      return c.json(
+        { message: 'Name must be 3-32 characters, lowercase alphanumeric and hyphens only.' },
+        400,
+      )
+    }
+
+    const type = body.type === 'kvm' ? 'kvm' : 'lxc'
+    const osKey = body.os || 'debian-12'
+    const osConfig = OS_MAP[osKey] || { name: 'Debian 12 Bookworm', alias: 'debian/12' }
+    const cores = Math.max(1, Math.min(8, Number(body.cores) || 1))
+    const memoryMb = Math.max(512, Math.min(16384, Number(body.memoryMb) || 1024))
+    const diskGb = Math.max(5, Math.min(200, Number(body.diskGb) || 10))
+
+    const existing = await queryOne('SELECT id FROM instances WHERE name = $1', [cleanName])
+    if (existing) {
+      return c.json({ message: 'An instance with this name already exists.' }, 409)
+    }
+
+    const instanceId = randomUUID()
+
+    const userSshKeys = await query<SshKeyRow>('SELECT public_key FROM ssh_keys WHERE user_id = $1', [user.id])
+    const sshPublicKeys = userSshKeys.map((k) => k.public_key)
+
+    try {
+      await incus.createInstance({
+        name: cleanName,
+        type: type === 'kvm' ? 'virtual-machine' : 'container',
+        imageAlias: osConfig.alias,
+        cpu: cores,
+        memory: `${memoryMb}MiB`,
+        disk: `${diskGb}GiB`,
+        sshKeys: sshPublicKeys,
+      })
+
+      // Start the newly provisioned instance
+      await incus.setInstanceState(cleanName, 'start').catch((e) => {
+        console.warn('Failed to start newly created instance:', e)
+      })
+
+      await query(
+        `INSERT INTO instances (id, user_id, name, type, os, image_alias, cores, memory_mb, disk_gb)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [instanceId, user.id, cleanName, type, osConfig.name, osConfig.alias, cores, memoryMb, diskGb],
+      )
+
+      await logActivity(
+        user.id,
+        'create_instance',
+        `Created ${type.toUpperCase()} instance "${cleanName}" (${osConfig.name})`,
+        clientKey(c),
+      )
+
+      return c.json(
+        {
+          id: instanceId,
+          name: cleanName,
+          type,
+          os: osConfig.name,
+          status: 'running',
+          cores,
+          memoryMb,
+          diskGb,
+        },
+        201,
+      )
+    } catch (err: any) {
+      console.error('Incus instance creation failed:', err)
+      return c.json({ message: err?.message || 'Failed to provision instance.' }, 500)
+    }
+  })
+
+  app.post('/api/instances/:id/action', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const instanceId = c.req.param('id')
+    const instance = await queryOne<InstanceRow>(
+      'SELECT * FROM instances WHERE id = $1 AND user_id = $2',
+      [instanceId, session.user_id],
+    )
+    if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+
+    const body = await c.req.json<{ action?: string }>().catch(() => null)
+    const action = body?.action
+    if (action !== 'start' && action !== 'stop' && action !== 'restart') {
+      return c.json({ message: 'Action must be start, stop, or restart.' }, 400)
+    }
+
+    try {
+      await incus.setInstanceState(instance.name, action)
+      await logActivity(
+        session.user_id,
+        `${action}_instance`,
+        `${action.toUpperCase()} action on instance "${instance.name}"`,
+        clientKey(c),
+      )
+      return c.json({ ok: true, action })
+    } catch (err: any) {
+      console.error(`Failed to ${action} instance:`, err)
+      return c.json({ message: err?.message || `Failed to ${action} instance.` }, 500)
+    }
+  })
+
+  app.delete('/api/instances/:id', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const instanceId = c.req.param('id')
+    const instance = await queryOne<InstanceRow>(
+      'SELECT * FROM instances WHERE id = $1 AND user_id = $2',
+      [instanceId, session.user_id],
+    )
+    if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+
+    try {
+      await incus.setInstanceState(instance.name, 'stop', true).catch(() => {})
+      await incus.deleteInstance(instance.name)
+    } catch (err: any) {
+      console.warn('Incus deletion warning:', err?.message)
+    }
+
+    await query('DELETE FROM instances WHERE id = $1', [instance.id])
+    await logActivity(
+      session.user_id,
+      'delete_instance',
+      `Deleted instance "${instance.name}"`,
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
+  })
+
+  app.get('/api/instances/stats', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const userInstances = await query<InstanceRow>(
+      'SELECT cores, memory_mb, disk_gb FROM instances WHERE user_id = $1',
+      [session.user_id],
+    )
+
+    let incusInfo: any = null
+    try {
+      incusInfo = await incus.getSystemInfo()
+    } catch (e) {
+      console.error('Failed to get Incus system info:', e)
+    }
+
+    const totalCores = userInstances.reduce((acc, i) => acc + i.cores, 0)
+    const totalMemoryMb = userInstances.reduce((acc, i) => acc + i.memory_mb, 0)
+    const totalDiskGb = userInstances.reduce((acc, i) => acc + i.disk_gb, 0)
+
+    return c.json({
+      resources: {
+        totalInstances: userInstances.length,
+        totalCores,
+        totalMemory: formatMemory(totalMemoryMb),
+        totalDiskGb,
+      },
+      node: {
+        daemon: incusInfo?.server || 'incus',
+        version: incusInfo?.environment?.server_version || '7.4',
+        os: `${incusInfo?.environment?.os_name || 'Debian'} ${incusInfo?.environment?.os_version || '13'}`,
+        kernel: incusInfo?.environment?.kernel_version || 'Linux',
+        driver: incusInfo?.environment?.driver || 'lxc | qemu',
+        status: 'online',
+      },
+    })
+  })
+
+  app.get('/api/instances/:id', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const instanceId = c.req.param('id')
+    const row = await queryOne<InstanceRow>(
+      'SELECT * FROM instances WHERE id = $1 AND user_id = $2',
+      [instanceId, session.user_id],
+    )
+    if (!row) return c.json({ message: 'Instance not found.' }, 404)
+
+    let live: IncusInstance | null = null
+    let state: any = null
+    try {
+      live = await incus.getInstance(row.name)
+      state = await incus.getInstanceState(row.name).catch(() => null)
+    } catch (err) {
+      console.warn('Could not fetch Incus instance details:', err)
+    }
+
+    const isRunning = (state?.status || live?.status)?.toLowerCase() === 'running'
+
+    let ip4 = '—'
+    let ip6 = '—'
+    let totalBytes = 0
+    const networkInterfaces: any[] = []
+
+    if (state?.network) {
+      for (const [name, iface] of Object.entries<any>(state.network)) {
+        if (name === 'lo') continue
+        const rx = iface.counters?.bytes_received || 0
+        const tx = iface.counters?.bytes_sent || 0
+        totalBytes += rx + tx
+
+        const ifaceIpv4 =
+          iface.addresses?.find((a: any) => a.family === 'inet' && a.scope === 'global')?.address ||
+          '—'
+        const ifaceIpv6 =
+          iface.addresses?.find((a: any) => a.family === 'inet6' && a.scope === 'global')?.address ||
+          '—'
+
+        if (ip4 === '—' && ifaceIpv4 !== '—') ip4 = ifaceIpv4
+        if (ip6 === '—' && ifaceIpv6 !== '—') ip6 = ifaceIpv6
+
+        networkInterfaces.push({
+          interface: name,
+          hwaddr: iface.hwaddr,
+          state: iface.state,
+          ip4: ifaceIpv4,
+          ip6: ifaceIpv6,
+          rxFormatted: formatBytes(rx),
+          txFormatted: formatBytes(tx),
+        })
+      }
+    }
+
+    const memBytes = state?.memory?.usage || 0
+    const totalMemBytes = (row.memory_mb || 1024) * 1024 * 1024
+    const ramUsage =
+      isRunning && totalMemBytes > 0
+        ? Math.min(100, Math.round((memBytes / totalMemBytes) * 100))
+        : 0
+
+    return c.json({
+      instance: {
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        os: row.os,
+        imageAlias: row.image_alias,
+        status: isRunning ? 'running' : 'stopped',
+        ip4,
+        ip6,
+        cores: row.cores,
+        memory: formatMemory(row.memory_mb),
+        memoryMb: row.memory_mb,
+        disk: `${row.disk_gb} GB NVMe`,
+        diskGb: row.disk_gb,
+        uptime: isRunning ? 'Active' : 'Stopped',
+        region: 'Frankfurt (fra-01)',
+        cpuUsage: isRunning ? 5 : 0,
+        ramUsage,
+        bandwidth: formatBytes(totalBytes),
+        networkInterfaces,
+        createdAt: toIso(row.created_at),
+      },
+    })
+  })
+
+  function sshFingerprint(publicKey: string): string {
+    const parts = publicKey.trim().split(/\s+/)
+    if (parts.length >= 2) {
+      try {
+        const keyBuffer = Buffer.from(parts[1], 'base64')
+        const hash = createHash('sha256').update(keyBuffer).digest('base64')
+        return `SHA256:${hash.replace(/=+$/, '')}`
+      } catch {
+        // fallback
+      }
+    }
+    return 'SHA256:invalid'
+  }
+
+  app.get('/api/auth/ssh-keys', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const keys = await query<SshKeyRow>(
+      'SELECT id, name, public_key, fingerprint, created_at FROM ssh_keys WHERE user_id = $1 ORDER BY created_at DESC',
+      [session.user_id],
+    )
+    return c.json({
+      keys: keys.map((k) => ({
+        id: k.id,
+        name: k.name,
+        publicKey: k.public_key,
+        fingerprint: k.fingerprint,
+        createdAt: toIso(k.created_at),
+      })),
+    })
+  })
+
+  app.post('/api/auth/ssh-keys', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const body = await c.req.json<{ name?: string; publicKey?: string }>().catch(() => null)
+    const name = body?.name?.trim()
+    const publicKey = body?.publicKey?.trim()
+
+    if (!name || name.length > 50) {
+      return c.json({ message: 'A descriptive key name (up to 50 chars) is required.' }, 400)
+    }
+
+    if (
+      !publicKey ||
+      !/^(ssh-rsa|ssh-ed25519|ecdsa-sha2-[a-z0-9-]+)\s+[A-Za-z0-9+/=]+/.test(publicKey)
+    ) {
+      return c.json(
+        { message: 'Invalid public SSH key format (expected ssh-ed25519, ssh-rsa, or ecdsa).' },
+        400,
+      )
+    }
+
+    const fingerprint = sshFingerprint(publicKey)
+    const keyId = randomUUID()
+
+    await query(
+      'INSERT INTO ssh_keys (id, user_id, name, public_key, fingerprint) VALUES ($1, $2, $3, $4, $5)',
+      [keyId, session.user_id, name, publicKey, fingerprint],
+    )
+
+    await logActivity(
+      session.user_id,
+      'add_ssh_key',
+      `Added public SSH key "${name}" (${fingerprint})`,
+      clientKey(c),
+    )
+
+    return c.json(
+      {
+        id: keyId,
+        name,
+        publicKey,
+        fingerprint,
+        createdAt: new Date().toISOString(),
+      },
+      201,
+    )
+  })
+
+  app.delete('/api/auth/ssh-keys/:id', async (c) => {
+    const session = await readSession(getCookie(c, SESSION_COOKIE))
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+
+    const keyId = c.req.param('id')
+    const key = await queryOne<SshKeyRow>(
+      'SELECT * FROM ssh_keys WHERE id = $1 AND user_id = $2',
+      [keyId, session.user_id],
+    )
+    if (!key) return c.json({ message: 'SSH key not found.' }, 404)
+
+    await query('DELETE FROM ssh_keys WHERE id = $1', [key.id])
+    await logActivity(
+      session.user_id,
+      'delete_ssh_key',
+      `Deleted public SSH key "${key.name}"`,
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
   })
 
   app.get('/api/health', async (c) => {

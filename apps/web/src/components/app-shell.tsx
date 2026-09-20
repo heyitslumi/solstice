@@ -109,7 +109,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
 }
 
 interface AppShellProps {
-  title: string
+  title: ReactNode
   description?: string
   actions?: ReactNode
   children: ReactNode

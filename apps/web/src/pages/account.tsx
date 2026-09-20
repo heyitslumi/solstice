@@ -14,6 +14,7 @@ import {
   Key,
   ListBullets,
   MagnifyingGlass,
+  Plus,
   ShieldCheck,
   SignOut,
   Terminal,
@@ -37,7 +38,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { TextField } from '@/components/ui/field'
-import { EMAIL_PATTERN, api, type ApiActivity, type ApiEmailLog, type ApiPasskey, type PendingEmailChange } from '@/lib/api'
+import { EMAIL_PATTERN, api, type ApiActivity, type ApiEmailLog, type ApiPasskey, type ApiSshKey, type PendingEmailChange } from '@/lib/api'
 import { useSession } from '@/lib/session'
 
 const CHANGE_CODE_LENGTH = 6
@@ -309,6 +310,62 @@ export function AccountPage() {
   const [emailSearch, setEmailSearch] = useState('')
   const [viewingEmail, setViewingEmail] = useState<ApiEmailLog | null>(null)
 
+  // SSH Keys
+  const [sshKeys, setSshKeys] = useState<ApiSshKey[]>([])
+  const [sshLoading, setSshLoading] = useState(false)
+  const [sshDialogOpen, setSshDialogOpen] = useState(false)
+  const [sshKeyName, setSshKeyName] = useState('')
+  const [sshPublicKey, setSshPublicKey] = useState('')
+  const [sshError, setSshError] = useState<string | null>(null)
+  const [sshSubmitting, setSshSubmitting] = useState(false)
+
+  async function loadSshKeys() {
+    setSshLoading(true)
+    const res = await api.listSshKeys()
+    if (res.ok) {
+      setSshKeys(res.data.keys)
+    }
+    setSshLoading(false)
+  }
+
+  async function handleAddSshKey(e: FormEvent) {
+    e.preventDefault()
+    setSshError(null)
+    const name = sshKeyName.trim()
+    const publicKey = sshPublicKey.trim()
+
+    if (!name) {
+      setSshError('Key name is required.')
+      return
+    }
+    if (!publicKey) {
+      setSshError('Public key content is required.')
+      return
+    }
+
+    setSshSubmitting(true)
+    try {
+      const res = await api.addSshKey({ name, publicKey })
+      if (!res.ok) {
+        setSshError(res.error.message || 'Failed to add SSH key.')
+        return
+      }
+      setSshDialogOpen(false)
+      setSshKeyName('')
+      setSshPublicKey('')
+      await loadSshKeys()
+    } finally {
+      setSshSubmitting(false)
+    }
+  }
+
+  async function handleDeleteSshKey(id: string) {
+    const res = await api.deleteSshKey(id)
+    if (res.ok) {
+      setSshKeys((prev) => prev.filter((k) => k.id !== id))
+    }
+  }
+
   const PAGE_SIZE = 10
 
   async function loadActivities(page = activityPage) {
@@ -355,6 +412,8 @@ export function AccountPage() {
       void loadActivities(activityPage)
     } else if (activeTab === 'emails') {
       void loadEmails()
+    } else if (activeTab === 'ssh') {
+      void loadSshKeys()
     }
   }, [activeTab, activityPage])
 
@@ -1111,24 +1170,109 @@ export function AccountPage() {
 
         {/* SSH Keys Tab */}
         {activeTab === 'ssh' && (
-          <Panel title="SSH Keys">
-            <div className="flex flex-col gap-4 px-5 py-8 text-center sm:py-12">
-              <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-surface-2 text-fg-subtle">
-                <Terminal size={24} />
+          <Panel
+            title="SSH Keys"
+            action={
+              <Dialog open={sshDialogOpen} onOpenChange={setSshDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="secondary">
+                    <Plus size={15} aria-hidden />
+                    Add SSH Key
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogTitle>Add Public SSH Key</DialogTitle>
+                  <DialogDescription>
+                    Paste your OpenSSH public key. It will be injected via cloud-init into all new
+                    instances.
+                  </DialogDescription>
+
+                  <form onSubmit={handleAddSshKey} className="mt-4 flex flex-col gap-4">
+                    {sshError ? <Alert tone="danger">{sshError}</Alert> : null}
+
+                    <TextField
+                      id="ssh-name"
+                      label="Key Name"
+                      placeholder="e.g. MacBook Pro, Workstation"
+                      value={sshKeyName}
+                      onChange={(e) => setSshKeyName(e.target.value)}
+                      required
+                    />
+
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="ssh-key-val" className="text-[13px] font-medium text-fg-muted">
+                        Public Key
+                      </label>
+                      <textarea
+                        id="ssh-key-val"
+                        rows={4}
+                        placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... user@host"
+                        value={sshPublicKey}
+                        onChange={(e) => setSshPublicKey(e.target.value)}
+                        className="w-full rounded-control border border-border bg-field-bg p-3 font-mono text-xs text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div className="mt-2 flex justify-end gap-2.5">
+                      <DialogClose asChild>
+                        <Button type="button" variant="secondary" disabled={sshSubmitting}>
+                          Cancel
+                        </Button>
+                      </DialogClose>
+                      <Button type="submit" disabled={sshSubmitting}>
+                        {sshSubmitting ? 'Adding...' : 'Save SSH Key'}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            }
+          >
+            {sshLoading ? (
+              <div className="flex justify-center p-8">
+                <ArrowClockwise size={20} className="animate-spin text-fg-subtle" />
               </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-fg">Public SSH Keys</h3>
-                <p className="text-xs text-fg-muted max-w-sm mx-auto">
-                  Add public SSH keys to automatically inject into newly provisioned Incus instances
-                  and containers.
-                </p>
+            ) : sshKeys.length === 0 ? (
+              <div className="flex flex-col gap-4 px-5 py-8 text-center sm:py-12">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-surface-2 text-fg-subtle">
+                  <Terminal size={24} />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-fg">No SSH keys added</h3>
+                  <p className="text-xs text-fg-muted max-w-sm mx-auto">
+                    Add public SSH keys to automatically inject into newly provisioned Incus instances
+                    and containers via cloud-init.
+                  </p>
+                </div>
               </div>
-              <div className="pt-2">
-                <Button size="sm" variant="secondary" disabled>
-                  Add SSH Key (Coming in Incus Phase)
-                </Button>
-              </div>
-            </div>
+            ) : (
+              <ul className="divide-y divide-border">
+                {sshKeys.map((key) => (
+                  <li key={key.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Terminal size={16} className="text-fg-subtle" />
+                        <span className="text-sm font-medium text-fg">{key.name}</span>
+                      </div>
+                      <p className="font-mono text-xs text-fg-muted truncate max-w-md">
+                        {key.fingerprint}
+                      </p>
+                      <p className="text-[11px] text-fg-subtle">Added {formatDate(key.createdAt)}</p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => void handleDeleteSshKey(key.id)}
+                      title="Delete SSH key"
+                      className="text-danger hover:bg-danger-surface"
+                    >
+                      <Trash size={16} />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Panel>
         )}
 

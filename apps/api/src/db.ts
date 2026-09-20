@@ -173,6 +173,30 @@ const SCHEMA = `
     created_at timestamptz NOT NULL DEFAULT now(),
     expires_at timestamptz NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS instances (
+    id          uuid PRIMARY KEY,
+    user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        text NOT NULL UNIQUE,
+    type        text NOT NULL,
+    os          text NOT NULL,
+    image_alias text NOT NULL,
+    cores       integer NOT NULL DEFAULT 1,
+    memory_mb   integer NOT NULL DEFAULT 1024,
+    disk_gb     integer NOT NULL DEFAULT 10,
+    created_at  timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS instances_user_idx ON instances (user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS ssh_keys (
+    id          uuid PRIMARY KEY,
+    user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        text NOT NULL,
+    public_key  text NOT NULL,
+    fingerprint text NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS ssh_keys_user_idx ON ssh_keys (user_id, created_at DESC);
 `
 
 async function hasColumn(table: string, column: string) {
@@ -224,5 +248,27 @@ export interface UserRow {
   password_hash: string | null
   avatar_url?: string | null
   email_verified_at: Date | string | null
+  created_at: Date | string
+}
+
+export interface InstanceRow {
+  id: string
+  user_id: string
+  name: string
+  type: 'kvm' | 'lxc'
+  os: string
+  image_alias: string
+  cores: number
+  memory_mb: number
+  disk_gb: number
+  created_at: Date | string
+}
+
+export interface SshKeyRow {
+  id: string
+  user_id: string
+  name: string
+  public_key: string
+  fingerprint: string
   created_at: Date | string
 }

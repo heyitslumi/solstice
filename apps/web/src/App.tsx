@@ -13,6 +13,7 @@ import { PrivacyPage } from '@/pages/legal/privacy'
 import { TermsPage } from '@/pages/legal/terms'
 import { LoginPage } from '@/pages/login'
 import { NotFoundPage } from '@/pages/not-found'
+import { ServerDetailPage } from '@/pages/server-detail'
 import { VerifyEmailPage } from '@/pages/verify-email'
 
 function HomeRedirect() {
@@ -57,6 +58,14 @@ function App() {
           element={
             <RequireAuth>
               <DashboardPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/servers/:id"
+          element={
+            <RequireAuth>
+              <ServerDetailPage />
             </RequireAuth>
           }
         />
