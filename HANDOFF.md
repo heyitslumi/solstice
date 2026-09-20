@@ -1,127 +1,164 @@
 # HANDOFF — Solstice Host (incus-vps-panel)
 
-Written 2026-09-18. Read `MEMORY.md` in this repo **first** — it contains environment-specific traps (IPv6 Vite, Postgres port 5433, `/tmp` tmpfs, Playwright tab throttling, etc.) that will cost hours if rediscovered.
+Updated: 2026-09-20  
+Git Origin: `https://github.com/heyitslumi/solstice.git` (branch `main`)  
+Git Identity: `heyitslumi <hi@lumis.moe>`
+
+---
 
 ## 1. What this project is
 
-A customer-facing, multi-tenant VPS hosting control panel backed by **Incus** (system containers + VMs). The `.omo/drafts/incus-vps-panel.md` file contains the full product plan draft (components C1–C6, assumptions A1–A14, findings from three research lanes, decisions with rationale, scope in/out).
+Solstice Host is a customer-facing, multi-tenant VPS control panel backed by **Incus** (managing both LXC system containers and KVM virtual machines).
 
-Current state: **the auth + panel shell is done; the Incus control plane is not started.**
+- **Current state**: Complete passwordless auth system (email link/code + WebAuthn passkeys), avatar upload system, full-screen ops console dashboard with mock telemetry/power actions, and automated test suites (93/93 tests passing).
+- **Next milestone**: Incus control plane implementation (Phase 1: installing & binding Incus daemon).
+- Moving from Windows WSL2 to a dedicated Debian 13 VM eliminates WSL mirrored-networking socket drops and Hyper-V nested virtualization issues for KVM.
 
-The panel is currently a polished React SPA with working passwordless auth (email link+code login, passkeys), account management, and an empty dashboard ("provisioning is not connected yet").
+---
 
-## 2. Stack (as built)
+## 2. Repo Architecture & Tech Stack
 
-- **Monorepo**: npm workspaces (`apps/web`, `apps/api`)
-- **Backend**: Node 24 runs `.ts` directly (no build step). Hono + `@hono/node-server`. Postgres via `pg`. WebAuthn via `@simplewebauthn/server`. No tsx, no better-sqlite3.
-  - `apps/api/src/index.ts` — entrypoint, `node --env-file-if-exists=.env`
-  - `apps/api/src/app.ts` — all routes (~1100 lines)
-  - `apps/api/src/db.ts` — schema + `migrate()` (runs on every boot), `SCHEMA` const inlined
-  - `apps/api/src/{session,two-factor,verification,email-change,passkeys,rate-limit,mail,secret}.ts` — domain modules, each with a matching `.test.ts`
-- **Frontend**: React + Vite + TypeScript + Tailwind v4 + shadcn-style UI primitives (`apps/web/src/components/ui/`), Phosphor icons, Radix. Dark-first "ops console" design. `@/` path alias → `src`.
-  - Routes in `apps/web/src/App.tsx`. Pages in `apps/web/src/pages/`.
-  - The Vite `/api` dev proxy lives in `vite.config.ts`.
-- **Database**: Postgres 17 on **port 5433** (NOT 5432 — that port belongs to an unrelated service). Role `solstice` has CREATEDB (tests build/drop a DB per file). Connection string in `apps/api/.env` (gitignored; `.env.example` is the template).
-- **Deployment**: `solstice-api.service` (systemd) runs `node src/index.ts` directly, NO `--watch`. Restarting it: `sudo systemctl restart solstice-api.service`. For dev auto-reload use `npm run dev` instead — stopping the service first.
-
-## 3. Just-completed work: passwordless auth (UNCOMMITTED)
-
-The whole working tree is one big uncommitted change: **passwords and 2FA (email OTP toggle, TOTP, recovery codes) were removed. Login is now email-issued magic link + 6-digit code in a single email; passkeys remain as the alternative login.**
-
-The API service was restarted after this work, so the running server already serves the new flow.
-
-### API surface now
-- `POST /api/auth/register` — `{name, email}` only (no password), then verification email
-- `POST /api/auth/login` — `{email, remember?}` → always `{ok:true}` (anti-oracle; sends link+code if account exists+verified, resends verification if unverified)
-- `POST /api/auth/login/verify` — `{email, code}` → session
-- `POST /api/auth/login/link` — `{token}` (the magic link) → session
-- `POST /api/auth/login/resend` — `{email, remember?}` → reissues challenge
-- **Removed**: `/forgot-password`, `/reset-password`, `/change-password`, `/two-factor`, `/totp/*`, recovery codes
-- Password gates **removed** from: passkey register/remove, change-email (still proves the new address by code + warns the old)
-- `publicUser` no longer returns `emailOtpEnabled`/`totpEnabled`
-
-### Schema changes (`apps/api/src/db.ts`)
-- `users.password_hash` → nullable, never written; `email_otp_enabled_at`, `totp_secret`, `totp_enabled_at`, `totp_last_step` dropped
-- `recovery_codes`, `password_resets` tables dropped
-- `login_challenges` gains nullable `link_hash` + unique index (code and link share one row; consuming either retires both)
-
-### Frontend changes
-- `login.tsx` — email step → "Check your email" code screen; magic link lands on `/login?token=...` and auto-submits; passkey button kept
-- `register.tsx` — no password fields
-- `account.tsx` — password change, email-2FA, and authenticator-app panels removed; passkeys is now its own panel; email-change dialog has no password field
-- `api.ts` — types/calls trimmed, `loginLink` added
-- Deleted: `forgot-password.tsx`, `reset-password.tsx`, `password-strength.tsx`, `lib/password.ts`
-- Legal copy updated (privacy, cancel-email-change) to reflect passwordless
-
-### Tests
-- `auth.test.ts` rewritten as passwordless-login suite (92 tests total across all files pass)
-- `password.test.ts`, `totp.test.ts` deleted; passkeys + email-change tests updated
-- Run: `npm test` in `apps/api` (needs Postgres up; loads `.env`; server must be running)
-
-### Verification status
-- `npm test` (apps/api): 92/92 pass
-- `npm run typecheck`, `npm run lint`, `npm run build`: all clean
-- Browser e2e verified live: register→verify→dashboard, sign-in by code, sign-in by magic link, email change without password, account page shows only Profile/Passkeys/Sessions/Danger zone
-- Diff URL (ephemeral, ~7 days): was shared in Discord as critique link
-
-## 4. DECISION MADE — pending action (do this next)
-
-The user chose: **"Plan it properly first"** before writing Incus code.
-
-Given that, the handoff task for the next agent is:
-
-1. Run **Metis gap analysis** on `.omo/drafts/incus-vps-panel.md` (intent was marked `unclear`; the plan agent should resolve ambiguities against the actual repo state — the draft assumed a Go control plane, but the repo is Node 24 + Hono + TS, and the draft predates the passwordless auth rework).
-2. **Override earlier**: TypeScript control plane in the current API is the likely direction (see §6), but confirm via the analysis.
-3. Write the full plan to `.omo/plans/incus-vps-panel.md` (the draft's frontmatter says: write plan → Metis gap analysis → todo waves → human TL;DR → dual high-accuracy review with momus + independent oracle before delivery).
-4. Present the plan TL;DR to the user for approval **before** implementing.
-
-## 5. Incus availability on this box
-
-- `incus` binary installed at `/usr/bin/incus`
-- Daemon socket live: `/var/lib/incus/unix.socket` (group `incus-admin`)
-- No Incus code exists in the repo yet (only the legal pages mention the word)
-
-So a real local host is available for dev/verification — no stubs needed.
-
-## 6. Design notes the planner should weigh
-
-- The draft's `A2` (Go control plane) was written pre-repo. Current repo is TS on Node 24 with everything wired (auth, rate limiting, mail, tests, systemd). A TS control plane via `fetch`/`ws` against the Incus REST API keeps one service/test suite. Go buys the first-class client library but adds a second backend, second test story, second deploy unit.
-- `A3` (React+Vite+shadcn, Phosphor) and `A13` (Docker Compose + systemd + Caddy) match the repo. Caddyfile exists at repo root.
-- `A10` (containers AND VMs from day one) still stands per draft.
-- Metrics/console websocket work will need the panel to hold TLS client certs per host — the draft's `A5` (direct API per host, no agent) implies cert management is in scope.
-- The draft's findings cite specific Incus REST paths (`/1.0/instances`, console via `POST /1.0/instances/<n>/console`, metrics at `/1.0/metrics`, Projects as tenant boundary). The planner should re-verify the Incus version floor (draft says 6.0 LTS+, `api_extensions` feature detection).
-
-## 7. Environment traps (TL;DR of MEMORY.md — read the full file)
-
-- Vite binds IPv6: probe with `curl localhost:5173`, not `127.0.0.1`
-- Postgres on 5433, `solstice` role needs CREATEDB
-- API under systemd without `--watch`; systemd supervises the real app
-- `/tmp` is a private tmpfs — Docker cannot mount it. Use paths under `/home/lumi`
-- Box is behind NAT (LAN 192.168.50.20); expose dev via tunnel, Vite listens on `[::1]` only
-- Dev site has Basic auth (`apps/web/.env`: solstice/meow)
-- Playwright clicks hang when other tabs are open → close tabs + `bringToFront()`
-- Use the `read` tool for images, not `look_at` (times out)
-- `critique` needs `export PATH="$HOME/.bun/bin:$PATH"`
-- egaki reads provider keys from stdin; no image-gen fallback
-- `write` tool requires a prior `read` of the file in the same session
-- Stale LSP diagnostics: check the reported line against the file's length
-- Session-check 401s on `/api/auth/me` are expected console noise (React StrictMode doubles them)
-- Dev mailbox: to exercise mail flows start a SECOND api with `MAIL_DIR` + no `SMTP_URL` + `DEV_MAILBOX=1` and a second Vite with `API_URL` pointed at it (leave 5173/tunnel alone)
-
-## 8. Useful commands
-
-```bash
-npm run dev:all          # api + web dev servers
-npm test                 # in apps/api — 92 tests, needs DB up
-npm run typecheck        # web build + api tsc
-npm run lint             # oxlint on web
-npm run build            # web production build
-sudo systemctl restart solstice-api.service   # deploy backend change
+```
+solstice-host/
+├── apps/
+│   ├── api/          # Node 24 TypeScript backend (Hono + @hono/node-server)
+│   │   ├── src/
+│   │   │   ├── index.ts        # Entrypoint with request logger
+│   │   │   ├── app.ts          # REST endpoints, error handler, rate limits
+│   │   │   ├── db.ts           # Schema migrations & pg.Pool
+│   │   │   ├── mail.ts         # Fastmail SMTP / file transport
+│   │   │   ├── passkeys.ts     # @simplewebauthn server verification
+│   │   │   ├── session.ts      # SHA256 hashed DB sessions
+│   │   │   ├── two-factor.ts   # Email challenge & link verification
+│   │   │   ├── verification.ts # Account confirmation links/codes
+│   │   │   └── *.test.ts       # 93 node:test suites
+│   └── web/          # React 19 + Vite 8 + Tailwind v4 + Radix + Phosphor
+│       ├── src/
+│       │   ├── App.tsx         # Route tree
+│       │   ├── pages/
+│       │   │   ├── login.tsx       # Unified sign-in + register modal
+│       │   │   ├── dashboard.tsx   # Fullscreen ops console & instance list
+│       │   │   ├── account.tsx     # Profile, avatar crop/upload, passkeys
+│       │   │   └── verify-email.tsx
+│       │   └── components/     # shadcn-style dark ops UI primitives
 ```
 
-## 9. Unresolved / open items
+### Key Decisions Implemented
+- **Unified Login/Register**: `/register` page removed. Entering an unknown email on `/login` prompts for "Full name", creates the account, and immediately dispatches confirmation code/link.
+- **Avatar System**: Canvas-based 256x256 square crop to WebP (15–30 KB payload), stored in `users.avatar_url` with validation up to 500 KB.
+- **Control Plane Architecture**: Chosen to stay in TypeScript within `apps/api` (Hono + native fetch/WebSockets to Incus REST socket `/var/lib/incus/unix.socket`), maintaining a single service and unified test runner.
 
-- The entire working tree (§3) is **uncommitted** — no commit was made (user hasn't asked). Commit or branch before starting the plan.
-- `scripts/backup-db.sh` is untracked (nightly pg_dump; not yet scheduled via systemd timer; never restore-tested).
-- The critique diff link for §3 (if still wanted) was posted in the Discord thread.
-- `.playwright-mcp/` is generated browser-automation output, gitignored.
+---
+
+## 3. Dedicated Debian 13 Setup Guide
+
+Execute these steps on the new Debian 13 machine/VM:
+
+### Step 1: System Packages & Node 24
+```bash
+sudo apt update -y && sudo apt upgrade -y
+sudo apt install -y curl git build-essential ca-certificates gnupg
+
+# Install Node.js 24 (NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
+sudo apt install -y nodejs
+```
+
+### Step 2: PostgreSQL 17 Setup
+```bash
+sudo apt install -y postgresql-17 postgresql-client-17
+
+# Configure port 5433 and local trust auth
+sudo sed -i 's/^port = .*/port = 5433/' /etc/postgresql/17/main/postgresql.conf
+sudo sed -i "s/^#listen_addresses = .*/listen_addresses = '*'/" /etc/postgresql/17/main/postgresql.conf
+sudo sed -i "s/scram-sha-256/trust/g" /etc/postgresql/17/main/pg_hba.conf
+sudo systemctl restart postgresql
+
+# Create role & database (solstice needs CREATEDB for per-test DB creation)
+sudo -u postgres psql -p 5433 -c "CREATE USER solstice WITH PASSWORD 'password' CREATEDB SUPERUSER;"
+sudo -u postgres psql -p 5433 -c "CREATE DATABASE solstice OWNER solstice;"
+```
+
+### Step 3: Install & Initialize Incus
+```bash
+sudo apt install -y incus incus-client
+sudo adduser $USER incus-admin
+newgrp incus-admin
+
+# Initialize Incus with default network and storage pool
+sudo incus admin init --minimal
+incus version
+```
+
+### Step 4: Clone & Configure Repo
+```bash
+git clone https://github.com/heyitslumi/solstice.git
+cd solstice
+npm install
+
+# apps/api/.env
+cat << 'EOF' > apps/api/.env
+PORT=8788
+DATABASE_URL=postgres://solstice:password@127.0.0.1:5433/solstice
+PUBLIC_ORIGIN=http://localhost:5173
+DEV_MAILBOX=0
+MAIL_DIR=./data/mail
+RATE_LIMIT_STORE=memory
+SMTP_URL=smtp://hi%40lumis.moe:9d8k9n2n8c2j2j64@smtp.fastmail.com:587
+SMTP_REQUIRE_TLS=1
+MAIL_FROM=Solstice Host <no-reply@lumis.tf>
+EOF
+
+# apps/web/.env
+cat << 'EOF' > apps/web/.env
+API_URL=http://127.0.0.1:8788
+EOF
+```
+
+### Step 5: Verify & Run
+```bash
+# Run backend test suite (asserts 93/93 passing)
+npm test --workspace @solstice/api
+
+# Run web typecheck & lint
+npm run build --workspace @solstice/web
+npx oxlint apps/web
+
+# Run development servers
+npm run dev --workspace @solstice/web &
+node --env-file=apps/api/.env apps/api/src/index.ts
+```
+
+---
+
+## 4. Next Implementation Phase: Incus Control Plane
+
+Reference: `.omo/drafts/incus-vps-panel.md`
+
+1. **Incus REST Driver (`apps/api/src/incus/`)**:
+   - Communicate directly with `/var/lib/incus/unix.socket` using Node's native `fetch` dispatcher or `undici`.
+   - Implement `GET /1.0`, verify `api_extensions`.
+   - Implement instance CRUD: `createInstance`, `startInstance`, `stopInstance`, `deleteInstance`.
+2. **Database Models (`apps/api/src/db.ts`)**:
+   - `hosts`: multi-host management records.
+   - `instances`: mapping tenant instance to Incus project + container/VM name.
+   - `tasks`: async job tracking table wrapping Incus operation polling (`/1.0/operations/<id>/wait`).
+3. **Frontend Wiring**:
+   - Replace mock array in `apps/web/src/pages/dashboard.tsx` with live `useQuery`/`fetch` calls to `/api/instances`.
+   - Wire "New Server" modal with cloud-init image picker (Debian, Ubuntu, Alpine).
+   - Wire console gateway using `@xterm/xterm` over WebSocket to `/1.0/instances/<name>/console`.
+
+---
+
+## 5. Critical Environment Traps (Must-Read)
+
+1. **Postgres Port 5433**:
+   Always connect to port 5433. The database role `solstice` **must** have `CREATEDB` privileges because test files dynamically spin up and tear down isolated databases (`solstice-test-...`).
+2. **Vite IPv6 / localhost**:
+   Vite listens on IPv6 localhost (`[::1]:5173`). Probe via `http://localhost:5173` or `[::1]`, not `127.0.0.1`.
+3. **Fastmail SMTP Encoding**:
+   The `@` character in `hi@lumis.moe` must be percent-encoded as `%40` in `SMTP_URL`.
+4. **React 19 StrictMode & Single-Use Tokens**:
+   StrictMode runs `useEffect` twice on initial mount in dev mode. Any single-use token endpoint (magic links, email verifications) must be guarded with `useRef(false)` to avoid burning the token on mount 1 and failing mount 2.
+5. **No Build Step on Backend**:
+   Node 24 executes native TypeScript directly without TSX or compilation steps. Run with `node --env-file=.env src/index.ts`.
