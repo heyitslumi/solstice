@@ -201,6 +201,12 @@ const SCHEMA = `
   /* Platform administrators. Seeded from ADMIN_EMAILS on every boot so the
      first operator never has to touch SQL by hand. */
   ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin boolean NOT NULL DEFAULT false;
+
+  /* Global panel configuration key-value storage */
+  CREATE TABLE IF NOT EXISTS system_settings (
+    key   text PRIMARY KEY,
+    value text NOT NULL
+  );
 `
 
 async function hasColumn(table: string, column: string) {

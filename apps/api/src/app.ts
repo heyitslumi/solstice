@@ -2301,11 +2301,26 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const admin = await requireAdmin(c)
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
+    const rows = await query<{ key: string; value: string }>('SELECT key, value FROM system_settings')
+    const config = Object.fromEntries(rows.map((r) => [r.key, r.value]))
+
     return c.json({
       application: {
-        name: 'Solstice Control Plane',
+        name: config['app_name'] || 'Solstice',
+        language: config['app_language'] || 'en',
+        icon: config['app_icon'] || '/brand/solstice-mark.png',
+        banner: config['app_banner'] || '',
+        url: config['app_url'] || publicOrigin(),
+        twoFactorRequirement: config['app_two_factor_requirement'] || 'none',
+        acceptedTwoFactorMethods: config['app_accepted_two_factor_methods']
+          ? JSON.parse(config['app_accepted_two_factor_methods'])
+          : ['passkey', 'email'],
+        emailTwoFactor: config['app_email_two_factor'] !== 'false',
+        requireEmailVerification: config['app_require_email_verification'] !== 'false',
+        enableRegistration: config['app_enable_registration'] !== 'false',
+        enablePasswordLogin: config['app_enable_password_login'] === 'true',
+        enableTelemetry: config['app_enable_telemetry'] !== 'false',
         environment: process.env.NODE_ENV || 'development',
-        publicOrigin: publicOrigin(),
         trustProxy: Boolean(process.env.TRUST_PROXY),
         adminEmails: (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean),
       },
@@ -2322,7 +2337,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         mailDir: process.env.MAIL_DIR || './data/mail',
       },
       webauthn: {
-        rpName: 'Solstice',
+        rpName: config['app_name'] || 'Solstice',
         rpId: new URL(publicOrigin()).hostname,
         origin: publicOrigin(),
       },
@@ -2332,6 +2347,61 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         maxRequestsPerMin: 60,
       },
     })
+  })
+
+  app.patch('/api/admin/settings/application', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const body = await c.req.json<Record<string, any>>().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return c.json({ message: 'Invalid settings body.' }, 400)
+    }
+
+    const mapping: Record<string, string> = {
+      name: 'app_name',
+      language: 'app_language',
+      icon: 'app_icon',
+      banner: 'app_banner',
+      url: 'app_url',
+      twoFactorRequirement: 'app_two_factor_requirement',
+      acceptedTwoFactorMethods: 'app_accepted_two_factor_methods',
+      emailTwoFactor: 'app_email_two_factor',
+      requireEmailVerification: 'app_require_email_verification',
+      enableRegistration: 'app_enable_registration',
+      enablePasswordLogin: 'app_enable_password_login',
+      enableTelemetry: 'app_enable_telemetry',
+    }
+
+    for (const [key, dbKey] of Object.entries(mapping)) {
+      if (key in body) {
+        let val = body[key]
+        if (typeof val === 'boolean') {
+          val = String(val)
+        } else if (Array.isArray(val)) {
+          val = JSON.stringify(val)
+        } else if (val === null || val === undefined) {
+          val = ''
+        } else {
+          val = String(val).trim()
+        }
+
+        await query(
+          `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [dbKey, val],
+        )
+      }
+    }
+
+    await logActivity(
+      admin.user.id,
+      'admin_update_settings',
+      'Updated panel application settings',
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
   })
 
   app.notFound((c) => c.json({ message: 'Not found.' }, 404))

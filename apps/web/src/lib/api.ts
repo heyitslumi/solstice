@@ -29,8 +29,18 @@ export interface AdminInstance extends ApiInstance {
 export interface AdminSettings {
   application: {
     name: string
+    language: string
+    icon: string
+    banner: string
+    url: string
+    twoFactorRequirement: 'none' | 'optional' | 'enforced'
+    acceptedTwoFactorMethods: string[]
+    emailTwoFactor: boolean
+    requireEmailVerification: boolean
+    enableRegistration: boolean
+    enablePasswordLogin: boolean
+    enableTelemetry: boolean
     environment: string
-    publicOrigin: string
     trustProxy: boolean
     adminEmails: string[]
   }
@@ -464,5 +474,13 @@ export const api = {
 
   adminSettings() {
     return request<AdminSettings>('/api/admin/settings')
+  },
+
+  adminUpdateApplicationSettings(input: Partial<AdminSettings['application']>) {
+    return request<{ ok: true }>('/api/admin/settings/application', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
   },
 }

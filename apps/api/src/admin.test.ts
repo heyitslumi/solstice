@@ -32,6 +32,15 @@ describe('admin endpoint guards', () => {
     assert.equal(res.status, 403)
   })
 
+  it('rejects unauthenticated PATCH /api/admin/settings/application with 403', async () => {
+    const res = await app.request('/api/admin/settings/application', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'New Name' }),
+    })
+    assert.equal(res.status, 403)
+  })
+
   it('rejects unauthenticated POST /api/admin/instances with 403', async () => {
     const res = await app.request('/api/admin/instances', {
       method: 'POST',
