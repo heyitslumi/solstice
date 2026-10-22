@@ -30,9 +30,6 @@ import { AdminUserCreatePage } from '@/pages/admin-user-create'
 import { AdminUsersPage } from '@/pages/admin-users'
 import { CancelEmailChangePage } from '@/pages/cancel-email-change'
 import { DashboardPage } from '@/pages/dashboard'
-import { AupPage } from '@/pages/legal/aup'
-import { PrivacyPage } from '@/pages/legal/privacy'
-import { TermsPage } from '@/pages/legal/terms'
 import { LoginPage } from '@/pages/login'
 import { NotFoundPage } from '@/pages/not-found'
 import { ServerDetailPage } from '@/pages/server-detail'
@@ -394,9 +391,6 @@ function App() {
             </RequireAuth>
           }
         />
-        <Route path="/legal/terms" element={<TermsPage />} />
-        <Route path="/legal/aup" element={<AupPage />} />
-        <Route path="/legal/privacy" element={<PrivacyPage />} />
         <Route path="/" element={<HomeRedirect />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

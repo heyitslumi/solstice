@@ -367,6 +367,7 @@ export interface AdminStats {
     cores: number
     memory: string
     diskGb: number
+    nodes?: number
   }
   node: {
     daemon: string
@@ -374,6 +375,8 @@ export interface AdminStats {
     os: string
     kernel: string
     driver: string
+    socketPath?: string
+    incusOnline?: boolean
     cpuModel?: string
     hostMemory?: {
       usedMb: number
@@ -381,6 +384,9 @@ export interface AdminStats {
       percent: number
     }
     databaseVersion?: string
+    databaseTarget?: string
+    mailTransport?: string
+    mailTarget?: string
     status: string
     uptimeSeconds?: number
     loadAvg?: [number, number, number]

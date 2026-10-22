@@ -154,7 +154,7 @@ export function AdminPage() {
                 <StatCard
                   icon={Cpu}
                   label="CPU Architecture"
-                  value={stats?.node.cpuModel ?? 'AMD EPYC 7551 32-Core Processor'}
+                  value={stats?.node.cpuModel ?? '—'}
                   sublabel="Host Compute Unit"
                 />
                 <StatCard
@@ -163,25 +163,25 @@ export function AdminPage() {
                   value={
                     stats?.node.hostMemory?.totalMb
                       ? `${(stats.node.hostMemory.usedMb / 1024).toFixed(2)} GiB / ${(stats.node.hostMemory.totalMb / 1024).toFixed(2)} GiB`
-                      : '2.32 GiB / 5.75 GiB'
+                      : '—'
                   }
                   sublabel={
                     stats?.node.hostMemory?.percent !== undefined
                       ? `${stats.node.hostMemory.percent}% utilized by host & workloads`
-                      : '40% utilized by host & workloads'
+                      : 'Loading...'
                   }
                 />
                 <StatCard
                   icon={LinuxLogo}
                   label="Host Kernel"
-                  value={stats?.node.kernel ?? '6.12.38+deb13-amd64'}
-                  sublabel={stats?.node.os ?? 'Debian GNU/Linux 13 (trixie)'}
+                  value={stats?.node.kernel ?? '—'}
+                  sublabel={stats?.node.os ?? '—'}
                 />
                 <StatCard
                   icon={Database}
                   label="Database Engine"
-                  value={stats?.node.databaseVersion ?? 'PostgreSQL 17.11'}
-                  sublabel="Direct Unix Socket / TCP"
+                  value={stats?.node.databaseVersion ?? '—'}
+                  sublabel={stats?.node.databaseTarget ?? 'Direct Unix Socket / TCP'}
                 />
               </div>
 
@@ -189,15 +189,15 @@ export function AdminPage() {
                 <StatCard
                   icon={Terminal}
                   label="Daemon Runtime"
-                  value={`${stats?.node.daemon ?? 'incus'} v${stats?.node.version ?? '7.4'}`}
-                  sublabel={stats?.node.driver ?? 'lxc | qemu'}
-                  badge="ACTIVE"
+                  value={stats ? `${stats.node.daemon} v${stats.node.version}` : '—'}
+                  sublabel={stats?.node.driver ?? '—'}
+                  badge={stats?.node.incusOnline === false ? 'OFFLINE' : 'ACTIVE'}
                 />
                 <StatCard
                   icon={Clock}
                   label="Node Uptime"
-                  value={stats?.node.uptimeSeconds ? formatUptime(stats.node.uptimeSeconds) : '2d 14h 12m'}
-                  sublabel="Zero unplanned failovers"
+                  value={stats?.node.uptimeSeconds ? formatUptime(stats.node.uptimeSeconds) : '—'}
+                  sublabel="Host uptime"
                 />
                 <StatCard
                   icon={Sliders}
@@ -212,9 +212,9 @@ export function AdminPage() {
                 <StatCard
                   icon={CheckCircle}
                   label="Daemon Socket"
-                  value="/var/lib/incus/unix.socket"
+                  value={stats?.node.socketPath ?? '/var/lib/incus/unix.socket'}
                   sublabel="Local IPC connected"
-                  badge="ONLINE"
+                  badge={stats?.node.incusOnline === false ? 'OFFLINE' : 'ONLINE'}
                 />
               </div>
             </div>
@@ -252,8 +252,8 @@ export function AdminPage() {
                 </div>
                 <div className="flex flex-col gap-1 rounded-panel border border-border bg-surface p-4">
                   <span className="text-[11px] font-medium tracking-wide text-fg-subtle uppercase">Clusters / Nodes</span>
-                  <span className="font-mono text-[22px] font-semibold text-sun-500">1</span>
-                  <span className="text-[11px] text-fg-subtle">Local standalone</span>
+                  <span className="font-mono text-[22px] font-semibold text-sun-500">{stats?.totals.nodes ?? 1}</span>
+                  <span className="text-[11px] text-fg-subtle">Registered nodes</span>
                 </div>
               </div>
             </div>
@@ -276,10 +276,12 @@ export function AdminPage() {
                   </div>
                   <div className="flex flex-col gap-1 rounded-control border border-border/70 bg-surface-2/40 p-3.5">
                     <span className="text-[11px] font-medium tracking-wide text-fg-subtle uppercase">
-                      Incus Socket Latency
+                      Incus Daemon
                     </span>
-                    <span className="font-mono text-[18px] font-semibold text-emerald-500">&lt; 1.20 ms</span>
-                    <span className="text-[11px] text-fg-subtle">Local IPC response time</span>
+                    <span className={cn('font-mono text-[18px] font-semibold', stats?.node.incusOnline === false ? 'text-rose-500' : 'text-emerald-500')}>
+                      {stats?.node.incusOnline === false ? 'Unreachable' : `v${stats?.node.version ?? '—'}`}
+                    </span>
+                    <span className="text-[11px] text-fg-subtle">Local IPC socket status</span>
                   </div>
                 </div>
               </div>
@@ -314,27 +316,26 @@ export function AdminPage() {
                       <th className="py-2.5">Subsystem</th>
                       <th className="py-2.5">Target</th>
                       <th className="py-2.5">Status</th>
-                      <th className="py-2.5">Latency</th>
                       <th className="py-2.5 text-right">Health Check</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     <tr>
                       <td className="py-3 font-medium text-fg">Incus Control Socket</td>
-                      <td className="py-3 font-mono text-[12px] text-fg-subtle">/var/lib/incus/unix.socket</td>
-                      <td className="py-3 text-emerald-500 font-medium">Online</td>
-                      <td className="py-3 font-mono text-[12px] text-fg-subtle">0.8 ms</td>
+                      <td className="py-3 font-mono text-[12px] text-fg-subtle">{stats?.node.socketPath ?? '/var/lib/incus/unix.socket'}</td>
+                      <td className={cn('py-3 font-medium', stats?.node.incusOnline === false ? 'text-rose-500' : 'text-emerald-500')}>
+                        {stats?.node.incusOnline === false ? 'Offline' : 'Online'}
+                      </td>
                       <td className="py-3 text-right">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
-                          Pass
+                        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', stats?.node.incusOnline === false ? 'bg-rose-500/10 text-rose-500' : 'bg-emerald-500/10 text-emerald-500')}>
+                          {stats?.node.incusOnline === false ? 'Fail' : 'Pass'}
                         </span>
                       </td>
                     </tr>
                     <tr>
                       <td className="py-3 font-medium text-fg">PostgreSQL Database</td>
-                      <td className="py-3 font-mono text-[12px] text-fg-subtle">127.0.0.1:5433 (solstice)</td>
-                      <td className="py-3 text-emerald-500 font-medium">Online</td>
-                      <td className="py-3 font-mono text-[12px] text-fg-subtle">0.4 ms</td>
+                      <td className="py-3 font-mono text-[12px] text-fg-subtle">{stats?.node.databaseTarget ?? 'local'}</td>
+                      <td className="py-3 text-emerald-500 font-medium">Online ({stats?.node.databaseVersion ?? 'PostgreSQL'})</td>
                       <td className="py-3 text-right">
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
                           Pass
@@ -342,10 +343,15 @@ export function AdminPage() {
                       </td>
                     </tr>
                     <tr>
-                      <td className="py-3 font-medium text-fg">SMTP Mail Relay</td>
-                      <td className="py-3 font-mono text-[12px] text-fg-subtle">smtp.fastmail.com:587</td>
-                      <td className="py-3 text-emerald-500 font-medium">Configured (TLS)</td>
-                      <td className="py-3 font-mono text-[12px] text-fg-subtle">—</td>
+                      <td className="py-3 font-medium text-fg">Mail Transport</td>
+                      <td className="py-3 font-mono text-[12px] text-fg-subtle">{stats?.node.mailTarget ?? 'local'}</td>
+                      <td className="py-3 text-emerald-500 font-medium">
+                        {stats?.node.mailTransport === 'smtp'
+                          ? 'SMTP Relay'
+                          : stats?.node.mailTransport === 'sendmail'
+                            ? 'Sendmail'
+                            : 'Filesystem (Dev Mailbox)'}
+                      </td>
                       <td className="py-3 text-right">
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
                           Pass

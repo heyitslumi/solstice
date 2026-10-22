@@ -9,6 +9,9 @@ export function AuthFooter() {
   } catch {
     host = window.location.host
   }
+  const hasLegalLinks = Boolean(
+    config.legalTermsUrl?.trim() || config.legalPrivacyUrl?.trim() || config.legalAupUrl?.trim(),
+  )
   return (
     <footer className="auth-footer border-t border-border">
       <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
@@ -16,9 +19,11 @@ export function AuthFooter() {
           © {new Date().getFullYear()} {host}
         </p>
 
-        <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
-          <LegalLinks className="text-[12px] text-fg-muted transition-colors hover:text-accent-text" />
-        </nav>
+        {hasLegalLinks ? (
+          <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
+            <LegalLinks className="text-[12px] text-fg-muted transition-colors hover:text-accent-text" />
+          </nav>
+        ) : null}
       </div>
     </footer>
   )

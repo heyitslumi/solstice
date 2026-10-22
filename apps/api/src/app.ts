@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { statfsSync } from 'node:fs'
+import { readFileSync, statfsSync } from 'node:fs'
 import os from 'node:os'
 
 import { getConnInfo } from '@hono/node-server/conninfo'
@@ -823,12 +823,17 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       return c.json({ fieldErrors: { email: 'That email is already registered.' } }, 409)
     }
 
+    const isAdminEmail = (process.env.ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean)
+      .includes(email.toLowerCase())
     const requireVerification = config['app_require_email_verification'] !== 'false'
     const id = randomUUID()
     const created = await queryOne<UserRow>(
-      `INSERT INTO users (id, email, name, email_verified_at)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [id, email, name, requireVerification ? null : new Date().toISOString()],
+      `INSERT INTO users (id, email, name, is_admin, email_verified_at)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [id, email, name, isAdminEmail, requireVerification ? null : new Date().toISOString()],
     )
     if (!created) return c.json({ message: 'Could not create the account.' }, 500)
 
@@ -886,12 +891,17 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         return c.json({ needsName: true, message: 'Please enter your full name to proceed.' }, 200)
       }
 
+      const isAdminEmail = (process.env.ADMIN_EMAILS ?? '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean)
+        .includes(email.toLowerCase())
       const requireVerification = config['app_require_email_verification'] !== 'false'
       const id = randomUUID()
       user = await queryOne<UserRow>(
-        `INSERT INTO users (id, email, name, email_verified_at)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [id, email, name, requireVerification ? null : new Date().toISOString()],
+        `INSERT INTO users (id, email, name, is_admin, email_verified_at)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [id, email, name, isAdminEmail, requireVerification ? null : new Date().toISOString()],
       )
       if (!user) return c.json({ message: 'Could not create the account.' }, 500)
     }
@@ -6857,7 +6867,47 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const memUsedMb = Math.max(0, memTotalMb - memFreeMb)
     const memPercent = memTotalMb > 0 ? Math.round((memUsedMb / memTotalMb) * 100) : 0
     const cpus = os.cpus()
-    const cpuModel = cpus[0]?.model?.trim() || 'AMD EPYC Processor'
+    const cpuModel = cpus[0]?.model?.trim() || 'Unknown CPU'
+
+    let hostOs = `${os.type()} ${os.release()}`
+    try {
+      const osRelease = readFileSync('/etc/os-release', 'utf8')
+      const pretty = osRelease.match(/^PRETTY_NAME="?([^"\n]+)"?/m)?.[1]
+      if (pretty) hostOs = pretty
+    } catch {
+      // keep os.type() fallback
+    }
+
+    let dbTarget = 'local'
+    try {
+      const dbUrl = new URL(process.env.DATABASE_URL ?? 'postgres://127.0.0.1:5432/solstice')
+      const dbName = dbUrl.pathname.replace(/^\/+/, '') || 'postgres'
+      dbTarget = `${dbUrl.hostname}:${dbUrl.port || '5432'} (${dbName})`
+    } catch {
+      // keep fallback
+    }
+
+    const config = await getSystemSettings()
+    const mailTransport = mailTransportName(config)
+    const smtpHost = config['mail_smtp_host']
+      ? `${config['mail_smtp_host']}:${config['mail_smtp_port'] || 587}`
+      : (() => {
+          try {
+            if (!process.env.SMTP_URL) return ''
+            const u = new URL(process.env.SMTP_URL)
+            return `${u.hostname}:${u.port || '587'}`
+          } catch {
+            return ''
+          }
+        })()
+    const mailTarget =
+      mailTransport === 'smtp'
+        ? smtpHost || 'SMTP relay'
+        : mailTransport === 'sendmail'
+          ? config['mail_sendmail_path'] || '/usr/sbin/sendmail'
+          : mailboxDir()
+
+    const nodeCountRow = await queryOne<{ count: number }>('SELECT COUNT(*)::int AS count FROM nodes')
 
     return c.json({
       totals: {
@@ -6867,21 +6917,27 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         cores: totals?.cores ?? 0,
         memory: formatMemory(totals?.memory_mb ?? 0),
         diskGb: totals?.disk_gb ?? 0,
+        nodes: nodeCountRow?.count ?? 1,
       },
       node: {
         daemon: incusInfo?.server || 'incus',
-        version: incusInfo?.environment?.server_version || '7.4',
-        os: 'Debian GNU/Linux 13 (trixie)',
+        version: incusInfo?.environment?.server_version || 'unknown',
+        os: hostOs,
         kernel: os.release(),
         driver: incusInfo?.environment?.driver || 'lxc | qemu',
+        socketPath: process.env.INCUS_SOCKET_PATH || '/var/lib/incus/unix.socket',
+        incusOnline: Boolean(incusInfo),
         cpuModel,
         hostMemory: {
           usedMb: memUsedMb,
           totalMb: memTotalMb,
           percent: memPercent,
         },
-        databaseVersion: `PostgreSQL ${dbVersionRow?.server_version ?? '17.11'}`,
-        status: 'online',
+        databaseVersion: `PostgreSQL ${dbVersionRow?.server_version ?? 'unknown'}`,
+        databaseTarget: dbTarget,
+        mailTransport,
+        mailTarget,
+        status: incusInfo ? 'online' : 'degraded',
         uptimeSeconds: Math.floor(os.uptime()),
         loadAvg: os.loadavg() as [number, number, number],
       },

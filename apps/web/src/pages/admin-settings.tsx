@@ -900,8 +900,8 @@ export function AdminSettingsPage() {
               </div>
 
               <p className="-mt-2 text-[12px] text-fg-subtle">
-                Point the footer links at your own hosted documents. Leave a field blank to keep
-                the built-in page.
+                Point the footer links at your own hosted documents. Leave a field blank to hide that
+                link in the footer.
               </p>
 
               {(
