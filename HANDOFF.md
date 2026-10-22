@@ -104,7 +104,7 @@ PUBLIC_ORIGIN=http://localhost:5173
 DEV_MAILBOX=0
 MAIL_DIR=./data/mail
 RATE_LIMIT_STORE=memory
-SMTP_URL=smtp://hi%40lumis.moe:9d8k9n2n8c2j2j64@smtp.fastmail.com:587
+SMTP_URL=smtp://hi%40lumis.moe:<password>@smtp.fastmail.com:587
 SMTP_REQUIRE_TLS=1
 MAIL_FROM=Solstice Host <no-reply@lumis.tf>
 EOF

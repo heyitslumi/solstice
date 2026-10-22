@@ -7,6 +7,7 @@ import {
   CheckCircle,
   Clock,
   Clipboard,
+  Copy,
   DownloadSimple,
   Envelope,
   Gear,
@@ -14,6 +15,7 @@ import {
   Key,
   ListBullets,
   MagnifyingGlass,
+  PaintBrush,
   Plus,
   ShieldCheck,
   SignOut,
@@ -24,7 +26,7 @@ import {
 } from '@phosphor-icons/react'
 import { browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
@@ -38,8 +40,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { TextField } from '@/components/ui/field'
-import { EMAIL_PATTERN, api, type ApiActivity, type ApiEmailLog, type ApiPasskey, type ApiSshKey, type PendingEmailChange } from '@/lib/api'
+import { EMAIL_PATTERN, api, type ApiActivity, type ApiEmailLog, type ApiPasskey, type ApiSshKey, type OAuthLink, type PendingEmailChange, type PublicOAuthProvider } from '@/lib/api'
+import { useAppConfig } from '@/lib/config'
 import { useSession } from '@/lib/session'
+import { THEME_PRESETS } from '@/lib/theme-utils'
 
 const CHANGE_CODE_LENGTH = 6
 
@@ -119,6 +123,7 @@ const TABS: { key: TabKey; label: string; icon: typeof User }[] = [
 export function AccountPage() {
   const navigate = useNavigate()
   const { user, signOut, refresh } = useSession()
+  const { config } = useAppConfig()
   const verified = !!user?.emailVerifiedAt
 
   const [activeTab, setActiveTab] = useState<TabKey>('profile')
@@ -180,7 +185,9 @@ export function AccountPage() {
           ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size)
 
           const dataUrl = canvas.toDataURL('image/webp', 0.85)
-          const result = await api.accountUpdate({ avatarUrl: dataUrl })
+          const uploadRes = await api.upload({ dataUrl, folder: 'avatars' })
+          const targetUrl = uploadRes.ok ? uploadRes.data.url : dataUrl
+          const result = await api.accountUpdate({ avatarUrl: targetUrl })
           if (!result.ok) {
             setAvatarError(result.error.message ?? 'Could not save profile picture.')
             return
@@ -279,6 +286,20 @@ export function AccountPage() {
   )
   const [exportingData, setExportingData] = useState(false)
 
+  // Appearance (synced from the account whenever it loads)
+  const [themeMode, setThemeMode] = useState('system')
+  const [themePreset, setThemePreset] = useState('')
+  const [themeSaving, setThemeSaving] = useState(false)
+  const [themeSaved, setThemeSaved] = useState(false)
+  const [themeError, setThemeError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (user) {
+      setThemeMode(user.themeMode ?? 'system')
+      setThemePreset(user.themePreset ?? '')
+    }
+  }, [user?.id])
+
   async function handleExportData() {
     setExportingData(true)
     const res = await api.exportData()
@@ -288,11 +309,25 @@ export function AccountPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `solstice-data-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.download = `panel-data-export-${new Date().toISOString().slice(0, 10)}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+    }
+  }
+
+  async function handleSaveTheme() {
+    setThemeSaving(true)
+    setThemeError(null)
+    setThemeSaved(false)
+    const res = await api.accountUpdate({ themeMode, themePreset })
+    setThemeSaving(false)
+    if (res.ok) {
+      setThemeSaved(true)
+      await refresh()
+    } else {
+      setThemeError(res.error.message ?? 'Could not save appearance settings.')
     }
   }
 
@@ -310,6 +345,25 @@ export function AccountPage() {
   const [emailSearch, setEmailSearch] = useState('')
   const [viewingEmail, setViewingEmail] = useState<ApiEmailLog | null>(null)
 
+  // API keys
+  interface ApiKeyRow {
+    id: string
+    name: string
+    prefix: string
+    lastUsedAt: string | null
+    expiresAt: string | null
+    createdAt: string
+  }
+  const [apiKeys, setApiKeys] = useState<ApiKeyRow[]>([])
+  const [apiLoading, setApiLoading] = useState(false)
+  const [apiDialogOpen, setApiDialogOpen] = useState(false)
+  const [apiKeyName, setApiKeyName] = useState('')
+  const [apiKeyExpiry, setApiKeyExpiry] = useState('never')
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [apiSubmitting, setApiSubmitting] = useState(false)
+  const [apiNewToken, setApiNewToken] = useState<string | null>(null)
+  const [apiRevoking, setApiRevoking] = useState<string | null>(null)
+
   // SSH Keys
   const [sshKeys, setSshKeys] = useState<ApiSshKey[]>([])
   const [sshLoading, setSshLoading] = useState(false)
@@ -318,6 +372,54 @@ export function AccountPage() {
   const [sshPublicKey, setSshPublicKey] = useState('')
   const [sshError, setSshError] = useState<string | null>(null)
   const [sshSubmitting, setSshSubmitting] = useState(false)
+
+  // OAuth links
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [oauthLinks, setOauthLinks] = useState<OAuthLink[]>([])
+  const [oauthLinksLoading, setOauthLinksLoading] = useState(true)
+  const [oauthProviders, setOauthProviders] = useState<PublicOAuthProvider[]>([])
+  const [oauthProviderId, setOauthProviderId] = useState('')
+  const [oauthNotice, setOauthNotice] = useState<string | null>(null)
+  const [oauthError, setOauthError] = useState<string | null>(null)
+  const [oauthConnecting, setOauthConnecting] = useState(false)
+  const [removingLinkId, setRemovingLinkId] = useState<string | null>(null)
+
+  async function loadOAuthLinks() {
+    setOauthLinksLoading(true)
+    const [linksRes, providersRes] = await Promise.all([
+      api.listOAuthLinks(),
+      api.listOAuthProviders(),
+    ])
+    if (linksRes.ok) setOauthLinks(linksRes.data.links || [])
+    if (providersRes.ok) setOauthProviders(providersRes.data || [])
+    setOauthLinksLoading(false)
+  }
+
+  async function handleConnectOAuth(e: FormEvent) {
+    e.preventDefault()
+    if (!oauthProviderId || oauthConnecting) return
+    setOauthConnecting(true)
+    setOauthError(null)
+    const res = await api.startOAuth(oauthProviderId, 'link')
+    if (!res.ok) {
+      setOauthError(res.error.message ?? 'Could not start linking.')
+      setOauthConnecting(false)
+      return
+    }
+    window.location.href = res.data.url
+  }
+
+  async function handleRemoveOAuthLink(linkId: string) {
+    setRemovingLinkId(linkId)
+    setOauthError(null)
+    const res = await api.deleteOAuthLink(linkId)
+    if (res.ok) {
+      setOauthLinks((prev) => prev.filter((l) => l.id !== linkId))
+    } else {
+      setOauthError(res.error.message ?? 'Could not remove link.')
+    }
+    setRemovingLinkId(null)
+  }
 
   async function loadSshKeys() {
     setSshLoading(true)
@@ -364,6 +466,58 @@ export function AccountPage() {
     if (res.ok) {
       setSshKeys((prev) => prev.filter((k) => k.id !== id))
     }
+  }
+
+  async function loadApiKeys() {
+    setApiLoading(true)
+    const res = await api.listApiKeys()
+    if (res.ok) {
+      setApiKeys(res.data.keys)
+    }
+    setApiLoading(false)
+  }
+
+  async function handleCreateApiKey(e: FormEvent) {
+    e.preventDefault()
+    setApiError(null)
+    const name = apiKeyName.trim()
+    if (!name) {
+      setApiError('Key name is required.')
+      return
+    }
+    setApiSubmitting(true)
+    const res = await api.createApiKey({
+      name,
+      ...(apiKeyExpiry === 'never' ? {} : { expiresInDays: Number(apiKeyExpiry) }),
+    })
+    if (res.ok) {
+      setApiNewToken(res.data.token)
+      setApiKeys((prev) => [
+        {
+          id: res.data.id,
+          name: res.data.name,
+          prefix: res.data.prefix,
+          lastUsedAt: null,
+          expiresAt: res.data.expiresAt,
+          createdAt: res.data.createdAt,
+        },
+        ...prev,
+      ])
+      setApiKeyName('')
+      setApiKeyExpiry('never')
+    } else {
+      setApiError(res.error.message || 'Failed to create API key.')
+    }
+    setApiSubmitting(false)
+  }
+
+  async function handleRevokeApiKey(id: string) {
+    setApiRevoking(id)
+    const res = await api.revokeApiKey(id)
+    if (res.ok) {
+      setApiKeys((prev) => prev.filter((k) => k.id !== id))
+    }
+    setApiRevoking(null)
   }
 
   const PAGE_SIZE = 10
@@ -414,6 +568,8 @@ export function AccountPage() {
       void loadEmails()
     } else if (activeTab === 'ssh') {
       void loadSshKeys()
+    } else if (activeTab === 'api') {
+      void loadApiKeys()
     }
   }, [activeTab, activityPage])
 
@@ -441,6 +597,20 @@ export function AccountPage() {
     }
 
     void load()
+    void loadOAuthLinks()
+
+    if (searchParams.get('oauth') === 'linked') {
+      setOauthNotice('OAuth account linked successfully.')
+      searchParams.delete('oauth')
+      setSearchParams(searchParams, { replace: true })
+    }
+    const oauthErrorParam = searchParams.get('oauth_error')
+    if (oauthErrorParam) {
+      setOauthError(oauthErrorParam)
+      searchParams.delete('oauth_error')
+      setSearchParams(searchParams, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   async function handleNameSave() {
@@ -955,6 +1125,108 @@ export function AccountPage() {
         {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="space-y-6">
+            <Panel title="Appearance">
+              <div className="flex flex-col gap-4 p-5">
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <PaintBrush size={16} className="text-fg-subtle" />
+                    <span className="text-xs font-semibold text-fg">Theme</span>
+                  </div>
+                  <p className="text-xs text-fg-muted">
+                    Choose how the panel looks for you. A theme replaces the administrator's
+                    default styling; System follows your device and the quick toggle.
+                  </p>
+                </div>
+
+                {themeError ? <Alert tone="danger">{themeError}</Alert> : null}
+                {themeSaved ? <Alert tone="success">Appearance settings saved.</Alert> : null}
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-fg">Mode</span>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { id: 'system', label: 'System' },
+                        { id: 'light', label: 'Light' },
+                        { id: 'dark', label: 'Dark' },
+                      ] as const
+                    ).map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          setThemeMode(option.id)
+                          setThemeSaved(false)
+                        }}
+                        className={
+                          themeMode === option.id
+                            ? 'rounded-control border border-accent bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent-text'
+                            : 'rounded-control border border-border bg-surface px-3 py-1.5 text-xs text-fg-muted hover:border-accent hover:text-fg'
+                        }
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-fg">Theme</span>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setThemePreset('')
+                        setThemeSaved(false)
+                      }}
+                      className={
+                        themePreset === ''
+                          ? 'rounded-control border border-accent bg-accent/10 p-3 text-left'
+                          : 'rounded-control border border-border bg-surface p-3 text-left hover:border-accent'
+                      }
+                    >
+                      <span className="block text-xs font-semibold text-fg">Panel default</span>
+                      <span className="mt-0.5 block text-[11px] text-fg-muted">
+                        Use the administrator's theme.
+                      </span>
+                    </button>
+                    {THEME_PRESETS.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          setThemePreset(preset.id)
+                          setThemeSaved(false)
+                        }}
+                        className={
+                          themePreset === preset.id
+                            ? 'rounded-control border border-accent bg-accent/10 p-3 text-left'
+                            : 'rounded-control border border-border bg-surface p-3 text-left hover:border-accent'
+                        }
+                      >
+                        <span className="flex items-center gap-2 text-xs font-semibold text-fg">
+                          <span
+                            className="size-3 rounded-full border border-border"
+                            style={{ backgroundColor: preset.accentColor }}
+                          />
+                          {preset.name}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-fg-muted">
+                          {preset.description}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Button size="sm" disabled={themeSaving} onClick={() => void handleSaveTheme()}>
+                    {themeSaving ? 'Saving...' : 'Save Appearance'}
+                  </Button>
+                </div>
+              </div>
+            </Panel>
+
             <Panel title="Display Preferences">
               <div className="flex flex-col gap-4 p-5">
                 <div className="flex flex-col gap-1.5">
@@ -1050,6 +1322,10 @@ export function AccountPage() {
                   manager. A passkey already proves it is you, so no code is asked for after it.
                 </p>
 
+                {config.enableSecurityKeys === false ? (
+                  <Alert tone="warning">Security keys are currently disabled by the administrator.</Alert>
+                ) : null}
+
                 {passkeyNotice ? <Alert tone="success">{passkeyNotice}</Alert> : null}
                 {passkeyError ? <Alert tone="danger">{passkeyError}</Alert> : null}
 
@@ -1082,27 +1358,117 @@ export function AccountPage() {
                   </ul>
                 ) : null}
 
-                <TextField
-                  id="passkey-name"
-                  name="passkeyName"
-                  label="Name (optional)"
-                  placeholder="Laptop, YubiKey…"
-                  value={passkeyName}
-                  onChange={(event) => setPasskeyName(event.target.value)}
-                  disabled={passkeySaving}
-                />
+                {config.enableSecurityKeys !== false ? (
+                  <>
+                    <TextField
+                      id="passkey-name"
+                      name="passkeyName"
+                      label="Name (optional)"
+                      placeholder="Laptop, YubiKey…"
+                      value={passkeyName}
+                      onChange={(event) => setPasskeyName(event.target.value)}
+                      disabled={passkeySaving}
+                    />
 
-                <div>
-                  <Button
-                    size="sm"
-                    disabled={passkeySaving || !browserSupportsWebAuthn()}
-                    onClick={() => {
-                      void handleAddPasskey()
-                    }}
-                  >
-                    {passkeySaving ? 'Waiting for your device…' : 'Add a passkey'}
-                  </Button>
-                </div>
+                    <div>
+                      <Button
+                        size="sm"
+                        disabled={passkeySaving || !browserSupportsWebAuthn()}
+                        onClick={() => {
+                          void handleAddPasskey()
+                        }}
+                      >
+                        {passkeySaving ? 'Waiting for your device…' : 'Add a passkey'}
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </Panel>
+
+            <Panel
+              title="OAuth links"
+              action={
+                oauthLinks.length > 0 ? (
+                  <span className="font-mono text-[11px] text-fg-subtle">
+                    {oauthLinks.length} linked
+                  </span>
+                ) : undefined
+              }
+            >
+              <div className="flex flex-col gap-4 px-5 py-4">
+                <p className="text-[13px] leading-relaxed text-fg-muted">
+                  Sign in with a third-party account instead of waiting for an email code.
+                </p>
+
+                {oauthNotice ? <Alert tone="success">{oauthNotice}</Alert> : null}
+                {oauthError ? <Alert tone="danger">{oauthError}</Alert> : null}
+
+                {oauthLinksLoading ? null : oauthLinks.length > 0 ? (
+                  <ul className="flex flex-col divide-y divide-border/70 rounded-control border border-border">
+                    {oauthLinks.map((link) => (
+                      <li
+                        key={link.id}
+                        className="flex items-center justify-between gap-4 px-3 py-2.5"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] text-fg">{link.providerName}</p>
+                          <p className="text-[12px] text-fg-subtle">
+                            {link.identifier ?? 'Identifier hidden by administrator'}
+                            {link.lastUsedAt ? ` · last used ${formatDate(link.lastUsedAt)}` : ''}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={removingLinkId === link.id || !link.userManageable}
+                          title={
+                            link.userManageable
+                              ? undefined
+                              : 'This provider does not allow removing the link'
+                          }
+                          onClick={() => {
+                            void handleRemoveOAuthLink(link.id)
+                          }}
+                        >
+                          {removingLinkId === link.id ? 'Removing…' : 'Remove'}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-[13px] text-fg-subtle">No linked accounts yet.</p>
+                )}
+
+                {oauthProviders.length > 0 ? (
+                  <form onSubmit={handleConnectOAuth} className="flex items-end gap-2.5">
+                    <div className="flex-1">
+                      <label
+                        htmlFor="oauth-provider"
+                        className="mb-1 block text-[12px] font-medium text-fg-muted"
+                      >
+                        Provider
+                      </label>
+                      <select
+                        id="oauth-provider"
+                        value={oauthProviderId}
+                        onChange={(event) => setOauthProviderId(event.target.value)}
+                        disabled={oauthConnecting}
+                        className="h-9 w-full rounded-control border border-field-border bg-field px-2.5 text-[13px] text-fg focus:border-accent focus:outline-none"
+                      >
+                        <option value="">Select a provider…</option>
+                        {oauthProviders.map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button size="sm" type="submit" disabled={!oauthProviderId || oauthConnecting}>
+                      {oauthConnecting ? 'Redirecting…' : 'Connect'}
+                    </Button>
+                  </form>
+                ) : null}
               </div>
             </Panel>
 
@@ -1278,23 +1644,132 @@ export function AccountPage() {
 
         {/* API Keys Tab */}
         {activeTab === 'api' && (
-          <Panel title="API Tokens">
-            <div className="flex flex-col gap-4 px-5 py-8 text-center sm:py-12">
-              <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-surface-2 text-fg-subtle">
-                <Key size={24} />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-fg">Personal Access Tokens</h3>
-                <p className="text-xs text-fg-muted max-w-sm mx-auto">
-                  Authenticate programmatic CLI and SDK requests to the Solstice API without interactive login.
+          <Panel
+            title="API Keys"
+            action={
+              <Button size="sm" variant="secondary" onClick={() => { setApiError(null); setApiNewToken(null); setApiDialogOpen(true) }}>
+                <Plus size={14} /> New Key
+              </Button>
+            }
+          >
+            <p className="px-5 pt-4 text-[12px] text-fg-subtle">
+              Personal access tokens for scripts and automation. Send as{' '}
+              <code className="font-mono text-[11px] text-fg">Authorization: Bearer solstice_...</code>{' '}
+              Tokens act as you, but can never grant admin.
+            </p>
+
+            {apiNewToken && (
+              <div className="mx-5 mt-4 rounded-control border border-amber-500/30 bg-amber-500/10 p-3.5">
+                <p className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">
+                  Copy this token now — it is never shown again.
                 </p>
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-control border border-border bg-surface px-3 py-2.5 font-mono text-[12px]">
+                  <span className="truncate text-fg">{apiNewToken}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 shrink-0"
+                    onClick={() => void navigator.clipboard.writeText(apiNewToken)}
+                  >
+                    <Copy size={13} />
+                  </Button>
+                </div>
               </div>
-              <div className="pt-2">
-                <Button size="sm" variant="secondary" disabled>
-                  Generate Token (Coming soon)
-                </Button>
-              </div>
+            )}
+
+            <div className="flex flex-col gap-2 px-5 py-4">
+              {apiLoading ? (
+                <p className="py-6 text-center text-[13px] text-fg-subtle">Loading keys...</p>
+              ) : apiKeys.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                  <Key size={28} className="text-fg-subtle/50" aria-hidden />
+                  <p className="text-[14px] font-semibold text-fg">No API keys yet</p>
+                  <p className="max-w-sm text-[12px] text-fg-subtle">
+                    Create one to automate snapshots, forwards, or power actions from your own scripts.
+                  </p>
+                </div>
+              ) : (
+                apiKeys.map((key) => (
+                  <div
+                    key={key.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-border px-3.5 py-3"
+                  >
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate text-[13px] font-semibold text-fg">{key.name}</span>
+                      <span className="font-mono text-[11px] text-fg-subtle">
+                        {key.prefix}... · created {new Date(key.createdAt).toLocaleDateString()}
+                        {key.lastUsedAt ? ` · last used ${new Date(key.lastUsedAt).toLocaleDateString()}` : ' · never used'}
+                        {key.expiresAt ? ` · expires ${new Date(key.expiresAt).toLocaleDateString()}` : ' · never expires'}
+                      </span>
+                    </div>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={apiRevoking === key.id}
+                      onClick={() => void handleRevokeApiKey(key.id)}
+                      className="h-7 px-2 text-[11px]"
+                    >
+                      {apiRevoking === key.id ? 'Revoking...' : 'Revoke'}
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
+
+            <Dialog open={apiDialogOpen} onOpenChange={setApiDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogTitle>New API Key</DialogTitle>
+                <DialogDescription>
+                  Name it after the script or machine that will use it.
+                </DialogDescription>
+                <form onSubmit={handleCreateApiKey} className="mt-4 flex flex-col gap-4">
+                  {apiError && <Alert tone="danger">{apiError}</Alert>}
+                  <div>
+                    <label className="text-[12px] font-semibold text-fg">Key name</label>
+                    <input
+                      type="text"
+                      required
+                      value={apiKeyName}
+                      onChange={(e) => setApiKeyName(e.target.value)}
+                      placeholder="e.g. nightly snapshots"
+                      maxLength={60}
+                      className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-fg">Expires</label>
+                    <select
+                      value={apiKeyExpiry}
+                      onChange={(e) => setApiKeyExpiry(e.target.value)}
+                      className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
+                    >
+                      <option value="never">Never</option>
+                      <option value="30">30 days</option>
+                      <option value="90">90 days</option>
+                      <option value="365">1 year</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end gap-2.5">
+                    <Button type="button" variant="secondary" onClick={() => setApiDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    {apiNewToken ? (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={() => { setApiNewToken(null); setApiDialogOpen(false) }}
+                      >
+                        Done
+                      </Button>
+                    ) : (
+                      <Button type="submit" variant="primary" disabled={apiSubmitting}>
+                        {apiSubmitting ? 'Creating...' : 'Create Key'}
+                      </Button>
+                    )}
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
           </Panel>
         )}
 

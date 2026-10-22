@@ -15,7 +15,7 @@ export function NotFoundPage() {
 
       <main className="flex flex-1 items-center justify-center px-5 py-16 sm:px-8">
         <div className="flex w-full max-w-md flex-col items-start gap-5">
-          <img src="/brand/solstice-mark.png" alt="" className="h-9 w-auto" />
+          <img src="/brand/mark.svg" alt="" className="h-9 w-auto" />
 
           <span className="font-mono text-[11px] tracking-[0.28em] text-sun-500 uppercase">
             404

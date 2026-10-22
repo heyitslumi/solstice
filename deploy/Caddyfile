@@ -1,0 +1,13 @@
+# Production frontend: static build + /api reverse proxy (websockets included).
+# Managed by install.sh --domain; do not edit by hand.
+__DOMAIN__ {
+	encode gzip
+
+	# Built SPA with client-side routing.
+	root * __APP_DIR__/apps/web/dist
+	try_files {path} /index.html
+	file_server
+
+	# API (REST + console websockets + uploads).
+	reverse_proxy /api/* 127.0.0.1:8788
+}

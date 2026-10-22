@@ -6,6 +6,7 @@ dist/
 
 # Local database (PGlite data directory)
 apps/api/data/
+data/
 
 *.local
 .DS_Store

@@ -31,9 +31,15 @@ export interface PasskeyRow {
   last_used_at: Date | string | null
 }
 
-export function relyingParty() {
+export function relyingParty(config?: Record<string, string>) {
+  if (config?.['webauthn_origin']) {
+    const origin = config['webauthn_origin'].replace(/\/+$/, '')
+    const rpID = config['webauthn_rp_id'] || new URL(origin).hostname
+    const rpName = config['webauthn_rp_name'] || config['app_name'] || 'VPS Panel'
+    return { origin, rpID, rpName }
+  }
   const origin = (process.env.PUBLIC_ORIGIN ?? 'http://localhost:5173').replace(/\/+$/, '')
-  return { origin, rpID: new URL(origin).hostname }
+  return { origin, rpID: new URL(origin).hostname, rpName: 'VPS Panel' }
 }
 
 function toBase64Url(bytes: Uint8Array) {
@@ -158,12 +164,20 @@ export function publicPasskey(row: PasskeyRow) {
 export async function registrationOptions(
   user: { id: string; email: string; name: string },
   existing: PasskeyRow[],
+  config?: Record<string, string>,
 ) {
-  const { rpID } = relyingParty()
+  const { rpID, rpName } = relyingParty(config)
+  const allowUsernameless =
+    config?.['webauthn_allow_usernameless'] !== undefined
+      ? config['webauthn_allow_usernameless'] === 'true'
+      : true
+
+  const timeout = (Number(config?.['webauthn_registration_timeout']) || 300) * 1000
 
   return generateRegistrationOptions({
-    rpName: 'Solstice Host',
+    rpName,
     rpID,
+    timeout,
     userName: user.email,
     userDisplayName: user.name,
     // The account id is already opaque and stable, which is exactly what a WebAuthn
@@ -174,18 +188,21 @@ export async function registrationOptions(
       const transports = transportsOf(row)
       return { id: row.credential_id, ...(transports ? { transports } : {}) }
     }),
-    // Discoverable, so the sign-in page can offer a passkey without asking for an
-    // address first, and verified, because without it possession of an unlocked
-    // device would be enough on its own.
-    authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+    // Discoverable when usernameless is permitted
+    authenticatorSelection: {
+      residentKey: allowUsernameless ? 'required' : 'discouraged',
+      userVerification: 'required',
+    },
   })
 }
 
-export async function authenticationOptions(credentials?: PasskeyRow[]) {
-  const { rpID } = relyingParty()
+export async function authenticationOptions(credentials?: PasskeyRow[], config?: Record<string, string>) {
+  const { rpID } = relyingParty(config)
+  const timeout = (Number(config?.['webauthn_authentication_timeout']) || 300) * 1000
 
   return generateAuthenticationOptions({
     rpID,
+    timeout,
     ...(credentials
       ? {
           allowCredentials: credentials.map((row) => {
@@ -203,8 +220,9 @@ export async function verifyRegistration(input: {
   challenge: string
   userId: string
   name: string
+  config?: Record<string, string>
 }) {
-  const { origin, rpID } = relyingParty()
+  const { origin, rpID } = relyingParty(input.config)
 
   const result = await verifyRegistrationResponse({
     response: input.response,
@@ -234,8 +252,9 @@ export async function verifyAuthentication(input: {
   response: AuthenticationResponseJSON
   challenge: string
   row: PasskeyRow
+  config?: Record<string, string>
 }) {
-  const { origin, rpID } = relyingParty()
+  const { origin, rpID } = relyingParty(input.config)
 
   const result = await verifyAuthenticationResponse({
     response: input.response,

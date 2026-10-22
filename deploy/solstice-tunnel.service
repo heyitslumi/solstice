@@ -1,0 +1,16 @@
+[Unit]
+Description=Panel quick tunnel (dev frontend + URL sync)
+After=network-online.target solstice-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__APP_DIR__
+# NOTE: tunnel mode serves the Vite dev server, not the production build.
+# Use --domain for real deployments.
+ExecStart=/bin/bash /usr/local/bin/solstice-tunnel.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

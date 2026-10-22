@@ -27,7 +27,7 @@ const ITEM =
 
 export function UserMenu({ onNavigate }: { onNavigate?: (to?: string) => void }) {
   const { user, signOut } = useSession()
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme(user?.themeMode)
   const navigate = useNavigate()
 
   const name = user?.name ?? 'Account'

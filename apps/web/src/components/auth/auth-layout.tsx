@@ -11,12 +11,12 @@ function CompactBrand() {
   return (
     <div className="flex items-center gap-2.5 lg:hidden">
       <img
-        src={config.icon || '/brand/solstice-mark.png'}
+        src={config.icon || '/brand/mark.svg'}
         alt=""
         className="h-7 w-auto max-w-[28px] max-h-[28px] shrink-0 object-contain"
       />
       <span className="text-[13px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
-        {config.name || 'Solstice'}
+        {config.name || 'VPS Panel'}
       </span>
     </div>
   )

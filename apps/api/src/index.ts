@@ -1,7 +1,9 @@
 import { serve } from '@hono/node-server'
 
 import { createApp } from './app.ts'
+import { attachConsoleServer } from './console.ts'
 import { closePool, migrate } from './db.ts'
+import { startMetricsSampler } from './metrics.ts'
 
 const PORT = Number(process.env.PORT ?? 8787)
 
@@ -17,8 +19,11 @@ app.use('*', async (c, next) => {
 })
 
 const server = serve({ fetch: app.fetch, port: PORT }, (info) => {
-  console.log(`solstice api listening on http://localhost:${info.port}`)
+  console.log(`panel api listening on http://localhost:${info.port}`)
 })
+
+startMetricsSampler()
+attachConsoleServer(server as unknown as import('node:http').Server)
 
 /*
  * Stop accepting connections and drain the pool before exiting. Without this a
@@ -33,3 +38,17 @@ async function shutdown() {
 
 process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
+
+/*
+ * Dev visibility: log fatal errors before exiting non-zero so a supervisor
+ * (scripts/dev-api.sh) can restart the process instead of dying silently.
+ */
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] uncaughtException:', err)
+  process.exit(1)
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[fatal] unhandledRejection:', reason)
+  process.exit(1)
+})

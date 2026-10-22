@@ -38,7 +38,7 @@ after(async () => {
 })
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
-const VERIFY_SUBJECT = 'Confirm your Solstice email'
+const VERIFY_SUBJECT = 'Confirm your VPS Panel email'
 
 type App = ReturnType<typeof createApp>
 

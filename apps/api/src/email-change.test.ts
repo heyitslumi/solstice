@@ -32,10 +32,10 @@ after(async () => {
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
 
-const VERIFY_SUBJECT = 'Confirm your Solstice email'
-const CODE_SUBJECT = 'Confirm your new Solstice address'
-const NOTICE_SUBJECT = 'Your Solstice sign-in address is being changed'
-const DONE_SUBJECT = 'Your Solstice sign-in address has changed'
+const VERIFY_SUBJECT = 'Confirm your VPS Panel email'
+const CODE_SUBJECT = 'Confirm your new VPS Panel address'
+const NOTICE_SUBJECT = 'Your VPS Panel sign-in address is being changed'
+const DONE_SUBJECT = 'Your VPS Panel sign-in address has changed'
 
 type App = ReturnType<typeof createApp>
 
@@ -110,7 +110,7 @@ async function signIn(app: App, email: string) {
   const started = await post(app, '/api/auth/login', { email })
   assert.equal(started.status, 200)
 
-  const code = codeFrom((await mailTo(app, email, 'Sign in to Solstice')).text)
+  const code = codeFrom((await mailTo(app, email, 'Sign in to VPS Panel')).text)
   const verified = await post(app, '/api/auth/login/verify', { email, code })
   assert.equal(verified.status, 200)
   return sessionCookie(verified)
@@ -180,7 +180,7 @@ describe('change email: requesting', () => {
     const mailbox = await app.request('/api/dev/mailbox?limit=200')
     const { messages } = (await mailbox.json()) as { messages: { to: string; subject: string }[] }
     const signInMails = messages.filter(
-      (entry) => entry.to === 'pending-new@example.com' && entry.subject === 'Sign in to Solstice',
+      (entry) => entry.to === 'pending-new@example.com' && entry.subject === 'Sign in to VPS Panel',
     )
     assert.equal(signInMails.length, 0, 'the new address must not have an account yet')
   })
@@ -282,7 +282,7 @@ describe('change email: confirming', () => {
     const { messages } = (await mailbox.json()) as { messages: { to: string; subject: string }[] }
     const signInsTo = (address: string) =>
       messages.filter(
-        (entry) => entry.to === address && entry.subject === 'Sign in to Solstice',
+        (entry) => entry.to === address && entry.subject === 'Sign in to VPS Panel',
       ).length
 
     assert.equal(signInsTo('confirm-old@example.com'), 0, 'the old address must be gone')

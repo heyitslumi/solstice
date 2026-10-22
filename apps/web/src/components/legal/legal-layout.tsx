@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 import { ThemeToggle } from '@/components/auth/theme-toggle'
-import { LEGAL_DOCUMENTS } from '@/lib/legal-meta'
+import { useAppConfig } from '@/lib/config'
+import { LegalLinks } from '@/components/legal-links'
 import { cn } from '@/lib/utils'
 
 interface LegalLayoutProps {
@@ -50,6 +51,33 @@ function TocLinks({
       })}
     </ul>
   )
+}
+
+function LegalBrandName() {
+  const { config } = useAppConfig()
+  return <>{config.name || 'VPS Panel'}</>
+}
+
+function LegalTagline() {
+  const { config } = useAppConfig()
+  const tagline = config.tagline || 'VPS Hosting'
+  if (!tagline) return null
+  return (
+    <span className="text-[8px] leading-none font-medium tracking-[0.36em] text-sun-600 uppercase">
+      {tagline}
+    </span>
+  )
+}
+
+function LegalHost() {
+  const { config } = useAppConfig()
+  let host = ''
+  try {
+    host = config.url ? new URL(config.url).host : window.location.host
+  } catch {
+    host = window.location.host
+  }
+  return <p className="font-mono text-[11px] tracking-wide text-fg-subtle">{host}</p>
 }
 
 export function LegalLayout({ title, updated, children }: LegalLayoutProps) {
@@ -135,14 +163,12 @@ export function LegalLayout({ title, updated, children }: LegalLayoutProps) {
             to="/login"
             className="flex items-center gap-2.5 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
-            <img src="/brand/solstice-mark.png" alt="" className="h-7 w-auto shrink-0" />
+            <img src="/brand/mark.svg" alt="" className="h-7 w-auto shrink-0" />
             <span className="flex flex-col gap-1">
               <span className="text-[13px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
-                Solstice
+                <LegalBrandName />
               </span>
-              <span className="text-[8px] leading-none font-medium tracking-[0.36em] text-sun-600 uppercase">
-                VPS Hosting
-              </span>
+              <LegalTagline />
             </span>
           </Link>
 
@@ -217,17 +243,9 @@ export function LegalLayout({ title, updated, children }: LegalLayoutProps) {
 
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-5 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <p className="font-mono text-[11px] tracking-wide text-fg-subtle">solstice.host</p>
+          <LegalHost />
           <nav className="flex flex-wrap gap-x-5 gap-y-2">
-            {LEGAL_DOCUMENTS.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="text-[13px] text-fg-muted transition-colors hover:text-accent-text"
-              >
-                {item.label}
-              </Link>
-            ))}
+            <LegalLinks className="text-[13px] text-fg-muted transition-colors hover:text-accent-text" />
           </nav>
         </div>
       </footer>

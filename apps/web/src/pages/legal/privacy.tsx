@@ -12,7 +12,7 @@ export function PrivacyPage() {
     <LegalLayout title="Privacy Policy" updated={LEGAL_UPDATED}>
       <h2>1. Scope</h2>
       <p>
-        This policy explains how <strong>{LEGAL_ENTITY}</strong> (“Solstice Host”, “we”) handles
+        This policy explains how <strong>{LEGAL_ENTITY}</strong> (“we”) handles
         personal data when you use the Service, visit our website, or contact us.
       </p>
 

@@ -5,10 +5,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { AuthForm } from '@/components/auth/auth-form'
 import { AuthHeading } from '@/components/auth/auth-heading'
+import { CaptchaWidget } from '@/components/captcha-widget'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { CheckboxField, TextField } from '@/components/ui/field'
-import { EMAIL_PATTERN, api } from '@/lib/api'
+import { EMAIL_PATTERN, api, type PublicOAuthProvider } from '@/lib/api'
 import { useAppConfig } from '@/lib/config'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
@@ -17,9 +18,15 @@ const CODE_LENGTH = 6
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { refresh } = useSession()
+  const { user, loading: sessionLoading, refresh } = useSession()
   const { config } = useAppConfig()
   const [searchParams] = useSearchParams()
+
+  useEffect(() => {
+    if (!sessionLoading && user) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [user, sessionLoading, navigate])
 
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -38,8 +45,40 @@ export function LoginPage() {
   const [verifying, setVerifying] = useState(false)
   const [resent, setResent] = useState(false)
 
+  const [captchaToken, setCaptchaToken] = useState<string | undefined>(undefined)
+
   const [passkeyPending, setPasskeyPending] = useState(false)
   const [passkeyError, setPasskeyError] = useState<string | null>(null)
+
+  const [oauthProviders, setOauthProviders] = useState<PublicOAuthProvider[]>([])
+  const [oauthStarting, setOauthStarting] = useState<string | null>(null)
+
+  useEffect(() => {
+    const oauthError = searchParams.get('oauth_error')
+    if (oauthError) {
+      setFormError(oauthError)
+      searchParams.delete('oauth_error')
+      navigate('/login', { replace: true })
+    }
+    void (async () => {
+      const res = await api.listOAuthProviders()
+      if (res.ok) setOauthProviders(res.data || [])
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function handleOAuthSignIn(providerId: string) {
+    if (oauthStarting) return
+    setOauthStarting(providerId)
+    setFormError(null)
+    const res = await api.startOAuth(providerId, 'login')
+    if (!res.ok) {
+      setFormError(res.error.message ?? 'Could not start OAuth sign-in.')
+      setOauthStarting(null)
+      return
+    }
+    window.location.href = res.data.url
+  }
 
   async function completeSignIn() {
     await refresh()
@@ -93,11 +132,17 @@ export function LoginPage() {
     setFormError(null)
     if (Object.keys(nextErrors).length > 0) return
 
+    if (config.captchaProvider && config.captchaProvider !== 'none' && !captchaToken) {
+      setFormError('Please complete the captcha verification.')
+      return
+    }
+
     setPending(true)
     const result = await api.login({
       email: trimmedEmail,
       name: needsName ? trimmedName : undefined,
       remember,
+      captchaToken,
     })
     setPending(false)
 
@@ -110,6 +155,11 @@ export function LoginPage() {
 
     if (result.data.needsName) {
       setNeedsName(true)
+      return
+    }
+
+    if (result.data.directLogin) {
+      await completeSignIn()
       return
     }
 
@@ -155,14 +205,20 @@ export function LoginPage() {
     setResent(true)
   }
 
-  async function handlePasskeySignIn() {
+  async function handlePasskeySignIn(forEmail?: string) {
     if (passkeyPending) return
+
+    const targetEmail = (forEmail ?? email).trim()
+    if (!config.allowUsernamelessLogin && !targetEmail) {
+      setErrors({ email: 'Enter your email address to sign in with a passkey.' })
+      return
+    }
 
     setPasskeyError(null)
     setFormError(null)
     setPasskeyPending(true)
 
-    const options = await api.passkeyLoginOptions()
+    const options = await api.passkeyLoginOptions(targetEmail ? { email: targetEmail } : undefined)
     if (!options.ok) {
       setPasskeyPending(false)
       setPasskeyError(options.error.message ?? 'Could not start passkey sign-in.')
@@ -188,10 +244,10 @@ export function LoginPage() {
     }
   }
 
-  if (linking) {
+  if (linking || (!sessionLoading && user)) {
     return (
       <div className="auth-stack flex flex-col gap-7">
-        <AuthHeading title="Signing you in" description="Verifying the link from your email." />
+        <AuthHeading title="Signing you in" description={user ? "Redirecting to dashboard..." : "Verifying the link from your email."} />
       </div>
     )
   }
@@ -263,6 +319,40 @@ export function LoginPage() {
             </Button>
           </div>
         </AuthForm>
+
+        {config.enableSecurityKeys !== false && browserSupportsWebAuthn() ? (
+          <>
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-[12px] text-fg-subtle">or</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+
+            {passkeyError ? <Alert tone="danger">{passkeyError}</Alert> : null}
+
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={verifying || passkeyPending}
+              onClick={() => {
+                void handlePasskeySignIn(email.trim())
+              }}
+            >
+              {passkeyPending ? (
+                <>
+                  <CircleNotch size={16} weight="bold" className="animate-spin" aria-hidden />
+                  Waiting for your device
+                </>
+              ) : (
+                <>
+                  <Key size={16} aria-hidden />
+                  Sign in with passkey instead
+                </>
+              )}
+            </Button>
+          </>
+        ) : null}
       </div>
     )
   }
@@ -270,7 +360,7 @@ export function LoginPage() {
   return (
     <div className="auth-stack flex flex-col gap-7">
       <AuthHeading
-        title={`Sign in to ${config.name || 'Solstice'}`}
+        title={`Sign in to ${config.name || 'VPS Panel'}`}
         description="Access your servers, snapshots and network allocations."
       />
 
@@ -327,6 +417,14 @@ export function LoginPage() {
           Keep me signed in on this device
         </CheckboxField>
 
+        <CaptchaWidget
+          provider={config.captchaProvider}
+          siteKey={config.captchaSiteKey}
+          apiUrl={config.captchaApiUrl}
+          onVerify={(token) => setCaptchaToken(token)}
+          onError={() => setFormError('Captcha failed to load.')}
+        />
+
         <Button type="submit" disabled={pending} className="w-full">
           {pending ? (
             <>
@@ -341,7 +439,9 @@ export function LoginPage() {
         </Button>
       </AuthForm>
 
-      {browserSupportsWebAuthn() ? (
+      {config.enableSecurityKeys !== false &&
+      browserSupportsWebAuthn() &&
+      config.allowUsernamelessLogin ? (
         <>
           <div className="flex items-center gap-3">
             <span className="h-px flex-1 bg-border" />
@@ -370,6 +470,38 @@ export function LoginPage() {
               </>
             )}
           </Button>
+        </>
+      ) : null}
+
+      {oauthProviders.length > 0 ? (
+        <>
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[12px] text-fg-subtle">or</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          {oauthProviders.map((provider) => (
+            <Button
+              key={provider.id}
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={pending || passkeyPending || oauthStarting !== null}
+              onClick={() => {
+                void handleOAuthSignIn(provider.id)
+              }}
+            >
+              {oauthStarting === provider.id ? (
+                <>
+                  <CircleNotch size={16} weight="bold" className="animate-spin" aria-hidden />
+                  Redirecting to {provider.name}
+                </>
+              ) : (
+                <>Continue with {provider.name}</>
+              )}
+            </Button>
+          ))}
         </>
       ) : null}
     </div>

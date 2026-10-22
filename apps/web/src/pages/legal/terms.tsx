@@ -13,9 +13,9 @@ export function TermsPage() {
     <LegalLayout title="Terms of Service" updated={LEGAL_UPDATED}>
       <h2>1. About this agreement</h2>
       <p>
-        These Terms of Service (“Terms”) govern your access to and use of the Solstice Host control
+        These Terms of Service (“Terms”) govern your access to and use of this control
         panel, virtual servers, and related services (together, the “Service”). The Service is
-        operated by <strong>{LEGAL_ENTITY}</strong>, {LEGAL_ADDRESS} (“Solstice Host”, “we”, “us”).
+        operated by <strong>{LEGAL_ENTITY}</strong>, {LEGAL_ADDRESS} (“we”, “us”).
       </p>
       <p>
         By creating an account or using the Service you agree to these Terms and to our{' '}

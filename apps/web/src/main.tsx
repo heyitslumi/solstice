@@ -16,12 +16,12 @@ if (!container) throw new Error('Root element #root is missing from index.html')
 createRoot(container).render(
   <StrictMode>
     <BrowserRouter>
-      <ConfigProvider>
-        <SessionProvider>
+      <SessionProvider>
+        <ConfigProvider>
           <ScrollToTop />
           <App />
-        </SessionProvider>
-      </ConfigProvider>
+        </ConfigProvider>
+      </SessionProvider>
     </BrowserRouter>
   </StrictMode>,
 )

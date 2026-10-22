@@ -1,0 +1,16 @@
+[Unit]
+Description=Panel API
+After=network.target postgresql.service
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=__APP_DIR__
+ExecStart=/usr/bin/node --env-file=apps/api/.env apps/api/src/index.ts
+Restart=always
+RestartSec=3
+StandardOutput=append:__APP_DIR__/data/api.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

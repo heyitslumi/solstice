@@ -8,9 +8,9 @@ export const LEGAL_ENTITY = '[LEGAL ENTITY NAME]'
 export const LEGAL_ADDRESS = '[REGISTERED ADDRESS]'
 export const LEGAL_JURISDICTION = '[GOVERNING JURISDICTION]'
 
-export const CONTACT_LEGAL = 'legal@solstice.host'
-export const CONTACT_PRIVACY = 'privacy@solstice.host'
-export const CONTACT_ABUSE = 'abuse@solstice.host'
+export const CONTACT_LEGAL = 'legal@[OPERATOR DOMAIN]'
+export const CONTACT_PRIVACY = 'privacy@[OPERATOR DOMAIN]'
+export const CONTACT_ABUSE = 'abuse@[OPERATOR DOMAIN]'
 
 export const LEGAL_DOCUMENTS = [
   { to: '/legal/terms', label: 'Terms of Service' },

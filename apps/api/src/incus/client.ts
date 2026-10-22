@@ -1,4 +1,6 @@
+import crypto from 'node:crypto'
 import http from 'node:http'
+import net from 'node:net'
 
 const SOCKET_PATH = process.env.INCUS_SOCKET_PATH || '/var/lib/incus/unix.socket'
 
@@ -182,24 +184,25 @@ export const incus = {
     disk?: string
     sshKeys?: string[]
   }) {
-    let cloudInitConfig: Record<string, string> = {}
-    if (params.sshKeys && params.sshKeys.length > 0) {
-      const keysFormatted = params.sshKeys.map((k) => `  - ${k.trim()}`).join('\n')
-      const rootKeysFormatted = params.sshKeys.map((k) => `      - ${k.trim()}`).join('\n')
-      const userData = `#cloud-config
+    // Always ensure an SSH daemon exists so generated credentials and key
+    // auth work out of the box; owner keys are appended when present.
+    const keysFormatted = (params.sshKeys || []).map((k) => `  - ${k.trim()}`).join('\n')
+    const rootKeysFormatted = (params.sshKeys || []).map((k) => `      - ${k.trim()}`).join('\n')
+    const userData = `#cloud-config
+packages:
+  - openssh-server
 ssh_pwauth: true
 ssh_authorized_keys:
-${keysFormatted}
+${keysFormatted || '  []'}
 users:
   - default
   - name: root
     ssh_authorized_keys:
-${rootKeysFormatted}
+${rootKeysFormatted || '      []'}
 `
-      cloudInitConfig = {
-        'cloud-init.user-data': userData,
-        'user.user-data': userData,
-      }
+    const cloudInitConfig = {
+      'cloud-init.user-data': userData,
+      'user.user-data': userData,
     }
 
     const body = {
@@ -234,7 +237,22 @@ ${rootKeysFormatted}
     return res.metadata
   },
 
-  async setInstanceState(name: string, action: 'start' | 'stop' | 'restart', force = false) {
+  /* Copy an instance (or instance/snapshot) to a new name. The source
+     snapshot keeps the copy crash-consistent while running. */
+  async copyInstance(source: string, newName: string) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      'POST',
+      '/1.0/instances',
+      { name: newName, source: { type: 'copy', source } },
+      30000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 600)
+    }
+    return res.metadata
+  },
+
+  async setInstanceState(name: string, action: 'start' | 'stop' | 'restart' | 'freeze' | 'unfreeze', force = false) {
     const res = await incusRequest<IncusOperationMetadata>(
       'PUT',
       `/1.0/instances/${encodeURIComponent(name)}/state`,
@@ -245,6 +263,303 @@ ${rootKeysFormatted}
       await waitOperation(res.operation, 60)
     }
     return res.metadata
+  },
+
+  async listSnapshots(name: string): Promise<Array<{ name: string; created_at: string; stateful: boolean }>> {
+    const res = await incusRequest<Array<{ name: string; created_at: string; stateful: boolean }>>(
+      'GET',
+      `/1.0/instances/${encodeURIComponent(name)}/snapshots?recursion=1`,
+    )
+    return res.metadata || []
+  },
+
+  async createSnapshot(name: string, snapshotName: string, stateful = false) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      'POST',
+      `/1.0/instances/${encodeURIComponent(name)}/snapshots`,
+      { name: snapshotName, stateful },
+      60000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 120)
+    }
+    return res.metadata
+  },
+
+  async deleteSnapshot(name: string, snapshotName: string) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      'DELETE',
+      `/1.0/instances/${encodeURIComponent(name)}/snapshots/${encodeURIComponent(snapshotName)}`,
+      undefined,
+      60000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 120)
+    }
+    return res.metadata
+  },
+
+  async restoreSnapshot(name: string, snapshotName: string) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      // PUT (full update), like the CLI: restore takes the full snapshot path.
+      'PUT',
+      `/1.0/instances/${encodeURIComponent(name)}`,
+      { restore: `${name}/${snapshotName}` },
+      30000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 180)
+    }
+    return res.metadata
+  },
+
+  async updateInstanceConfig(name: string, config: Record<string, string>) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      'PATCH',
+      `/1.0/instances/${encodeURIComponent(name)}`,
+      { config },
+      30000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 120)
+    }
+    return res.metadata
+  },
+
+  async renameInstance(name: string, newName: string) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      'POST',
+      `/1.0/instances/${encodeURIComponent(name)}`,
+      { name: newName },
+      30000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 120)
+    }
+    return res.metadata
+  },
+
+  async freezeInstance(name: string, frozen: boolean) {
+    return this.setInstanceState(name, frozen ? 'freeze' : 'unfreeze')
+  },
+
+  /* Run a non-interactive command; resolves true when the operation succeeds.
+     Output is not captured (no websocket reader); use for fire-and-set tasks. */
+  /* Open one exec websocket channel and complete the HTTP upgrade. */
+  async execChannel(opId: string, secret: string): Promise<net.Socket> {
+    return new Promise((resolve, reject) => {
+      const key = crypto.randomBytes(16).toString('base64')
+      const sock = net.connect(SOCKET_PATH)
+      let head = Buffer.alloc(0)
+      const timer = setTimeout(() => {
+        sock.destroy()
+        reject(new Error('Incus websocket handshake timed out'))
+      }, 15000)
+      sock.on('connect', () => {
+        sock.write(
+          `GET /1.0/operations/${opId}/websocket?secret=${secret} HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\n\r\n`,
+        )
+      })
+      sock.on('data', (chunk: Buffer) => {
+        head = Buffer.concat([head, chunk])
+        const idx = head.indexOf('\r\n\r\n')
+        if (idx === -1) return
+        if (!head.slice(0, idx).toString().includes('101')) {
+          clearTimeout(timer)
+          sock.destroy()
+          reject(new Error('Incus websocket handshake failed'))
+          return
+        }
+        clearTimeout(timer)
+        resolve(sock)
+      })
+      sock.once('error', (err) => {
+        clearTimeout(timer)
+        reject(err)
+      })
+    })
+  },
+
+  /* Send a masked client close frame (stdin EOF for the guest). */
+  execStdinEof(sock: net.Socket) {
+    sock.write(Buffer.from([0x88, 0x00]))
+  },
+
+  async execInstance(name: string, command: string[], timeoutSec = 60): Promise<boolean> {
+    // Websocket-mode exec: KVM guests only actually run the command once all
+    // channels are attached (fire-and-forget mode silently no-ops there).
+    const res = await incusRequest<{
+      operation: string
+    } & IncusOperationMetadata>(
+      'POST',
+      `/1.0/instances/${encodeURIComponent(name)}/exec`,
+      {
+        command,
+        environment: {},
+        'wait-for-websocket': true,
+        interactive: false,
+      },
+      30000,
+    )
+    const opPath = res.operation || (res.metadata as unknown as string)
+    if (typeof opPath !== 'string' || !opPath) return res.type === 'sync'
+    const opId = opPath.split('/').pop() as string
+    const fds = (res.metadata as any)?.metadata?.fds as Record<string, string> | undefined
+    const sockets: net.Socket[] = []
+    try {
+      // Attach every channel (control + stdio); the guest starts on full attach.
+      for (const key of ['control', '0', '1', '2']) {
+        const secret = fds?.[key]
+        if (!secret) continue
+        sockets.push(await this.execChannel(opId, secret))
+      }
+      const stdin = sockets[1]
+      if (stdin) this.execStdinEof(stdin)
+      await waitOperation(opPath, timeoutSec)
+      return true
+    } finally {
+      for (const sock of sockets) {
+        try {
+          sock.destroy()
+        } catch {
+          // ignore
+        }
+      }
+    }
+  },
+
+  /* Read a small text file from the instance (raw bytes, not JSON). */
+  async readInstanceFile(name: string, filePath: string, timeoutMs = 15000): Promise<string | null> {
+    return new Promise((resolve) => {
+      const req = http.request(
+        {
+          socketPath: SOCKET_PATH,
+          path: `/1.0/instances/${encodeURIComponent(name)}/files?path=${encodeURIComponent(filePath)}`,
+          method: 'GET',
+          headers: { Host: 'localhost' },
+          timeout: timeoutMs,
+        },
+        (res) => {
+          let raw = ''
+          res.setEncoding('utf8')
+          res.on('data', (chunk) => {
+            raw += chunk
+            // Log files stay small; bail out rather than buffering forever.
+            if (raw.length > 64 * 1024) req.destroy()
+          })
+          res.on('end', () => {
+            resolve(res.statusCode && res.statusCode < 400 ? raw : null)
+          })
+        },
+      )
+      req.on('timeout', () => req.destroy())
+      req.on('error', () => resolve(null))
+      req.end()
+    })
+  },
+
+  /* Devices are managed read-modify-write: fetch the instance, merge the
+     devices map, and PUT it back (mirrors what the CLI does). */
+  async mergeInstanceDevices(name: string, mutate: (devices: Record<string, Record<string, string>>) => void) {
+    const current = await this.getInstance(name)
+    const devices: Record<string, Record<string, string>> = { ...(current.devices || {}) }
+    mutate(devices)
+    const res = await incusRequest<IncusOperationMetadata>(
+      'PUT',
+      `/1.0/instances/${encodeURIComponent(name)}`,
+      {
+        architecture: (current as any).architecture,
+        config: current.config,
+        devices,
+        ephemeral: (current as any).ephemeral,
+        profiles: (current as any).profiles,
+      },
+      30000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 60)
+    }
+    return res.metadata
+  },
+
+  /* Network ACLs (firewall). Rules live inside the ACL object: read, modify
+     the egress/ingress arrays, and PUT the whole object back. */
+  async getNetworkAcl(name: string): Promise<{
+    name: string
+    description: string
+    egress: Array<Record<string, string>>
+    ingress: Array<Record<string, string>>
+  } | null> {
+    try {
+      const res = await incusRequest<any>('GET', `/1.0/network-acls/${encodeURIComponent(name)}`)
+      const md = res.metadata || {}
+      return {
+        name: md.name || name,
+        description: md.description || '',
+        egress: md.egress || [],
+        ingress: md.ingress || [],
+      }
+    } catch (err: any) {
+      if (/not found/i.test(err?.message || '')) return null
+      throw err
+    }
+  },
+
+  async createNetworkAcl(
+    name: string,
+    rules: { egress: Array<Record<string, string>>; ingress: Array<Record<string, string>> },
+  ) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      'POST',
+      '/1.0/network-acls',
+      { name, description: `Panel firewall (${name})`, egress: rules.egress, ingress: rules.ingress },
+      30000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 60)
+    }
+    return res.metadata
+  },
+
+  async updateNetworkAcl(
+    name: string,
+    rules: { egress: Array<Record<string, string>>; ingress: Array<Record<string, string>> },
+  ) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      'PUT',
+      `/1.0/network-acls/${encodeURIComponent(name)}`,
+      { egress: rules.egress, ingress: rules.ingress },
+      30000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 60)
+    }
+    return res.metadata
+  },
+
+  async deleteNetworkAcl(name: string) {
+    const res = await incusRequest<IncusOperationMetadata>(
+      'DELETE',
+      `/1.0/network-acls/${encodeURIComponent(name)}`,
+      undefined,
+      30000,
+    )
+    if (res.type === 'async' && res.operation) {
+      await waitOperation(res.operation, 60)
+    }
+    return res.metadata
+  },
+
+  async addInstanceDevice(name: string, deviceName: string, device: Record<string, string>) {
+    return this.mergeInstanceDevices(name, (devices) => {
+      devices[deviceName] = device
+    })
+  },
+
+  async deleteInstanceDevice(name: string, deviceName: string) {
+    return this.mergeInstanceDevices(name, (devices) => {
+      delete devices[deviceName]
+    })
   },
 
   async deleteInstance(name: string) {

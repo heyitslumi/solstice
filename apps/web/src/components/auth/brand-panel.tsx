@@ -31,17 +31,19 @@ export function BrandPanel() {
 
       <div className="relative flex items-center gap-3.5">
         <img
-          src={config.icon || '/brand/solstice-mark.png'}
+          src={config.icon || '/brand/mark.svg'}
           alt=""
           className="h-11 w-auto max-w-[44px] max-h-[44px] shrink-0 object-contain"
         />
         <div className="flex flex-col gap-1">
           <span className="text-[15px] leading-none font-semibold tracking-[0.26em] text-brand-ink uppercase">
-            {config.name || 'Solstice'}
+            {config.name || 'VPS Panel'}
           </span>
-          <span className="text-[9px] leading-none font-medium tracking-[0.4em] text-sun-500 uppercase">
-            VPS Hosting
-          </span>
+          {(config.tagline || 'VPS Hosting') && (
+            <span className="text-[9px] leading-none font-medium tracking-[0.4em] text-sun-500 uppercase">
+              {config.tagline || 'VPS Hosting'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -54,7 +56,7 @@ export function BrandPanel() {
         </p>
         <p className="flex items-center gap-2 pt-1 font-mono text-[11px] tracking-wide text-brand-ink/35">
           <span aria-hidden className="size-1.5 rounded-full bg-sun-500" />
-          {config.url ? new URL(config.url).host : 'solstice.host'}
+          {config.url ? new URL(config.url).host : window.location.host}
         </p>
       </div>
     </aside>

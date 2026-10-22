@@ -1,0 +1,16 @@
+[Unit]
+Description=Panel web dev server (tunnel mode only)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=__APP_DIR__
+ExecStart=/usr/bin/npm run dev --workspace @solstice/web
+Restart=always
+RestartSec=3
+StandardOutput=append:__APP_DIR__/data/web.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

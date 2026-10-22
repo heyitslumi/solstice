@@ -17,9 +17,15 @@ function readStoredTheme(): Theme {
  * Theme state for the panel. The initial class is applied by the inline script
  * in index.html so there is no flash of the wrong theme on first paint; this
  * hook takes over once React mounts.
+ *
+ * A server-side preference ('light' | 'dark') wins over the local stored /
+ * device choice. 'system' (or absent) keeps the local behavior.
  */
-export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(readStoredTheme)
+export function useTheme(serverMode?: string | null) {
+  const forced = serverMode === 'light' || serverMode === 'dark' ? serverMode : null
+  const [localTheme, setLocalTheme] = useState<Theme>(readStoredTheme)
+
+  const theme: Theme = forced ?? localTheme
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -27,16 +33,16 @@ export function useTheme() {
 
   const choose = useCallback((next: Theme) => {
     window.localStorage.setItem(STORAGE_KEY, next)
-    setTheme(next)
+    setLocalTheme(next)
   }, [])
 
   const toggle = useCallback(() => {
-    setTheme((current) => {
+    setLocalTheme((current) => {
       const next: Theme = current === 'dark' ? 'light' : 'dark'
       window.localStorage.setItem(STORAGE_KEY, next)
       return next
     })
   }, [])
 
-  return { theme, setTheme: choose, toggle }
+  return { theme, setTheme: choose, toggle, forced: forced !== null }
 }

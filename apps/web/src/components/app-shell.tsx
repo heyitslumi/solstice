@@ -2,23 +2,29 @@ import {
   ArrowBendUpLeft,
   ChartLineUp,
   ClockCounterClockwise,
-  Database,
+  Cube,
+  FolderSimple,
   Gear,
   Globe,
   HardDrives,
   Heartbeat,
   House,
+  LinkSimple,
   List,
+  MapPin,
   MegaphoneSimple,
-  PuzzlePiece,
+  PaintBrush,
+  DesktopTower,
   ShieldStar,
   SquaresFour,
+  Users,
 } from '@phosphor-icons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { UserMenu } from '@/components/user-menu'
+import { AnnouncementBanners } from '@/components/announcement-banner'
 import { Button } from '@/components/ui/button'
 import { useAppConfig } from '@/lib/config'
 import { useSession } from '@/lib/session'
@@ -35,10 +41,10 @@ interface NavItem {
 
 const CLIENT_NAV: NavItem[] = [
   { label: 'Overview', icon: <SquaresFour size={17} aria-hidden />, to: '/dashboard' },
-  { label: 'Servers', icon: <HardDrives size={17} aria-hidden /> },
-  { label: 'Snapshots', icon: <ClockCounterClockwise size={17} aria-hidden /> },
-  { label: 'Network', icon: <Globe size={17} aria-hidden /> },
-  { label: 'Usage', icon: <ChartLineUp size={17} aria-hidden /> },
+  { label: 'Servers', icon: <HardDrives size={17} aria-hidden />, to: '/servers' },
+  { label: 'Snapshots', icon: <ClockCounterClockwise size={17} aria-hidden />, to: '/snapshots' },
+  { label: 'Network', icon: <Globe size={17} aria-hidden />, to: '/network' },
+  { label: 'Usage', icon: <ChartLineUp size={17} aria-hidden />, to: '/usage' },
 ]
 
 interface AdminNavSection {
@@ -55,18 +61,40 @@ const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     ],
   },
   {
+    title: 'USERS & ACCESS',
+    items: [
+      { label: 'Users', icon: <Users size={16} aria-hidden />, to: '/admin/users' },
+      { label: 'OAuth Providers', icon: <LinkSimple size={16} aria-hidden />, to: '/admin/oauth-providers' },
+      { label: 'Activity', icon: <ClockCounterClockwise size={16} aria-hidden />, to: '/admin/activity' },
+    ],
+  },
+  {
+    title: 'SERVERS',
+    items: [
+      { label: 'Servers', icon: <DesktopTower size={16} aria-hidden />, to: '/admin/servers' },
+      { label: 'Port Forwards', icon: <Globe size={16} aria-hidden />, to: '/admin/port-forwards' },
+    ],
+  },
+  {
+    title: 'OPERATING SYSTEMS',
+    items: [
+      { label: 'OS Templates', icon: <Cube size={16} aria-hidden />, to: '/admin/os-templates' },
+    ],
+  },
+  {
     title: 'INFRASTRUCTURE',
     items: [
-      { label: 'Network Pools', icon: <Globe size={16} aria-hidden /> },
+      { label: 'Nodes', icon: <HardDrives size={16} aria-hidden />, to: '/admin/nodes' },
+      { label: 'Locations', icon: <MapPin size={16} aria-hidden />, to: '/admin/locations' },
     ],
   },
   {
     title: 'SYSTEM',
     items: [
       { label: 'Settings', icon: <Gear size={16} aria-hidden />, to: '/admin/settings' },
-      { label: 'Announcements', icon: <MegaphoneSimple size={16} aria-hidden /> },
-      { label: 'Audit Logs', icon: <Database size={16} aria-hidden /> },
-      { label: 'Plugins & Hooks', icon: <PuzzlePiece size={16} aria-hidden /> },
+      { label: 'Announcements', icon: <MegaphoneSimple size={16} aria-hidden />, to: '/admin/announcements' },
+      { label: 'Assets', icon: <FolderSimple size={16} aria-hidden />, to: '/admin/assets' },
+      { label: 'Theme Editor', icon: <PaintBrush size={16} aria-hidden />, to: '/admin/theme' },
     ],
   },
 ]
@@ -96,16 +124,16 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
         className="flex items-center gap-2.5 rounded-control px-2 py-1"
       >
         <img
-          src={config.icon || '/brand/solstice-mark.png'}
+          src={config.icon || '/brand/mark.svg'}
           alt=""
           className="h-7 w-auto max-w-[28px] max-h-[28px] shrink-0 object-contain"
         />
         <span className="flex flex-col gap-0.5 min-w-0">
           <span className="truncate text-[12px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
-            {config.name || 'Solstice'}
+            {config.name || 'VPS Panel'}
           </span>
           <span className="text-[8px] leading-none font-semibold tracking-[0.32em] text-sun-500 uppercase">
-            {isAdminArea ? 'Control Plane' : 'VPS Hosting'}
+            {isAdminArea ? 'Control Plane' : config.tagline || 'VPS Hosting'}
           </span>
         </span>
       </Link>
@@ -137,7 +165,27 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
                       ? currentFull === '/admin' || currentFull === '/admin?tab=overview'
                       : item.to === '/admin/settings'
                         ? pathname.startsWith('/admin/settings')
-                        : currentFull === item.to
+                        : item.to === '/admin/announcements'
+                          ? pathname.startsWith('/admin/announcements')
+                          : item.to === '/admin/assets'
+                            ? pathname.startsWith('/admin/assets')
+                            : item.to === '/admin/theme'
+                              ? pathname.startsWith('/admin/theme')
+                              : item.to === '/admin/locations'
+                                ? pathname.startsWith('/admin/locations')
+                                : item.to === '/admin/nodes'
+                                  ? pathname.startsWith('/admin/nodes')
+                                  : item.to === '/admin/users'
+                                    ? pathname.startsWith('/admin/users')
+                                    : item.to === '/admin/oauth-providers'
+                                      ? pathname.startsWith('/admin/oauth-providers')
+                                      : item.to === '/admin/activity'
+                                        ? pathname.startsWith('/admin/activity')
+                                        : item.to === '/admin/os-templates'
+                                          ? pathname.startsWith('/admin/os-templates')
+                                          : item.to === '/admin/servers'
+                                            ? pathname.startsWith('/admin/servers')
+                                            : currentFull === item.to
                     : false
 
                   if (!item.to) {
@@ -357,7 +405,10 @@ export function AppShell({ title, description, actions, children }: AppShellProp
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-5 py-8 sm:px-8 lg:py-10">{children}</main>
+        <main className="flex-1 overflow-y-auto px-5 py-8 sm:px-8 lg:py-10">
+          <AnnouncementBanners />
+          {children}
+        </main>
       </div>
     </div>
   )

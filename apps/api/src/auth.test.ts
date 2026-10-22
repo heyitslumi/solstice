@@ -67,7 +67,7 @@ async function verificationCode(app: ReturnType<typeof freshApp>, email: string)
   // The code sits alone on its own line; a looser match would also catch a
   // six-digit run inside the confirmation link's token.
   const code = (
-    await mailboxMessage(app, email, 'Confirm your Solstice email')
+    await mailboxMessage(app, email, 'Confirm your VPS Panel email')
   ).match(/^\s*(\d{6})\s*$/m)?.[1]
   assert.ok(code, 'expected a 6-digit code on its own line')
   return code
@@ -75,7 +75,7 @@ async function verificationCode(app: ReturnType<typeof freshApp>, email: string)
 
 async function verificationToken(app: ReturnType<typeof freshApp>, email: string) {
   const link = (
-    await mailboxMessage(app, email, 'Confirm your Solstice email')
+    await mailboxMessage(app, email, 'Confirm your VPS Panel email')
   ).match(/https?:\/\/\S*verify-email\S*/)?.[0]
   assert.ok(link, 'expected a confirmation link in the email')
 
@@ -86,14 +86,14 @@ async function verificationToken(app: ReturnType<typeof freshApp>, email: string
 
 async function loginCode(app: ReturnType<typeof freshApp>, email: string) {
   const code = (
-    await mailboxMessage(app, email, 'Sign in to Solstice')
+    await mailboxMessage(app, email, 'Sign in to VPS Panel')
   ).match(/^\s*(\d{6})\s*$/m)?.[1]
   assert.ok(code, 'expected a 6-digit sign-in code on its own line')
   return code
 }
 
 async function loginLinkToken(app: ReturnType<typeof freshApp>, email: string) {
-  const link = (await mailboxMessage(app, email, 'Sign in to Solstice')).match(
+  const link = (await mailboxMessage(app, email, 'Sign in to VPS Panel')).match(
     /https?:\/\/\S*\/login\?token=\S*/,
   )?.[0]
   assert.ok(link, 'expected a sign-in link in the email')

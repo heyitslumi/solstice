@@ -51,16 +51,78 @@ function devBasicAuth(username: string, password: string): Plugin {
   }
 }
 
+function dynamicSeo(apiUrl: string): Plugin {
+  return {
+    name: 'dynamic-seo',
+    transformIndexHtml: {
+      order: 'post',
+      async handler(html) {
+        let config: any = null
+        try {
+          const res = await fetch(`${apiUrl}/api/config`, { signal: AbortSignal.timeout(1000) })
+          if (res.ok) config = await res.json()
+        } catch {
+          // fallback
+        }
+
+        if (!config) return html
+
+        const pageUrl = config.url || ''
+        const name = config.name || 'Solstice'
+        const title = `${name} Host`
+        const desc = config.metaDescription || 'Next-generation cloud infrastructure and VPS management platform.'
+        const image = config.metaPreviewImage || config.banner || ''
+        const twitterCard = config.metaTwitterCard || 'summary_large_image'
+        const themeColor = config.metaThemeColor || '#6c5ce7'
+        const allowIndexing = config.metaAllowIndexing !== false
+
+        // Replace <title>
+        html = html.replace(/<title>.*?<\/title>/i, `<title>${title}</title>`)
+
+        // Clean out default description/theme-color/robots to avoid duplicates
+        html = html.replace(/<meta\s+name=["']description["'][^>]*>\s*/gi, '')
+        html = html.replace(/<meta\s+name=["']theme-color["'][^>]*>\s*/gi, '')
+        html = html.replace(/<meta\s+name=["']robots["'][^>]*>\s*/gi, '')
+        html = html.replace(/<meta\s+property=["']og:[^"']*["'][^>]*>\s*/gi, '')
+        html = html.replace(/<meta\s+name=["']twitter:[^"']*["'][^>]*>\s*/gi, '')
+
+        const metaTags = [
+          `<meta name="description" content="${desc}" />`,
+          `<meta name="theme-color" content="${themeColor}" />`,
+          pageUrl ? `<meta property="og:url" content="${pageUrl}" />` : '',
+          `<meta property="og:site_name" content="${name}" />`,
+          `<meta property="og:type" content="website" />`,
+          `<meta property="og:title" content="${title}" />`,
+          `<meta property="og:description" content="${desc}" />`,
+          image ? `<meta property="og:image" content="${image}" />` : '',
+          image ? `<meta property="og:image:secure_url" content="${image}" />` : '',
+          `<meta name="twitter:card" content="${twitterCard}" />`,
+          `<meta name="twitter:title" content="${title}" />`,
+          `<meta name="twitter:description" content="${desc}" />`,
+          image ? `<meta name="twitter:image" content="${image}" />` : '',
+          `<meta name="robots" content="${allowIndexing ? 'index, follow' : 'noindex, nofollow'}" />`,
+        ]
+          .filter(Boolean)
+          .join('\n    ')
+
+        return html.replace('</head>', `    ${metaTags}\n  </head>`)
+      },
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const username = env.DEV_AUTH_USER
   const password = env.DEV_AUTH_PASSWORD
+  const apiUrl = env.API_URL || process.env.API_URL || 'http://127.0.0.1:8788'
 
   return {
     plugins: [
       react(),
       tailwindcss(),
+      dynamicSeo(apiUrl),
       ...(username && password ? [devBasicAuth(username, password)] : []),
     ],
     resolve: {
@@ -73,11 +135,14 @@ export default defineConfig(({ mode }) => {
       // Vite rejects requests whose Host header it does not recognise, so the
       // public dev domain has to be listed explicitly. The leading dot covers the
       // random tunnel subdomains.
-      allowedHosts: ['vps.dev.solstice.host', '.kimaki.dev', 'elysia', 'elysia.tailscale.net', '.tailscale.net', '100.64.0.10', '.trycloudflare.com'],
+      allowedHosts: ['dev.solstice.host', 'vps.dev.solstice.host', '.solstice.host', '.kimaki.dev', 'elysia', 'elysia.tailscale.net', '.tailscale.net', '100.64.0.10', '.trycloudflare.com'],
       proxy: {
         '/api': {
           target: env.API_URL || process.env.API_URL || 'http://127.0.0.1:8788',
           changeOrigin: true,
+          // The embedded console speaks WebSocket under /api — without this
+          // Vite never forwards the Upgrade and the terminal hangs connecting.
+          ws: true,
         },
         '/agentation': {
           target: process.env.AGENTATION_URL ?? 'http://127.0.0.1:4747',

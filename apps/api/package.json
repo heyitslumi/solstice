@@ -11,9 +11,11 @@
   "dependencies": {
     "@hono/node-server": "^1.19.5",
     "@simplewebauthn/server": "^14.0.2",
+    "@types/ws": "^8.18.1",
     "hono": "^4.10.2",
     "nodemailer": "^10.0.10",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/nodemailer": "^8.0.1",
