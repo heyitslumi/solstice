@@ -3,11 +3,15 @@
 __DOMAIN__ {
 	encode gzip
 
-	# Built SPA with client-side routing.
-	root * __APP_DIR__/apps/web/dist
-	try_files {path} /index.html
-	file_server
-
 	# API (REST + console websockets + uploads).
-	reverse_proxy /api/* 127.0.0.1:8788
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8788
+	}
+
+	# Built SPA with client-side routing.
+	handle {
+		root * __APP_DIR__/apps/web/dist
+		try_files {path} /index.html
+		file_server
+	}
 }
