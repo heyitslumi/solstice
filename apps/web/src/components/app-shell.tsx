@@ -2,7 +2,8 @@ import {
   ArrowBendUpLeft,
   ChartLineUp,
   ClockCounterClockwise,
-  Cube,
+  Disc,
+  FloppyDisk,
   FolderSimple,
   Gear,
   Globe,
@@ -76,9 +77,13 @@ const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     ],
   },
   {
-    title: 'OPERATING SYSTEMS',
+    title: 'MEDIA',
     items: [
-      { label: 'OS Templates', icon: <Cube size={16} aria-hidden />, to: '/admin/os-templates' },
+      { label: 'Template Groups', icon: <FloppyDisk size={16} aria-hidden /> },
+      { label: 'Templates', icon: <FloppyDisk size={16} aria-hidden /> },
+      { label: 'Template Manager', icon: <FloppyDisk size={16} aria-hidden /> },
+      { label: 'Template Collections', icon: <FloppyDisk size={16} aria-hidden /> },
+      { label: 'CD/DVD', icon: <Disc size={16} aria-hidden /> },
     ],
   },
   {
@@ -181,11 +186,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
                                       ? pathname.startsWith('/admin/oauth-providers')
                                       : item.to === '/admin/activity'
                                         ? pathname.startsWith('/admin/activity')
-                                        : item.to === '/admin/os-templates'
-                                          ? pathname.startsWith('/admin/os-templates')
-                                          : item.to === '/admin/servers'
-                                            ? pathname.startsWith('/admin/servers')
-                                            : currentFull === item.to
+                                        : item.to === '/admin/servers'
+                                          ? pathname.startsWith('/admin/servers')
+                                          : currentFull === item.to
                     : false
 
                   if (!item.to) {

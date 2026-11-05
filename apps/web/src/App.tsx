@@ -19,8 +19,6 @@ import { AdminThemePage } from '@/pages/admin-theme'
 import { AdminActivityPage } from '@/pages/admin-activity'
 import { AdminOAuthProviderFormPage } from '@/pages/admin-oauth-provider-form'
 import { AdminOAuthProvidersPage } from '@/pages/admin-oauth-providers'
-import { AdminOsTemplateFormPage } from '@/pages/admin-os-template-form'
-import { AdminOsTemplatesPage } from '@/pages/admin-os-templates'
 import { AdminServerDetailPage } from '@/pages/admin-server-detail'
 import { AdminServerFormPage } from '@/pages/admin-server-form'
 import { AdminServersPage } from '@/pages/admin-servers'
@@ -307,36 +305,6 @@ function App() {
             <RequireAuth>
               <RequireAdmin>
                 <AdminActivityPage />
-              </RequireAdmin>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/admin/os-templates"
-          element={
-            <RequireAuth>
-              <RequireAdmin>
-                <AdminOsTemplatesPage />
-              </RequireAdmin>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/admin/os-templates/new"
-          element={
-            <RequireAuth>
-              <RequireAdmin>
-                <AdminOsTemplateFormPage />
-              </RequireAdmin>
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/admin/os-templates/:id/edit"
-          element={
-            <RequireAuth>
-              <RequireAdmin>
-                <AdminOsTemplateFormPage />
               </RequireAdmin>
             </RequireAuth>
           }
