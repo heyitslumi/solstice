@@ -596,7 +596,7 @@ export function AdminTemplatesPage() {
 
       {/* Floating Batch Selection Bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-4 rounded-panel border border-border bg-surface/95 px-5 py-3 shadow-2xl backdrop-blur-md">
+        <div className="fixed bottom-6 left-1/2 z-50 flex items-center gap-4 rounded-panel border border-border bg-surface/95 px-5 py-3 shadow-2xl backdrop-blur-md animate-[float-bar-in_0.22s_cubic-bezier(0.16,1,0.3,1)_both]">
           <div className="flex items-center gap-2">
             <span className="flex size-5 items-center justify-center rounded-full bg-sun-500/20 text-[11px] font-bold text-sun-500">
               {selectedIds.size}
