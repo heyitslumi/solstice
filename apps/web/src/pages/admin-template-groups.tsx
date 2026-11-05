@@ -9,7 +9,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 
 import { AppShell } from '@/components/app-shell'
-import { getOsLogo, OS_LOGOS } from '@/components/os-icons'
+import { OsLogoImage, OS_LOGOS } from '@/components/os-icons'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -420,8 +420,6 @@ export function AdminTemplateGroupsPage() {
                 </tr>
               ) : (
                 filtered.map((g) => {
-                  const logoDef = getOsLogo(g.logo)
-                  const LogoIcon = logoDef.component
                   const isSelected = selectedIds.has(g.id)
 
                   return (
@@ -443,8 +441,8 @@ export function AdminTemplateGroupsPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-control border border-border bg-surface-2">
-                            <LogoIcon size={18} className={logoDef.color} />
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-control border border-border bg-surface-2 p-1.5">
+                            <OsLogoImage logoKey={g.logo} size={18} />
                           </div>
                           <span className="font-semibold text-[13px] text-fg group-hover:text-accent">
                             {g.name}
@@ -555,10 +553,7 @@ export function AdminTemplateGroupsPage() {
                 </select>
                 <div className="mt-2 flex items-center gap-2">
                   <span className="text-[11px] text-fg-subtle">Preview:</span>
-                  {(() => {
-                    const PreviewLogo = getOsLogo(formLogo).component
-                    return <PreviewLogo size={16} className={getOsLogo(formLogo).color} />
-                  })()}
+                  <OsLogoImage logoKey={formLogo} size={20} />
                 </div>
               </div>
 
