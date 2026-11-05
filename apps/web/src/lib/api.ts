@@ -111,12 +111,17 @@ export interface ActivityEntry {
 
 export interface OsTemplate {
   id: string
+  groupId?: string | null
+  groupName?: string | null
+  groupLogo?: string | null
   name: string
+  version?: string
   os: string
   release: string
   arch: string
   variant: string
   imageAlias: string
+  cloudInit?: boolean
   enabled: boolean
   createdAt: string
   updatedAt: string
@@ -556,6 +561,17 @@ function patch<T>(path: string, body?: unknown) {
     method: 'PATCH',
     body: body === undefined ? undefined : JSON.stringify(body),
   })
+}
+
+export interface OsGroupItem {
+  id: string
+  name: string
+  description: string
+  logo: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  templates?: any[]
 }
 
 export const api = {

@@ -5744,12 +5744,17 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
   function publicOsTemplate(row: OsTemplateRow) {
     return {
       id: row.id,
+      groupId: row.group_id ?? null,
+      groupName: row.group_name ?? null,
+      groupLogo: row.group_logo ?? null,
       name: row.name,
+      version: row.version ?? '1.00',
       os: row.os ?? '',
       release: row.release ?? '',
       arch: row.arch ?? 'amd64',
       variant: row.variant ?? 'cloud',
       imageAlias: row.image_alias,
+      cloudInit: row.cloud_init !== false,
       enabled: !!row.enabled,
       createdAt: toIso(row.created_at),
       updatedAt: toIso(row.updated_at),
@@ -5979,7 +5984,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const admin = await requireAdmin(c)
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
-    const rows = await query<OsTemplateRow>('SELECT * FROM os_templates ORDER BY name ASC')
+    const rows = await query<OsTemplateRow>(`
+      SELECT t.*, g.name AS group_name, g.logo AS group_logo
+        FROM os_templates t
+        LEFT JOIN os_groups g ON g.id = t.group_id
+       ORDER BY t.name ASC
+    `)
     return c.json(rows.map(publicOsTemplate))
   })
 
@@ -5994,16 +6004,19 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<OsTemplateRow>(
-        `INSERT INTO os_templates (name, os, release, arch, variant, image_alias, enabled)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
         [
           str(body.name).trim(),
+          body.groupId || null,
+          str(body.version).trim() || '1.00',
           str(body.os).trim(),
           str(body.release).trim(),
           str(body.arch).trim() || 'amd64',
           str(body.variant).trim() || 'cloud',
           str(body.imageAlias).trim(),
+          body.cloudInit !== false,
           body.enabled !== false,
         ],
       )
@@ -6015,7 +6028,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         clientKey(c),
       )
 
-      return c.json(publicOsTemplate(row!), 201)
+      const full = await queryOne<OsTemplateRow>(`
+        SELECT t.*, g.name AS group_name, g.logo AS group_logo
+          FROM os_templates t
+          LEFT JOIN os_groups g ON g.id = t.group_id
+         WHERE t.id = $1
+      `, [row!.id])
+
+      return c.json(publicOsTemplate(full || row!), 201)
     } catch (err: any) {
       if (err?.code === '23505') {
         return c.json({ message: 'A template with this image alias already exists.' }, 409)
@@ -6039,6 +6059,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       fields.push(`name = $${idx++}`)
       values.push(str(body.name).trim())
     }
+    if (body.groupId !== undefined) {
+      fields.push(`group_id = $${idx++}`)
+      values.push(body.groupId || null)
+    }
+    if (body.version !== undefined) {
+      fields.push(`version = $${idx++}`)
+      values.push(str(body.version).trim() || '1.00')
+    }
     if (body.os !== undefined) {
       fields.push(`os = $${idx++}`)
       values.push(str(body.os).trim())
@@ -6058,6 +6086,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.imageAlias !== undefined) {
       fields.push(`image_alias = $${idx++}`)
       values.push(str(body.imageAlias).trim())
+    }
+    if (body.cloudInit !== undefined) {
+      fields.push(`cloud_init = $${idx++}`)
+      values.push(body.cloudInit !== false)
     }
     if (body.enabled !== undefined) {
       fields.push(`enabled = $${idx++}`)
@@ -6081,7 +6113,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         clientKey(c),
       )
 
-      return c.json(publicOsTemplate(updated))
+      const full = await queryOne<OsTemplateRow>(`
+        SELECT t.*, g.name AS group_name, g.logo AS group_logo
+          FROM os_templates t
+          LEFT JOIN os_groups g ON g.id = t.group_id
+         WHERE t.id = $1
+      `, [updated.id])
+
+      return c.json(publicOsTemplate(full || updated))
     } catch (err: any) {
       if (err?.code === '23505') {
         return c.json({ message: 'A template with this image alias already exists.' }, 409)

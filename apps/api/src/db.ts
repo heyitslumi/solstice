@@ -353,6 +353,7 @@ const SCHEMA = `
   );
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS group_id uuid REFERENCES os_groups(id) ON DELETE SET NULL;
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS version text NOT NULL DEFAULT '1.00';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_init boolean NOT NULL DEFAULT true;
   CREATE UNIQUE INDEX IF NOT EXISTS os_templates_alias_idx ON os_templates (image_alias, arch);
 
   /* Infrastructure Locations */
@@ -546,13 +547,18 @@ export interface OAuthLinkRow {
 
 export interface OsTemplateRow {
   id: string
+  group_id?: string | null
   name: string
+  version?: string
   os: string
   release: string
   arch: string
   variant: string
   image_alias: string
+  cloud_init?: boolean
   enabled: boolean
+  group_name?: string
+  group_logo?: string
   created_at: Date | string
   updated_at: Date | string
 }
