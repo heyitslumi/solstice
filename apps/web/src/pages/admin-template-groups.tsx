@@ -82,16 +82,57 @@ export function AdminTemplateGroupsPage() {
     setTimeout(() => setSuccessMsg(null), 3500)
   }
 
+  // Miscellaneous Group (Other) settings state
+  const [miscGroup, setMiscGroup] = useState<OsGroupItem | null>(null)
+  const [miscName, setMiscName] = useState('Other')
+  const [miscLogo, setMiscLogo] = useState('linux')
+  const [miscEnabled, setMiscEnabled] = useState(true)
+  const [miscSaving, setMiscSaving] = useState(false)
+
   async function loadGroups() {
     setLoading(true)
     setError(null)
     const res = await api.adminListOsGroups()
     if (res.ok) {
-      setGroups(res.data || [])
+      const all = res.data || []
+      const foundMisc = all.find((g) => g.name.toLowerCase() === 'other')
+      if (foundMisc) {
+        setMiscGroup(foundMisc)
+        setMiscName(foundMisc.name)
+        setMiscLogo(foundMisc.logo || 'linux')
+        setMiscEnabled(foundMisc.enabled !== false)
+      }
+      // Don't include "Other" on the regular distribution list
+      setGroups(all.filter((g) => g.name.toLowerCase() !== 'other'))
     } else {
       setError(res.error.message || 'Failed to load OS template groups.')
     }
     setLoading(false)
+  }
+
+  async function handleSaveMisc(e: React.FormEvent) {
+    e.preventDefault()
+    setMiscSaving(true)
+    setError(null)
+
+    const payload = {
+      name: miscName.trim() || 'Other',
+      logo: miscLogo,
+      enabled: miscEnabled,
+    }
+
+    const res = miscGroup
+      ? await api.adminUpdateOsGroup(miscGroup.id, payload)
+      : await api.adminCreateOsGroup(payload)
+
+    if (res.ok) {
+      setSuccessMsg('Miscellaneous Group updated.')
+      await loadGroups()
+    } else {
+      setError(res.error.message || 'Failed to update Miscellaneous Group.')
+    }
+    setMiscSaving(false)
+    setTimeout(() => setSuccessMsg(null), 3500)
   }
 
   useEffect(() => {
@@ -239,6 +280,97 @@ export function AdminTemplateGroupsPage() {
         {/* Alert Notifications */}
         {error && <Alert tone="danger">{error}</Alert>}
         {successMsg && <Alert tone="success">{successMsg}</Alert>}
+
+        {/* Miscellaneous Group Config Row */}
+        <div className="rounded-panel border border-border bg-surface p-4 shadow-2xs">
+          <div className="text-[12px] font-bold uppercase tracking-wider text-fg-subtle mb-3">
+            Miscellaneous Group
+          </div>
+          <form onSubmit={handleSaveMisc} className="flex flex-wrap items-end gap-3.5">
+            <div className="min-w-[160px] flex-1">
+              <label className="block text-[11px] font-semibold text-fg-subtle uppercase tracking-wider mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                value={miscName}
+                onChange={(e) => setMiscName(e.target.value)}
+                placeholder="Other"
+                className="h-9 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
+              />
+            </div>
+
+            <div className="min-w-[150px] flex-1">
+              <label className="block text-[11px] font-semibold text-fg-subtle uppercase tracking-wider mb-1">
+                Collections
+              </label>
+              <select
+                disabled
+                className="h-9 w-full rounded-control border border-border bg-surface-2/40 px-3 text-[13px] text-fg-subtle focus:outline-none cursor-not-allowed"
+              >
+                <option value="">(None)</option>
+              </select>
+            </div>
+
+            <div className="min-w-[150px] flex-1">
+              <label className="block text-[11px] font-semibold text-fg-subtle uppercase tracking-wider mb-1">
+                Logo
+              </label>
+              <select
+                value={miscLogo}
+                onChange={(e) => setMiscLogo(e.target.value)}
+                className="h-9 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
+              >
+                {Object.entries(OS_LOGOS).map(([key, def]) => (
+                  <option key={key} value={key}>
+                    {def.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col justify-end">
+              <label className="block text-[11px] font-semibold text-fg-subtle uppercase tracking-wider mb-1.5">
+                Enabled
+              </label>
+              <button
+                type="button"
+                onClick={() => setMiscEnabled(!miscEnabled)}
+                className={cn(
+                  'relative h-7 w-12 rounded-full transition-colors focus:outline-none',
+                  miscEnabled ? 'bg-emerald-500' : 'bg-surface-2 border border-border',
+                )}
+                aria-pressed={miscEnabled}
+              >
+                <span
+                  className={cn(
+                    'absolute top-0.5 left-0.5 size-6 rounded-full bg-white shadow-sm transition-transform',
+                    miscEnabled ? 'translate-x-5' : 'translate-x-0',
+                  )}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={miscSaving}
+                className="h-9 px-4 text-[12px]"
+              >
+                {miscSaving ? 'Updating...' : 'Update'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!miscGroup}
+                className="h-9 px-3.5 text-[12px]"
+              >
+                Manage
+              </Button>
+            </div>
+          </form>
+        </div>
 
         {/* Path / Status Bar matching Assets page */}
         <div className="flex items-center justify-between rounded-control border border-border bg-surface-2/40 px-4 py-2.5 text-[13px]">
