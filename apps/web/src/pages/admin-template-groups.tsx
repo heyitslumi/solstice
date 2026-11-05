@@ -12,6 +12,7 @@ import { AppShell } from '@/components/app-shell'
 import { getOsLogo, OS_LOGOS } from '@/components/os-icons'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -44,6 +45,42 @@ export function AdminTemplateGroupsPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<OsGroupItem | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Selection set
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  function handleSelectAll(checked: boolean) {
+    if (checked) {
+      setSelectedIds(new Set(groups.map((g) => g.id)))
+    } else {
+      setSelectedIds(new Set())
+    }
+  }
+
+  function handleToggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  async function handleDeleteBatch() {
+    if (selectedIds.size === 0) return
+    setDeleting(true)
+    for (const id of selectedIds) {
+      await api.adminDeleteOsGroup(id)
+    }
+    setSuccessMsg(`Deleted ${selectedIds.size} group(s).`)
+    setSelectedIds(new Set())
+    await loadGroups()
+    setDeleting(false)
+    setTimeout(() => setSuccessMsg(null), 3500)
+  }
 
   async function loadGroups() {
     setLoading(true)
@@ -213,6 +250,24 @@ export function AdminTemplateGroupsPage() {
               <strong className="font-semibold text-fg">{groups.length}</strong> distributions
             </span>
           </div>
+
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="text-[12px] text-fg-subtle font-mono">
+                {selectedIds.size} selected
+              </span>
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={deleting}
+                onClick={handleDeleteBatch}
+                className="gap-1.5 text-[12px]"
+              >
+                <Trash size={14} />
+                Delete Selected
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Groups Table matching Assets table */}
@@ -220,7 +275,16 @@ export function AdminTemplateGroupsPage() {
           <table className="w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-border bg-surface-2/40 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
-                <th className="px-5 py-3">Distribution</th>
+                <th className="w-10 px-4 py-3">
+                  <div className="flex items-center">
+                    <Checkbox
+                      aria-label="Select all"
+                      checked={groups.length > 0 && selectedIds.size === groups.length}
+                      onCheckedChange={(checked) => handleSelectAll(checked === true)}
+                    />
+                  </div>
+                </th>
+                <th className="px-4 py-3">Distribution</th>
                 <th className="px-4 py-3">Description</th>
                 <th className="px-4 py-3">Logo Key</th>
                 <th className="px-4 py-3">Status</th>
@@ -230,13 +294,13 @@ export function AdminTemplateGroupsPage() {
             <tbody className="divide-y divide-border">
               {loading && groups.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-fg-subtle">
+                  <td colSpan={6} className="p-8 text-center text-fg-subtle">
                     Loading template groups...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-fg-subtle">
+                  <td colSpan={6} className="p-8 text-center text-fg-subtle">
                     No template groups found.
                   </td>
                 </tr>
@@ -244,13 +308,26 @@ export function AdminTemplateGroupsPage() {
                 filtered.map((g) => {
                   const logoDef = getOsLogo(g.logo)
                   const LogoIcon = logoDef.component
+                  const isSelected = selectedIds.has(g.id)
 
                   return (
                     <tr
                       key={g.id}
-                      className="group transition-colors hover:bg-surface-2/40"
+                      className={cn(
+                        'group transition-colors hover:bg-surface-2/40',
+                        isSelected && 'bg-sun-500/5',
+                      )}
                     >
-                      <td className="px-5 py-3.5">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center">
+                          <Checkbox
+                            aria-label={`Select ${g.name}`}
+                            checked={isSelected}
+                            onCheckedChange={() => handleToggleSelect(g.id)}
+                          />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="flex size-8 shrink-0 items-center justify-center rounded-control border border-border bg-surface-2">
                             <LogoIcon size={18} className={logoDef.color} />
