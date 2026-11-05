@@ -22,6 +22,7 @@ import { AdminOAuthProvidersPage } from '@/pages/admin-oauth-providers'
 import { AdminServerDetailPage } from '@/pages/admin-server-detail'
 import { AdminServerFormPage } from '@/pages/admin-server-form'
 import { AdminServersPage } from '@/pages/admin-servers'
+import { AdminTemplateGroupsPage } from '@/pages/admin-template-groups'
 import { AdminPortForwardsPage } from '@/pages/admin-port-forwards'
 import { AdminUserDetailPage } from '@/pages/admin-user-detail'
 import { AdminUserCreatePage } from '@/pages/admin-user-create'
@@ -305,6 +306,16 @@ function App() {
             <RequireAuth>
               <RequireAdmin>
                 <AdminActivityPage />
+              </RequireAdmin>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/template-groups"
+          element={
+            <RequireAuth>
+              <RequireAdmin>
+                <AdminTemplateGroupsPage />
               </RequireAdmin>
             </RequireAuth>
           }

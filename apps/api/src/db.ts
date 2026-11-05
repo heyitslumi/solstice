@@ -325,10 +325,23 @@ const SCHEMA = `
     created_at    timestamptz NOT NULL DEFAULT now()
   );
 
+  /* OS template groups for distribution categorization */
+  CREATE TABLE IF NOT EXISTS os_groups (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        text NOT NULL,
+    description text NOT NULL DEFAULT '',
+    logo        text NOT NULL DEFAULT 'linux',
+    enabled     boolean NOT NULL DEFAULT true,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+  );
+
   /* OS templates for VPS provisioning (aliases on images.linuxcontainers.org) */
   CREATE TABLE IF NOT EXISTS os_templates (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id    uuid REFERENCES os_groups(id) ON DELETE SET NULL,
     name        text NOT NULL,
+    version     text NOT NULL DEFAULT '1.00',
     os          text NOT NULL DEFAULT '',
     release     text NOT NULL DEFAULT '',
     arch        text NOT NULL DEFAULT 'amd64',
@@ -338,6 +351,8 @@ const SCHEMA = `
     created_at  timestamptz NOT NULL DEFAULT now(),
     updated_at  timestamptz NOT NULL DEFAULT now()
   );
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS group_id uuid REFERENCES os_groups(id) ON DELETE SET NULL;
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS version text NOT NULL DEFAULT '1.00';
   CREATE UNIQUE INDEX IF NOT EXISTS os_templates_alias_idx ON os_templates (image_alias, arch);
 
   /* Infrastructure Locations */

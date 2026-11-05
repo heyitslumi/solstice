@@ -5822,6 +5822,159 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
   })
 
+  /* --- OS Template Groups --- */
+
+  app.get('/api/admin/os-groups', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const rows = await query<any>(`
+      SELECT g.*, 
+             COALESCE(json_agg(t.*) FILTER (WHERE t.id IS NOT NULL), '[]') AS templates
+        FROM os_groups g
+        LEFT JOIN os_templates t ON t.group_id = g.id
+       GROUP BY g.id
+       ORDER BY g.name ASC
+    `)
+
+    return c.json(
+      rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        logo: r.logo,
+        enabled: r.enabled,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        templates: (r.templates || []).map((t: any) => ({
+          id: t.id,
+          groupId: t.group_id,
+          name: t.name,
+          version: t.version,
+          os: t.os,
+          release: t.release,
+          arch: t.arch,
+          variant: t.variant,
+          imageAlias: t.image_alias,
+          enabled: t.enabled,
+          createdAt: t.created_at,
+          updatedAt: t.updated_at,
+        })),
+      })),
+    )
+  })
+
+  app.post('/api/admin/os-groups', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const body = await c.req.json<any>().catch(() => null)
+    if (!body || !str(body.name).trim()) {
+      return c.json({ message: 'Group name is required.' }, 400)
+    }
+
+    const row = await queryOne<any>(
+      `INSERT INTO os_groups (name, description, logo, enabled)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [
+        str(body.name).trim(),
+        str(body.description || '').trim(),
+        str(body.logo || 'linux').trim(),
+        body.enabled !== false,
+      ],
+    )
+
+    await logActivity(
+      admin.user.id,
+      'create_os_group',
+      `Created OS template group "${row.name}"`,
+      clientKey(c),
+    )
+
+    return c.json(
+      {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        logo: row.logo,
+        enabled: row.enabled,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      },
+      201,
+    )
+  })
+
+  app.patch('/api/admin/os-groups/:id', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const body = await c.req.json<any>().catch(() => null)
+    if (!body) return c.json({ message: 'Invalid payload.' }, 400)
+
+    const fields: string[] = []
+    const values: any[] = []
+    let idx = 1
+
+    if (body.name !== undefined) {
+      fields.push(`name = $${idx++}`)
+      values.push(str(body.name).trim())
+    }
+    if (body.description !== undefined) {
+      fields.push(`description = $${idx++}`)
+      values.push(str(body.description).trim())
+    }
+    if (body.logo !== undefined) {
+      fields.push(`logo = $${idx++}`)
+      values.push(str(body.logo).trim())
+    }
+    if (body.enabled !== undefined) {
+      fields.push(`enabled = $${idx++}`)
+      values.push(body.enabled !== false)
+    }
+
+    if (fields.length === 0) return c.json({ message: 'No fields provided.' }, 400)
+
+    values.push(id)
+    const updated = await queryOne<any>(
+      `UPDATE os_groups SET ${fields.join(', ')}, updated_at = now()
+        WHERE id = $${idx} RETURNING *`,
+      values,
+    )
+
+    if (!updated) return c.json({ message: 'Group not found.' }, 404)
+
+    return c.json({
+      id: updated.id,
+      name: updated.name,
+      description: updated.description,
+      logo: updated.logo,
+      enabled: updated.enabled,
+      createdAt: updated.created_at,
+      updatedAt: updated.updated_at,
+    })
+  })
+
+  app.delete('/api/admin/os-groups/:id', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const deleted = await queryOne<any>('DELETE FROM os_groups WHERE id = $1 RETURNING name', [id])
+    if (!deleted) return c.json({ message: 'Group not found.' }, 404)
+
+    await logActivity(
+      admin.user.id,
+      'delete_os_group',
+      `Deleted OS template group "${deleted.name}"`,
+      clientKey(c),
+    )
+
+    return c.json({ ok: true })
+  })
+
   app.get('/api/admin/os-templates', async (c) => {
     const admin = await requireAdmin(c)
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)

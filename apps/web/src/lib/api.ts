@@ -1148,6 +1148,49 @@ export const api = {
     return request<OsCatalogEntry[]>(`/api/admin/os-catalog${query ? `?${query}` : ''}`)
   },
 
+  adminListOsGroups() {
+    return request<Array<{
+      id: string
+      name: string
+      description: string
+      logo: string
+      enabled: boolean
+      createdAt: string
+      updatedAt: string
+      templates?: any[]
+    }>>('/api/admin/os-groups')
+  },
+
+  adminCreateOsGroup(input: Partial<{ name: string; description: string; logo: string; enabled: boolean }>) {
+    return post<{
+      id: string
+      name: string
+      description: string
+      logo: string
+      enabled: boolean
+      createdAt: string
+      updatedAt: string
+    }>('/api/admin/os-groups', input)
+  },
+
+  adminUpdateOsGroup(id: string, input: Partial<{ name: string; description: string; logo: string; enabled: boolean }>) {
+    return patch<{
+      id: string
+      name: string
+      description: string
+      logo: string
+      enabled: boolean
+      createdAt: string
+      updatedAt: string
+    }>(`/api/admin/os-groups/${encodeURIComponent(id)}`, input)
+  },
+
+  adminDeleteOsGroup(id: string) {
+    return request<{ ok: true }>(`/api/admin/os-groups/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  },
+
   adminListOsTemplates() {
     return request<OsTemplate[]>('/api/admin/os-templates')
   },

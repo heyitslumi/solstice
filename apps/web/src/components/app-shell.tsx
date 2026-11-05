@@ -79,7 +79,7 @@ const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
   {
     title: 'MEDIA',
     items: [
-      { label: 'Template Groups', icon: <FloppyDisk size={16} aria-hidden /> },
+      { label: 'Template Groups', icon: <FloppyDisk size={16} aria-hidden />, to: '/admin/template-groups' },
       { label: 'Templates', icon: <FloppyDisk size={16} aria-hidden /> },
       { label: 'Template Manager', icon: <FloppyDisk size={16} aria-hidden /> },
       { label: 'Template Collections', icon: <FloppyDisk size={16} aria-hidden /> },
@@ -186,9 +186,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
                                       ? pathname.startsWith('/admin/oauth-providers')
                                       : item.to === '/admin/activity'
                                         ? pathname.startsWith('/admin/activity')
-                                        : item.to === '/admin/servers'
-                                          ? pathname.startsWith('/admin/servers')
-                                          : currentFull === item.to
+                                        : item.to === '/admin/template-groups'
+                                          ? pathname.startsWith('/admin/template-groups')
+                                          : item.to === '/admin/servers'
+                                            ? pathname.startsWith('/admin/servers')
+                                            : currentFull === item.to
                     : false
 
                   if (!item.to) {
