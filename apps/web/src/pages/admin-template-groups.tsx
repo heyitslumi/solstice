@@ -276,19 +276,6 @@ export function AdminTemplateGroupsPage() {
               <Plus size={16} weight="bold" />
               Add Group
             </Button>
-
-            {selectedIds.size > 0 && (
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={deleting}
-                onClick={handleDeleteBatch}
-                className="gap-1.5 text-[12px]"
-              >
-                <Trash size={14} />
-                Delete Selected ({selectedIds.size})
-              </Button>
-            )}
           </div>
         </div>
 
@@ -611,6 +598,43 @@ export function AdminTemplateGroupsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Floating Batch Selection Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-4 rounded-panel border border-border bg-surface/95 px-5 py-3 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="flex size-5 items-center justify-center rounded-full bg-sun-500/20 text-[11px] font-bold text-sun-500">
+              {selectedIds.size}
+            </span>
+            <span className="text-[13px] font-medium text-fg">
+              group{selectedIds.size > 1 ? 's' : ''} selected
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-border" />
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+              className="h-8 px-3 text-[12px]"
+            >
+              Deselect
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={deleting}
+              onClick={handleDeleteBatch}
+              className="h-8 gap-1.5 px-3.5 text-[12px]"
+            >
+              <Trash size={14} />
+              {deleting ? 'Deleting...' : `Delete Selected (${selectedIds.size})`}
+            </Button>
+          </div>
+        </div>
+      )}
     </AppShell>
   )
 }
