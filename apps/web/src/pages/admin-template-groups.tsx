@@ -216,6 +216,8 @@ export function AdminTemplateGroupsPage() {
       description="Manage OS template distribution families and branding."
     >
       <div className="flex w-full flex-col gap-5">
+        {error && <Alert tone="danger">{error}</Alert>}
+        {successMsg && <Alert tone="success">{successMsg}</Alert>}
         {/* Top Control Bar matching Assets page */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -274,12 +276,21 @@ export function AdminTemplateGroupsPage() {
               <Plus size={16} weight="bold" />
               Add Group
             </Button>
+
+            {selectedIds.size > 0 && (
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={deleting}
+                onClick={handleDeleteBatch}
+                className="gap-1.5 text-[12px]"
+              >
+                <Trash size={14} />
+                Delete Selected ({selectedIds.size})
+              </Button>
+            )}
           </div>
         </div>
-
-        {/* Alert Notifications */}
-        {error && <Alert tone="danger">{error}</Alert>}
-        {successMsg && <Alert tone="success">{successMsg}</Alert>}
 
         {/* Miscellaneous Group Config Row */}
         <div className="rounded-panel border border-border bg-surface p-4 shadow-2xs">
@@ -330,22 +341,23 @@ export function AdminTemplateGroupsPage() {
             </div>
 
             <div className="flex flex-col justify-end">
-              <label className="block text-[11px] font-semibold text-fg-subtle uppercase tracking-wider mb-1.5">
+              <label className="block text-[11px] font-semibold text-fg-subtle uppercase tracking-wider mb-2">
                 Enabled
               </label>
               <button
                 type="button"
+                role="switch"
+                aria-checked={miscEnabled}
                 onClick={() => setMiscEnabled(!miscEnabled)}
                 className={cn(
-                  'relative h-7 w-12 rounded-full transition-colors focus:outline-none',
-                  miscEnabled ? 'bg-emerald-500' : 'bg-surface-2 border border-border',
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                  miscEnabled ? 'bg-sun-500' : 'bg-surface-3',
                 )}
-                aria-pressed={miscEnabled}
               >
                 <span
                   className={cn(
-                    'absolute top-0.5 left-0.5 size-6 rounded-full bg-white shadow-sm transition-transform',
-                    miscEnabled ? 'translate-x-5' : 'translate-x-0',
+                    'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                    miscEnabled ? 'translate-x-4' : 'translate-x-0',
                   )}
                 />
               </button>
@@ -370,36 +382,6 @@ export function AdminTemplateGroupsPage() {
               </Button>
             </div>
           </form>
-        </div>
-
-        {/* Path / Status Bar matching Assets page */}
-        <div className="flex items-center justify-between rounded-control border border-border bg-surface-2/40 px-4 py-2.5 text-[13px]">
-          <div className="flex items-center gap-2 font-medium text-fg-subtle">
-            <span className="text-sun-500 font-semibold">template-groups</span>
-            <span className="text-fg-subtle/50">/</span>
-            <span className="text-[12px] text-fg-subtle">
-              Showing <strong className="font-semibold text-fg">{filtered.length}</strong> of{' '}
-              <strong className="font-semibold text-fg">{groups.length}</strong> distributions
-            </span>
-          </div>
-
-          {selectedIds.size > 0 && (
-            <div className="flex items-center gap-3">
-              <span className="text-[12px] text-fg-subtle font-mono">
-                {selectedIds.size} selected
-              </span>
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={deleting}
-                onClick={handleDeleteBatch}
-                className="gap-1.5 text-[12px]"
-              >
-                <Trash size={14} />
-                Delete Selected
-              </Button>
-            </div>
-          )}
         </div>
 
         {/* Groups Table matching Assets table */}
@@ -584,12 +566,23 @@ export function AdminTemplateGroupsPage() {
                 <label className="text-[12px] font-semibold text-fg">Status</label>
                 <div className="mt-1.5 flex h-10 items-center justify-between rounded-control border border-field-border bg-field px-3">
                   <span className="text-[12px] text-fg">Enabled</span>
-                  <input
-                    type="checkbox"
-                    checked={formEnabled}
-                    onChange={(e) => setFormEnabled(e.target.checked)}
-                    className="size-4 accent-accent cursor-pointer"
-                  />
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={formEnabled}
+                    onClick={() => setFormEnabled(!formEnabled)}
+                    className={cn(
+                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                      formEnabled ? 'bg-sun-500' : 'bg-surface-3',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                        formEnabled ? 'translate-x-4' : 'translate-x-0',
+                      )}
+                    />
+                  </button>
                 </div>
               </div>
             </div>
