@@ -1,0 +1,399 @@
+// TEST PAGE — frontend-only mockup of the VirtFusion-style server
+// setup flow. Nothing here provisions anything: Install runs a
+// simulated progress sequence. Do not wire to the API until the
+// layout is approved. Route: /servers/setup (test).
+import { useEffect, useMemo, useState } from 'react'
+
+import { AppShell } from '@/components/app-shell'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { api, type ApiSshKey } from '@/lib/api'
+
+interface OsOption {
+  id: string
+  name: string
+  version: string
+  variant: string
+  group: string
+}
+
+const SWAPS = ['None', '256 MB', '512 MB', '768 MB', '1 GB', '1.5 GB']
+const DNS_PROVIDERS: Array<{ icon: string; name: string; primary: string; secondary: string }> = [
+  { icon: '🌐', name: 'Google', primary: '8.8.8.8', secondary: '8.8.4.4' },
+  { icon: '☁️', name: 'Cloudflare', primary: '1.1.1.1', secondary: '1.0.0.1' },
+  { icon: '🛡️', name: 'Quad9', primary: '9.9.9.9', secondary: '149.112.112.112' },
+  { icon: '🟠', name: 'OpenDNS', primary: '208.67.222.222', secondary: '208.67.220.220' },
+  { icon: '🔒', name: 'AdGuard', primary: '94.140.14.14', secondary: '94.140.15.15' },
+  { icon: '🦌', name: 'Mullvad', primary: '193.138.218.74', secondary: '193.138.218.75' },
+  { icon: '🇨🇦', name: 'Canadian Shield', primary: '93.146.6.10', secondary: '93.146.6.11' },
+  { icon: '🕊️', name: 'LibreDNS', primary: '116.203.185.107', secondary: '116.203.185.108' },
+  { icon: '👁️', name: 'DNS.Watch', primary: '84.200.69.80', secondary: '84.200.70.40' },
+  { icon: '🇷🇺', name: 'Yandex', primary: '77.88.8.8', secondary: '77.88.8.1' },
+  { icon: '🏠', name: 'Use node default (DHCP)', primary: '', secondary: '' },
+]
+
+function tzOffsetLabel(tz: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'longOffset',
+    }).formatToParts(new Date())
+    const off = parts.find((p) => p.type === 'timeZoneName')?.value || ''
+    return off.replace('GMT', 'UTC')
+  } catch {
+    return ''
+  }
+}
+
+const inputClass =
+  'h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none'
+
+export function ServerSetupPage() {
+  const [osOptions, setOsOptions] = useState<OsOption[]>([])
+  const [sshKeys, setSshKeys] = useState<ApiSshKey[]>([])
+  const [selectedOs, setSelectedOs] = useState<OsOption | null>(null)
+  const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const [swap, setSwap] = useState('512 MB')
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [name, setName] = useState('')
+  const [hostname, setHostname] = useState('')
+  const [tz, setTz] = useState('Europe/Paris')
+  const [dns1, setDns1] = useState(0)
+  const [dns2, setDns2] = useState(0)
+  const [directSsh, setDirectSsh] = useState(true)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [phase, setPhase] = useState<'form' | 'progress' | 'panel'>('form')
+  const [step, setStep] = useState(0)
+  const [password, setPassword] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      // Prefer the rich admin shape (group/version/variant), fall back to public list.
+      const adminRes = await api.adminListOsTemplates()
+      if (active && adminRes.ok) {
+        setOsOptions(
+          adminRes.data.map((t) => ({
+            id: t.id,
+            name: t.name,
+            version: t.version || '',
+            variant: t.variant || '',
+            group: t.groupName || t.os || t.name,
+          })),
+        )
+      } else {
+        const pub = await api.listOsTemplates()
+        if (active && pub.ok) {
+          setOsOptions(
+            pub.data.templates.map((t) => ({ id: t.id, name: t.name, version: '', variant: '', group: t.name })),
+          )
+        }
+      }
+      const keysRes = await api.listSshKeys()
+      if (active && keysRes.ok) setSshKeys(keysRes.data.keys)
+    })()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const groups = useMemo(() => {
+    const map = new Map<string, OsOption[]>()
+    for (const o of osOptions) {
+      if (!map.has(o.group)) map.set(o.group, [])
+      map.get(o.group)!.push(o)
+    }
+    return [...map.entries()]
+  }, [osOptions])
+
+  const timezones = useMemo(() => {
+    try {
+      return Intl.supportedValuesOf('timeZone') as string[]
+    } catch {
+      return ['Europe/Paris', 'Europe/London', 'UTC']
+    }
+  }, [])
+
+  const noKeysSelected = selectedKeys.size === 0
+  const osLabel = selectedOs
+    ? `${selectedOs.name} ${selectedOs.version} ${selectedOs.variant}`.trim()
+    : ''
+
+  function toggleKey(id: string) {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function startInstall() {
+    if (!selectedOs) return
+    setConfirmOpen(false)
+    setPhase('progress')
+    setStep(0)
+    const total = 6
+    let i = 0
+    const tick = () => {
+      i++
+      setStep(i)
+      if (i >= total) {
+        setTimeout(() => {
+          if (noKeysSelected) {
+            const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'
+            const bytes = crypto.getRandomValues(new Uint8Array(12))
+            setPassword([...bytes].map((b) => alphabet[b % alphabet.length]).join(''))
+          }
+          setPhase('panel')
+        }, 900)
+        return
+      }
+      setTimeout(tick, 800)
+    }
+    setTimeout(tick, 800)
+  }
+
+  if (phase === 'panel') {
+    return (
+      <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
+        <div className="mx-auto w-full max-w-3xl py-8">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold">{name || 'my-server'}</h1>
+            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-400">
+              ● Running
+            </span>
+            <span className="ml-auto flex gap-2">
+              <Button variant="secondary" size="sm">Reboot</Button>
+              <Button variant="secondary" size="sm">Shutdown</Button>
+              <Button variant="secondary" size="sm">Console</Button>
+            </span>
+          </div>
+          <div className="mt-6 rounded-panel border border-border bg-surface p-5">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><p className="text-fg-subtle">IPv4</p><p className="font-medium">5.231.32.70</p></div>
+              <div><p className="text-fg-subtle">Operating System</p><p className="font-medium">{osLabel}</p></div>
+              <div><p className="text-fg-subtle">SSH</p><p className="font-mono text-[13px]">ssh -p 22222 root@5.231.32.70</p></div>
+              <div><p className="text-fg-subtle">Timezone</p><p className="font-medium">{tz}</p></div>
+            </div>
+            {password && (
+              <div className="mt-4 flex items-center justify-between rounded-control bg-field px-3 py-2 text-[13px]">
+                <span>Root password (copy it now, it won't be shown again): <code className="font-mono">{password}</code></span>
+                <Button variant="secondary" size="sm" onClick={() => navigator.clipboard?.writeText(password)}>Copy</Button>
+              </div>
+            )}
+            <p className="mt-4 text-center text-xs text-fg-subtle">TEST PAGE — mock control panel, nothing was provisioned</p>
+          </div>
+        </div>
+      </AppShell>
+    )
+  }
+
+  if (phase === 'progress') {
+    const steps = [
+      'Creating server',
+      'Pulling OS image',
+      'Configuring cloud-init',
+      noKeysSelected ? 'Generating root password' : `Injecting ${selectedKeys.size} SSH key(s)`,
+      'Starting server',
+      'Waiting for network',
+    ]
+    return (
+      <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
+        <div className="mx-auto w-full max-w-3xl py-8">
+          <h1 className="text-2xl font-bold">Installing {osLabel}...</h1>
+          <div className="mt-6 rounded-panel border border-border bg-surface p-5">
+            <div className="h-2 overflow-hidden rounded-full bg-field">
+              <div className="h-full bg-accent transition-all" style={{ width: `${(step / steps.length) * 100}%` }} />
+            </div>
+            <div className="mt-4 space-y-2">
+              {steps.map((label, i) => (
+                <div key={label} className={i < step ? 'flex items-center gap-2 text-sm text-fg' : i === step ? 'flex items-center gap-2 text-sm text-fg' : 'flex items-center gap-2 text-sm text-fg-subtle'}>
+                  <span className={i < step ? 'flex size-5 items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-emerald-950' : i === step ? 'size-5 animate-spin rounded-full border-2 border-accent border-t-transparent' : 'size-5 rounded-full border-2 border-border'} />
+                  {label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </AppShell>
+    )
+  }
+
+  return (
+    <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
+      <div className="mx-auto w-full max-w-3xl py-8">
+
+        <section className="mt-8">
+          <h2 className="text-[15px] font-semibold">Name</h2>
+          <p className="text-[12px] text-fg-subtle">The server name allows you to easily identify the server under your account.</p>
+          <div className="mt-2 flex gap-2">
+            <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="my-server" />
+            <Button variant="secondary" onClick={() => setName(`server-${Math.floor(Math.random() * 900 + 100)}`)}>Random</Button>
+          </div>
+        </section>
+
+        <section className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <h2 className="text-[15px] font-semibold">Hostname <span className="ml-1 rounded bg-field px-1.5 py-0.5 text-[10px] text-fg-subtle">OPTIONAL</span></h2>
+            <p className="text-[12px] text-fg-subtle">If the server requires a valid hostname, you should set it here.</p>
+            <input className={`${inputClass} mt-2`} value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="server.example.com" />
+          </div>
+          <div>
+            <h2 className="text-[15px] font-semibold">Timezone</h2>
+            <p className="text-[12px] text-fg-subtle">The timezone that should be set on the server.</p>
+            <select className={`${inputClass} mt-2`} value={tz} onChange={(e) => setTz(e.target.value)}>
+              {timezones.map((z) => (
+                <option key={z} value={z}>({tzOffsetLabel(z)}) {z}</option>
+              ))}
+            </select>
+          </div>
+        </section>
+
+        <section className="mt-8">
+          <h2 className="text-[15px] font-semibold">Operating System</h2>
+          <p className="text-[12px] text-fg-subtle">Select the operating system that you would like to be automatically installed on the server.</p>
+          <div className="mt-3 space-y-2">
+            {groups.map(([group, options]) => (
+              <div key={group} className="overflow-hidden rounded-panel border border-border bg-surface">
+                <button
+                  type="button"
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium ${openGroup === group ? 'bg-accent text-white' : ''}`}
+                  onClick={() => setOpenGroup(openGroup === group ? null : group)}
+                >
+                  {group}
+                  <span className="ml-auto">{openGroup === group ? '⌃' : '⌄'}</span>
+                </button>
+                {openGroup === group && (
+                  <div className="space-y-2 p-3">
+                    {options.map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => setSelectedOs(o)}
+                        className={`relative w-full rounded-control border bg-field p-3 text-left ${selectedOs?.id === o.id ? 'border-emerald-500' : 'border-border'}`}
+                      >
+                        {selectedOs?.id === o.id && <span className="absolute right-3 top-3 font-bold text-emerald-500">✓</span>}
+                        <p className="text-sm font-medium">{`${o.name} ${o.version} ${o.variant}`.trim()}</p>
+                        <p className="text-[12px] text-fg-subtle">{o.id}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {osOptions.length === 0 && <p className="text-sm text-fg-subtle">No OS templates available.</p>}
+          </div>
+        </section>
+
+        {selectedOs && (
+          <>
+            <section className="mt-8">
+              <h2 className="text-[15px] font-semibold">Swap Space</h2>
+              <p className="text-[12px] text-fg-subtle">Swap acts as backup memory to prevent crashes when physical memory is full. The chosen amount will be reserved on the storage disk.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {SWAPS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setSwap(s)}
+                    className={`relative rounded-control border px-4 py-2 text-[13px] ${swap === s ? 'border-emerald-500' : 'border-border bg-field'}`}
+                  >
+                    {swap === s && <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-emerald-950">✓</span>}
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="mt-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[15px] font-semibold">SSH Keys</h2>
+                <Button size="sm" onClick={() => alert('demo: would open add-key modal')}>Add Key</Button>
+              </div>
+              <p className="text-[12px] text-fg-subtle">{sshKeys.length} slots used, {Math.max(0, 50 - sshKeys.length)} remaining.</p>
+              <p className="text-[12px] text-fg-subtle">The selected SSH keys will be configured under the root user when the operating system is installed.</p>
+              {sshKeys.length === 0 ? (
+                <div className="mt-2 rounded-panel border border-border bg-surface p-8 text-center text-sm text-fg-subtle">No SSH Keys found</div>
+              ) : (
+                <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {sshKeys.map((k) => (
+                    <button
+                      key={k.id}
+                      type="button"
+                      onClick={() => toggleKey(k.id)}
+                      className={`relative rounded-panel border bg-surface p-4 text-left ${selectedKeys.has(k.id) ? 'border-emerald-500' : 'border-border'}`}
+                    >
+                      {selectedKeys.has(k.id) && <span className="absolute right-0 top-0 flex size-5 items-center justify-center rounded-bl-lg bg-emerald-500 text-[11px] font-bold text-emerald-950">✓</span>}
+                      <p className="text-sm font-medium">{k.name}</p>
+                      <p className="text-[12px] text-fg-subtle">Owner: You</p>
+                      <p className="text-[12px] text-fg-subtle">Created: {new Date(k.createdAt).toLocaleString()}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {noKeysSelected && (
+              <div className="mt-8 flex gap-3 rounded-panel border border-warning/50 bg-warning/10 p-4">
+                <span className="flex size-6 flex-none items-center justify-center rounded bg-warning font-bold text-warning">i</span>
+                <div>
+                  <p className="text-sm font-semibold">No SSH Keys Selected</p>
+                  <p className="text-[12px] text-fg-muted">Adding an SSH key will help keep your server secure by allowing us to disable password authentication. If you don't add one, we will enable password authentication and email you the root/admin password once the server has been built.</p>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        <section className="mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[15px] font-semibold">Advanced</h2>
+          </div>
+          <div className="mt-3 rounded-panel border border-border bg-surface p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Direct SSH</p>
+                <p className="text-[12px] text-fg-subtle">Automatically enable SSH port forwarding when the server is built.</p>
+              </div>
+              <button type="button" onClick={() => setDirectSsh(!directSsh)} className={`h-6 w-11 flex-none rounded-full p-0.5 ${directSsh ? 'bg-emerald-500' : 'bg-field'}`}>
+                <span className={`block size-5 rounded-full bg-white transition-transform ${directSsh ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+          </div>
+          <h2 className="mt-6 text-[15px] font-semibold">IPv4 Public DNS Resolvers</h2>
+          <p className="text-[12px] text-fg-subtle">A server requires two DNS resolvers. You may swap the system defaults for a preferred set of public resolvers.</p>
+          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-[12px] text-fg-subtle">Primary</p>
+              <select className={inputClass} value={dns1} onChange={(e) => setDns1(Number(e.target.value))}>
+                {DNS_PROVIDERS.map((d, i) => <option key={d.name} value={i}>{d.icon} {d.name}{d.primary ? ` — ${d.primary}` : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <p className="text-[12px] text-fg-subtle">Secondary</p>
+              <select className={inputClass} value={dns2} onChange={(e) => setDns2(Number(e.target.value))}>
+                {DNS_PROVIDERS.map((d, i) => <option key={d.name} value={i}>{d.icon} {d.name}{d.secondary ? ` — ${d.secondary}` : ''}</option>)}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <Button className="mt-8 w-full" disabled={!selectedOs} onClick={() => setConfirmOpen(true)}>
+          {selectedOs ? `Install with ${osLabel.replace(' Minimal', '')}` : 'Install'}
+        </Button>
+      </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle className="text-center">Are you sure you want to install {osLabel} on this server{noKeysSelected ? ' without any SSH keys' : ''}?</DialogTitle>
+          <DialogDescription className="text-center">This is a test page — confirming will only simulate provisioning.</DialogDescription>
+          <div className="mt-4 flex gap-3">
+            <Button variant="secondary" className="flex-1" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            <Button className="flex-1" onClick={startInstall}>Install Now</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </AppShell>
+  )
+}

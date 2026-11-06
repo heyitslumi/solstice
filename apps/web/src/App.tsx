@@ -35,6 +35,7 @@ import { DashboardPage } from '@/pages/dashboard'
 import { LoginPage } from '@/pages/login'
 import { NotFoundPage } from '@/pages/not-found'
 import { ServerDetailPage } from '@/pages/server-detail'
+import { ServerSetupPage } from '@/pages/server-setup'
 import { ServersPage } from '@/pages/servers'
 import { ServerConsolePage } from '@/pages/server-console'
 import { NetworkPage } from '@/pages/network'
@@ -84,6 +85,14 @@ function App() {
           element={
             <RequireAuth>
               <DashboardPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/servers/setup"
+          element={
+            <RequireAuth>
+              <ServerSetupPage />
             </RequireAuth>
           }
         />
