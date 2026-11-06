@@ -75,6 +75,11 @@ function groupDesc(group: string): string {
   return GROUP_DESC[group.toLowerCase().replace(/[^a-z]/g, '')] || 'Linux distribution images for Incus.'
 }
 
+function lineTime(i: number): string {
+  const d = new Date(Date.now() - (60 - i) * 1000)
+  return d.toTimeString().slice(0, 8)
+}
+
 function tzOffsetLabel(tz: string): string {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -178,6 +183,7 @@ export function ServerSetupPage() {
   const [phase, setPhase] = useState<'form' | 'progress' | 'panel'>('form')
   const [step, setStep] = useState(0)
   const [password, setPassword] = useState<string | null>(null)
+  const [logLines, setLogLines] = useState<string[]>([])
 
   useEffect(() => {
     let active = true
@@ -246,12 +252,34 @@ export function ServerSetupPage() {
     setConfirmOpen(false)
     setPhase('progress')
     setStep(0)
+    setLogLines([])
+    const push = (line: string) => setLogLines((prev) => [...prev, line])
+    push(`→ Creating server "${name || 'server'}"`)
+    push(`→ Resolving template ${osLabel} (${selectedOs.id})`)
     const total = 6
     let i = 0
     const tick = () => {
       i++
       setStep(i)
+      if (i === 1) {
+        push('✓ Server created')
+        push('→ Pulling OS image (debian/trixie/cloud)')
+      } else if (i === 2) {
+        push('✓ Image ready (386 MB)')
+        push('→ Configuring cloud-init')
+      } else if (i === 3) {
+        push('✓ cloud-init configured (hostname, timezone, dns)')
+        push(noKeysSelected ? '→ Generating root password' : `→ Injecting ${selectedKeys.size} SSH key(s)`)
+      } else if (i === 4) {
+        push(noKeysSelected ? '✓ Root password generated' : '✓ SSH keys injected')
+        push('→ Starting server')
+      } else if (i === 5) {
+        push('✓ Server started')
+        push('→ Waiting for network')
+      }
       if (i >= total) {
+        push('✓ Network OK — 5.231.32.70')
+        push('✓ Provisioning complete')
         setTimeout(() => {
           if (noKeysSelected) {
             const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'
@@ -314,17 +342,24 @@ export function ServerSetupPage() {
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
         <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
-          <div className="rounded-panel border border-border bg-surface p-5">
-            <div className="h-2 overflow-hidden rounded-full bg-field">
-              <div className="h-full bg-accent transition-all" style={{ width: `${(step / steps.length) * 100}%` }} />
+          <div className="overflow-hidden rounded-panel border border-border bg-black">
+            <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-2.5">
+              <span className="size-3 rounded-full bg-red-500/70" />
+              <span className="size-3 rounded-full bg-yellow-500/70" />
+              <span className="size-3 rounded-full bg-emerald-500/70" />
+              <span className="ml-2 text-[12px] text-fg-subtle">provisioning — {name || 'server'}</span>
+              <span className="ml-auto text-[12px] text-fg-subtle">{Math.round((step / steps.length) * 100)}%</span>
             </div>
-            <div className="mt-4 space-y-2">
-              {steps.map((label, i) => (
-                <div key={label} className={i < step ? 'flex items-center gap-2 text-sm text-fg' : i === step ? 'flex items-center gap-2 text-sm text-fg' : 'flex items-center gap-2 text-sm text-fg-subtle'}>
-                  <span className={i < step ? 'flex size-5 items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-emerald-950' : i === step ? 'size-5 animate-spin rounded-full border-2 border-accent border-t-transparent' : 'size-5 rounded-full border-2 border-border'} />
-                  {label}
-                </div>
+            <div className="h-2 bg-field">
+              <div className="h-full bg-accent transition-all duration-500" style={{ width: `${(step / steps.length) * 100}%` }} />
+            </div>
+            <div className="h-72 overflow-y-auto p-4 font-mono text-[12px] leading-relaxed">
+              {logLines.map((line, i) => (
+                <p key={i} className={line.includes('✓') || line.includes('OK') ? 'text-emerald-400' : line.includes('→') ? 'text-accent' : 'text-fg-muted'}>
+                  <span className="mr-2 text-fg-subtle">{lineTime(i)}</span>{line}
+                </p>
               ))}
+              {step < steps.length && <p className="animate-pulse text-fg-subtle">▌</p>}
             </div>
           </div>
         </div>
