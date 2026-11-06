@@ -213,21 +213,21 @@ export function AdminTemplateFormPage() {
                     className={inputClass}
                   />
                 </Field>
-                <Field label="Version" help="Version of the template shown to the end user.">
-                  <input
-                    type="text"
-                    value={formVersion}
-                    onChange={(e) => setFormVersion(e.target.value)}
-                    placeholder="24.04 LTS (Noble Numbat)"
-                    className={inputClass}
-                  />
-                </Field>
                 <Field label="Variant" help="Variant of the template (e.g. cloud, minimal).">
                   <input
                     type="text"
                     value={formVariant}
                     onChange={(e) => setFormVariant(e.target.value)}
                     placeholder="cloud"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Version" help="Version of the template shown to the end user.">
+                  <input
+                    type="text"
+                    value={formVersion}
+                    onChange={(e) => setFormVersion(e.target.value)}
+                    placeholder="24.04 LTS (Noble Numbat)"
                     className={inputClass}
                   />
                 </Field>
@@ -248,7 +248,7 @@ export function AdminTemplateFormPage() {
                 />
               </Field>
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <Field label="Template Group" help="Distribution family this template belongs to.">
                   <select value={formGroupId} onChange={(e) => setFormGroupId(e.target.value)} className={inputClass}>
                     <option value="">(None)</option>
@@ -258,15 +258,6 @@ export function AdminTemplateFormPage() {
                       </option>
                     ))}
                   </select>
-                </Field>
-                <Field label="OS" help="Catalog OS key, e.g. Ubuntu, Debian.">
-                  <input
-                    type="text"
-                    value={formOs}
-                    onChange={(e) => setFormOs(e.target.value)}
-                    placeholder="Ubuntu"
-                    className={inputClass}
-                  />
                 </Field>
                 <Field label="Release" help="Catalog release key, e.g. noble, trixie.">
                   <input
