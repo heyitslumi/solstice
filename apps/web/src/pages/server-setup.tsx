@@ -1,7 +1,7 @@
-// TEST PAGE — frontend-only mockup of the VirtFusion-style server
-// setup flow. Nothing here provisions anything: Install runs a
-// simulated progress sequence. Do not wire to the API until the
-// layout is approved. Route: /servers/setup (test).
+// VirtFusion-style server setup flow: pick OS, swap, SSH keys,
+// DNS, then install. Install calls the real provisioning API.
+// Route: /servers/setup (new servers) or embedded in server detail
+// for bare servers awaiting their first OS install.
 import { CaretDown } from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -330,7 +330,7 @@ export function ServerSetupPage({
 
   if (phase === 'panel') {
     return (
-      <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
+      <AppShell title="Server Setup" description="Choose an operating system and configure your server.">
         <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold">{name || 'my-server'}</h1>
@@ -356,7 +356,7 @@ export function ServerSetupPage({
                 <Button variant="secondary" size="sm" onClick={() => navigator.clipboard?.writeText(password)}>Copy</Button>
               </div>
             )}
-            <p className="mt-4 text-center text-xs text-fg-subtle">TEST PAGE — mock control panel, nothing was provisioned</p>
+            <p className="mt-4 text-center text-xs text-fg-subtle">Your server is ready.</p>
           </div>
         </div>
       </AppShell>
@@ -373,7 +373,7 @@ export function ServerSetupPage({
       'Waiting for network',
     ]
     return (
-      <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
+      <AppShell title="Server Setup" description="Provisioning your server...">
         <div className="flex min-h-[calc(100dvh-14rem)] flex-col">
           <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-panel border border-border bg-surface px-10 pb-14 pt-10 text-center">
             <div className="size-24 animate-spin rounded-full border-[6px] border-fg-subtle/25 border-t-accent" />
@@ -410,7 +410,7 @@ export function ServerSetupPage({
   }
 
   return (
-    <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
+    <AppShell title="Server Setup" description="Choose an operating system and configure your server.">
       <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
 
         <section className="mt-4">
