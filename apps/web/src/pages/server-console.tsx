@@ -163,7 +163,7 @@ export function ServerConsolePage() {
       term.dispose()
       termRef.current = null
     }
-  }, [id, attempt, mode])
+  }, [id, attempt, mode, takeover])
 
   useEffect(() => connect(), [connect])
 
