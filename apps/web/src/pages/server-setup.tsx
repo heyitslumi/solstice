@@ -31,7 +31,6 @@ const DNS_PROVIDERS: Array<{ slug: string | null; name: string; primary: string;
   { slug: null, name: 'LibreDNS', primary: '116.203.185.107', secondary: '116.203.185.108' },
   { slug: null, name: 'DNS.Watch', primary: '84.200.69.80', secondary: '84.200.70.40' },
   { slug: null, name: 'Yandex', primary: '77.88.8.8', secondary: '77.88.8.1' },
-  { slug: null, name: 'Use node default (DHCP)', primary: '', secondary: '' },
 ]
 
 const DISTRO_SLUG: Record<string, string> = {
@@ -120,7 +119,7 @@ function DnsDropdown({
         <CaretDown size={14} className={`ml-auto flex-none text-fg-subtle transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-44 overflow-y-auto rounded-control border border-border bg-surface p-1 shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-36 overflow-y-auto rounded-control border border-border bg-surface p-1 shadow-xl">
           {DNS_PROVIDERS.map((d, i) => {
             const dip = secondary ? d.secondary : d.primary
             return (
