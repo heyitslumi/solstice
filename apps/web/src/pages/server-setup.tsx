@@ -518,7 +518,7 @@ export function ServerSetupPage() {
           </div>
         </section>
 
-        <Button className="mt-8 w-full" disabled={!selectedOs} onClick={() => setConfirmOpen(true)}>
+        <Button className="mt-8 w-full" disabled={!selectedOs || !name.trim()} onClick={() => setConfirmOpen(true)}>
           {selectedOs ? `Install with ${osLabel.replace(' Minimal', '')}` : 'Install'}
         </Button>
       </div>
