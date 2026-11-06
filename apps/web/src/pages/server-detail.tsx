@@ -1566,19 +1566,21 @@ export function ServerDetailPage() {
 
       {/* Rebuild dialog */}
       <Dialog open={reinstallOpen} onOpenChange={setReinstallOpen}>
-        <DialogContent className="max-w-md border-red-600 bg-red-600 p-8 text-center" style={{ width: 'min(30rem, calc(100vw - 2rem))' }}>
-          <DialogTitle className="text-center text-xl font-bold text-white">
+        <DialogContent className="max-w-md p-6 text-center" style={{ width: 'min(26rem, calc(100vw - 2rem))' }}>
+          <DialogTitle className="text-center text-[15px] font-semibold">
             Are you sure you want to rebuild this server?
           </DialogTitle>
-          <DialogDescription className="sr-only">Confirm rebuilding this server. All data will be deleted.</DialogDescription>
-          <div className="mx-auto mt-6 flex size-16 items-center justify-center rounded-full bg-white text-3xl font-black text-red-600">
+          <DialogDescription className="mt-2 text-center text-[13px]">
+            This wipes all data on <strong className="text-fg">{instance.name}</strong> and installs a fresh system.
+          </DialogDescription>
+          <div className="mx-auto mt-5 flex size-12 items-center justify-center rounded-full bg-danger/15 text-2xl font-black text-danger">
             !
           </div>
           <div className="mt-8 flex gap-3">
             <Button
               type="button"
               variant="secondary"
-              className="flex-1 border-white/20 bg-white/10 text-white hover:bg-white/20"
+              className="flex-1"
               onClick={() => setReinstallOpen(false)}
             >
               Cancel
