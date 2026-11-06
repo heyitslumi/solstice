@@ -1,4 +1,4 @@
-import { ArrowLeft, Cube, FloppyDisk } from '@phosphor-icons/react'
+import { ArrowLeft, FloppyDisk } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -58,8 +58,8 @@ function Field({
       <label className="text-[12px] font-semibold text-fg">
         {label} {required && <span className="text-danger">*</span>}
       </label>
+      {help && <span className="mt-0.5 block text-[11px] leading-snug text-fg-subtle">{help}</span>}
       {children}
-      {help && <span className="mt-1 block text-[11px] text-fg-subtle">{help}</span>}
     </div>
   )
 }
@@ -199,21 +199,9 @@ export function AdminTemplateFormPage() {
             Loading template details...
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            {/* Left: identity & source */}
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+            {/* Left card: identity & source */}
             <div className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs">
-              <div className="flex items-center gap-3 border-b border-border pb-4">
-                <div className="flex size-9 items-center justify-center rounded-control bg-accent/10 text-accent-text">
-                  <Cube size={18} weight="bold" />
-                </div>
-                <div>
-                  <h2 className="text-[15px] font-semibold text-fg">Identity &amp; Source</h2>
-                  <p className="text-[11px] text-fg-subtle">
-                    Shown to end users when provisioning a server.
-                  </p>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                 <Field label="Name" help="Name of the template shown to the end user." required>
                   <input
@@ -307,13 +295,8 @@ export function AdminTemplateFormPage() {
               </div>
             </div>
 
-            {/* Right: provisioning settings */}
+            {/* Right card: provisioning settings */}
             <aside className="flex flex-col rounded-panel border border-border bg-surface shadow-2xs">
-              <div className="border-b border-border px-5 py-4">
-                <h2 className="text-[15px] font-semibold text-fg">Provisioning</h2>
-                <p className="text-[11px] text-fg-subtle">How servers are built from this template.</p>
-              </div>
-
               <div className="flex items-center justify-between gap-4 px-5 py-4">
                 <div>
                   <p className="text-[13px] font-semibold text-fg">Architecture</p>
