@@ -324,8 +324,8 @@ export function ServerSetupPage() {
                   style={{ gridTemplateRows: openGroup === group ? '1fr' : '0fr' }}
                 >
                   <div className="overflow-hidden">
-                    <p className="px-4 pt-3 text-[12px] text-fg-subtle">{groupDesc(group)}</p>
-                    <div className="space-y-2 p-3">
+                    <p className="px-4 pt-4 text-[12px] leading-relaxed text-fg-subtle">{groupDesc(group)}</p>
+                    <div className="flex flex-col gap-3 p-4">
                     {options.map((o) => (
                       <button
                         key={o.id}
