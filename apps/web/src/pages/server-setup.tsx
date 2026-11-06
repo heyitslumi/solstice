@@ -342,15 +342,15 @@ export function ServerSetupPage() {
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
         <div className="-mt-8 flex min-h-[calc(100dvh-10rem)] flex-col lg:-mt-10">
-          <div className="rounded-panel border border-border bg-surface p-10 text-center">
-            <div className="mx-auto size-20 animate-spin rounded-full border-4 border-border border-t-accent" />
-            <h2 className="mt-7 text-xl font-semibold">Installing {osLabel}...</h2>
-            <p className="mt-2 text-sm text-fg-subtle">{steps[Math.min(step, steps.length - 1)]}</p>
-            <div className="mx-auto mt-6 max-w-md">
-              <div className="h-2.5 overflow-hidden rounded-full bg-field">
+          <div className="flex flex-1 flex-col items-center justify-center rounded-panel border border-border bg-surface p-10 text-center">
+            <div className="size-24 animate-spin rounded-full border-[6px] border-fg-subtle/25 border-t-accent" />
+            <h2 className="mt-8 text-2xl font-semibold">Installing {osLabel}...</h2>
+            <p className="mt-2 text-base text-fg-subtle">{steps[Math.min(step, steps.length - 1)]}</p>
+            <div className="mt-8 w-full max-w-xl">
+              <div className="relative h-4 overflow-hidden rounded-full bg-field">
                 <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${(step / steps.length) * 100}%` }} />
+                <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white mix-blend-difference">{Math.round((step / steps.length) * 100)}%</span>
               </div>
-              <p className="mt-2 text-right text-[12px] text-fg-subtle">{Math.round((step / steps.length) * 100)}%</p>
             </div>
           </div>
           <div className="mt-4 overflow-hidden rounded-panel border border-border bg-black">
