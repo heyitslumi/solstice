@@ -752,8 +752,14 @@ export const api = {
     cores?: number
     memoryMb?: number
     diskGb?: number
+    hostname?: string
+    timezone?: string
+    swapMb?: number
+    dnsServers?: string[]
+    sshKeyIds?: string[]
+    directSsh?: boolean
   }) {
-    return post<ApiInstance>('/api/instances', input)
+    return post<ApiInstance & { sshHostPort?: number | null; rootPassword?: string | null }>('/api/instances', input)
   },
 
   instanceAction(id: string, action: 'start' | 'stop' | 'restart' | 'freeze' | 'unfreeze', force = false) {

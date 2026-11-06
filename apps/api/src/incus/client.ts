@@ -186,14 +186,42 @@ export const incus = {
     // Only meaningful for VMs. true = UEFI boot, false = BIOS (CSM) boot.
     // undefined leaves the Incus default (UEFI w/ secure boot).
     uefi?: boolean
+    hostname?: string
+    timezone?: string
+    swapMb?: number
+    dnsServers?: string[]
   }) {
     // Always ensure an SSH daemon exists so generated credentials and key
     // auth work out of the box; owner keys are appended when present.
     const keysFormatted = (params.sshKeys || []).map((k) => `  - ${k.trim()}`).join('\n')
     const rootKeysFormatted = (params.sshKeys || []).map((k) => `      - ${k.trim()}`).join('\n')
+    const hostname = (params.hostname || '').trim()
+    const timezone = (params.timezone || '').trim()
+    const swapMb = Math.max(0, Math.min(16384, Number(params.swapMb) || 0))
+    const dnsServers = (params.dnsServers || []).filter((d) => /^\d{1,3}(\.\d{1,3}){3}$/.test(d.trim()))
+    const runcmd: string[] = ['systemctl enable --now qemu-guest-agent || true']
+    if (swapMb > 0) {
+      runcmd.push(
+        `fallocate -l ${swapMb}M /swapfile`,
+        'chmod 600 /swapfile',
+        'mkswap /swapfile',
+        'swapon /swapfile',
+        `grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab`,
+      )
+    }
+    if (dnsServers.length > 0) {
+      const dnsLines = dnsServers.map((d) => `DNS=${d.trim()}`).join('\n')
+      runcmd.push(
+        'mkdir -p /etc/systemd/network',
+        `printf '[Match]\nName=enp5s0\n\n[Network]\n${dnsLines}\n\n[DHCPv4]\nUseDNS=false\n' > /etc/systemd/network/20-solstice-dns.network`,
+        'systemctl restart systemd-networkd || true',
+      )
+    }
     const userData = `#cloud-config
-packages:
+${hostname ? `hostname: ${hostname}\nmanage_etc_hosts: true\n` : ''}${timezone ? `timezone: ${timezone}\n` : ''}packages:
   - openssh-server
+  - qemu-guest-agent
+  - curl
 ssh_pwauth: true
 ssh_authorized_keys:
 ${keysFormatted || '  []'}
@@ -202,6 +230,8 @@ users:
   - name: root
     ssh_authorized_keys:
 ${rootKeysFormatted || '      []'}
+runcmd:
+${runcmd.map((r) => `  - ${r}`).join('\n')}
 `
     const cloudInitConfig = {
       'cloud-init.user-data': userData,

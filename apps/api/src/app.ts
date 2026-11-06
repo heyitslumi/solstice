@@ -2704,6 +2704,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         cores?: number
         memoryMb?: number
         diskGb?: number
+        hostname?: string
+        timezone?: string
+        swapMb?: number
+        dnsServers?: string[]
+        sshKeyIds?: string[]
+        directSsh?: boolean
       }>()
       .catch(() => null)
 
@@ -2721,7 +2727,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     const type = body.type === 'kvm' ? 'kvm' : 'lxc'
     const osKey = body.os || 'debian-12'
-    let osConfig = OS_MAP[osKey] || { name: 'Debian 12 Bookworm', alias: 'debian/12' }
+    let osConfig: { name: string; alias: string; uefi?: boolean } = OS_MAP[osKey] || { name: 'Debian 12 Bookworm', alias: 'debian/12' }
     try {
       osConfig = await resolveOsSource(body)
     } catch (err: any) {
@@ -2730,6 +2736,25 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const cores = Math.max(1, Math.min(8, Number(body.cores) || 1))
     const memoryMb = Math.max(512, Math.min(16384, Number(body.memoryMb) || 1024))
     const diskGb = Math.max(5, Math.min(200, Number(body.diskGb) || 10))
+    const hostname = String(body.hostname || '').trim().toLowerCase()
+    if (hostname && !/^[a-z0-9][a-z0-9.-]{0,62}[a-z0-9]$/.test(hostname)) {
+      return c.json({ message: 'Hostname must be a valid DNS hostname (letters, digits, hyphens, dots).' }, 400)
+    }
+    const timezone = String(body.timezone || '').trim()
+    if (timezone) {
+      let validTz = false
+      try {
+        validTz = (Intl.supportedValuesOf('timeZone') as string[]).includes(timezone)
+      } catch {
+        validTz = true
+      }
+      if (!validTz) return c.json({ message: 'Invalid timezone.' }, 400)
+    }
+    const swapMb = Math.max(0, Math.min(16384, Number(body.swapMb) || 0))
+    const dnsServers = Array.isArray(body.dnsServers)
+      ? body.dnsServers.map((d) => String(d).trim()).filter((d) => /^\d{1,3}(\.\d{1,3}){3}$/.test(d)).slice(0, 3)
+      : []
+    const directSsh = body.directSsh === true
 
     const existing = await queryOne('SELECT id FROM instances WHERE name = $1', [cleanName])
     if (existing) {
@@ -2738,7 +2763,16 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     const instanceId = randomUUID()
 
-    const userSshKeys = await query<SshKeyRow>('SELECT public_key FROM ssh_keys WHERE user_id = $1', [user.id])
+    let userSshKeys: SshKeyRow[]
+    if (Array.isArray(body.sshKeyIds)) {
+      const ids = body.sshKeyIds.filter((id) => typeof id === 'string')
+      userSshKeys =
+        ids.length > 0
+          ? await query<SshKeyRow>('SELECT public_key FROM ssh_keys WHERE user_id = $1 AND id = ANY($2::uuid[])', [user.id, ids])
+          : []
+    } else {
+      userSshKeys = await query<SshKeyRow>('SELECT public_key FROM ssh_keys WHERE user_id = $1', [user.id])
+    }
     const sshPublicKeys = userSshKeys.map((k) => k.public_key)
 
     try {
@@ -2751,6 +2785,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         disk: `${diskGb}GiB`,
         sshKeys: sshPublicKeys,
         uefi: osConfig.uefi,
+        hostname: hostname || undefined,
+        timezone: timezone || undefined,
+        swapMb,
+        dnsServers,
       })
 
       // Start the newly provisioned instance
@@ -2760,10 +2798,60 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
       const nodeId = await defaultNodeId()
       await query(
-        `INSERT INTO instances (id, user_id, name, type, os, image_alias, cores, memory_mb, disk_gb, node_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [instanceId, user.id, cleanName, type, osConfig.name, osConfig.alias, cores, memoryMb, diskGb, nodeId],
+        `INSERT INTO instances (id, user_id, name, type, os, image_alias, cores, memory_mb, disk_gb, node_id, hostname, timezone, swap_mb, dns_servers)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)`,
+        [instanceId, user.id, cleanName, type, osConfig.name, osConfig.alias, cores, memoryMb, diskGb, nodeId, hostname, timezone, swapMb, JSON.stringify(dnsServers)],
       )
+
+      // Password fallback: no SSH keys selected -> generate a root password
+      // (returned once, never stored) and enable direct SSH.
+      let rootPassword: string | null = null
+      let sshHostPort: number | null = null
+      if (sshPublicKeys.length === 0 || directSsh) {
+        try {
+          let containerIp: string | null = null
+          for (let attempt = 0; attempt < 15 && !containerIp; attempt++) {
+            const state = await incus.getInstanceState(cleanName).catch(() => null)
+            containerIp = containerGlobalIpv4(state)
+            if (!containerIp) await new Promise((r) => setTimeout(r, 3000))
+          }
+          if (containerIp) {
+            const config = await getSystemSettings()
+            const { start, end } = portForwardRange(config)
+            const taken = new Set(
+              (await query<{ host_port: number }>(
+                'SELECT host_port FROM port_forwards WHERE host_port BETWEEN $1 AND $2',
+                [start, end],
+              )).map((r) => r.host_port),
+            )
+            const free: number[] = []
+            for (let port = start; port <= end; port++) if (!taken.has(port)) free.push(port)
+            if (free.length > 0) {
+              sshHostPort = free[Math.floor(Math.random() * free.length)]
+              await attachForward(
+                cleanName,
+                { kind: 'ssh', host_port: sshHostPort, container_port: 22, protocol: 'tcp' },
+                containerIp,
+              )
+              await query(
+                `INSERT INTO port_forwards (id, instance_id, kind, host_port, container_port, protocol)
+                 VALUES ($1, $2, 'ssh', $3, 22, 'tcp')`,
+                [randomUUID(), instanceId, sshHostPort],
+              ).catch(() => {})
+            }
+          }
+        } catch (err: any) {
+          console.warn('Direct SSH setup warning:', err?.message)
+          sshHostPort = null
+        }
+      }
+      if (sshPublicKeys.length === 0) {
+        try {
+          rootPassword = await issueRootPassword(cleanName)
+        } catch (err: any) {
+          console.warn('Root password setup warning:', err?.message)
+        }
+      }
 
       await logActivity(
         user.id,
@@ -2782,6 +2870,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           cores,
           memoryMb,
           diskGb,
+          hostname: hostname || cleanName,
+          timezone: timezone || null,
+          swapMb,
+          dnsServers,
+          sshHostPort,
+          rootPassword,
         },
         201,
       )
@@ -6293,7 +6387,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     const type = body.type === 'kvm' ? 'kvm' : 'lxc'
     const osKey = body.os || 'debian-12'
-    let osConfig = OS_MAP[osKey] || { name: 'Debian 12 Bookworm', alias: 'debian/12' }
+    let osConfig: { name: string; alias: string; uefi?: boolean } = OS_MAP[osKey] || { name: 'Debian 12 Bookworm', alias: 'debian/12' }
     try {
       osConfig = await resolveOsSource(body)
     } catch (err: any) {

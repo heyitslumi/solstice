@@ -103,16 +103,21 @@ export function ServersPage() {
                 : `${servers.length} configured (${runningCount} running)`}
             </p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={loadServers}
-            disabled={loading}
-            className="gap-1.5 text-[12px]"
-          >
-            <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
+          <span className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadServers}
+              disabled={loading}
+              className="gap-1.5 text-[12px]"
+            >
+              <ArrowClockwise size={14} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </Button>
+            <Link to="/servers/setup">
+              <Button size="sm" className="gap-1.5 text-[12px]">Create Server</Button>
+            </Link>
+          </span>
         </div>
 
         {error && <Alert tone="danger">{error}</Alert>}

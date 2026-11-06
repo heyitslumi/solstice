@@ -183,6 +183,9 @@ export function ServerSetupPage() {
   const [phase, setPhase] = useState<'form' | 'progress' | 'panel'>('form')
   const [step, setStep] = useState(0)
   const [password, setPassword] = useState<string | null>(null)
+  const [sshHostPort, setSshHostPort] = useState<number | null>(null)
+  const [instanceId, setInstanceId] = useState<string | null>(null)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [logLines, setLogLines] = useState<string[]>([])
 
   useEffect(() => {
@@ -247,52 +250,56 @@ export function ServerSetupPage() {
     })
   }
 
-  function startInstall() {
+  async function startInstall() {
     if (!selectedOs) return
     setConfirmOpen(false)
     setPhase('progress')
     setStep(0)
     setLogLines([])
+    setCreateError(null)
     const push = (line: string) => setLogLines((prev) => [...prev, line])
-    push(`→ Creating server "${name || 'server'}"`)
-    push(`→ Resolving template ${osLabel} (${selectedOs.id})`)
-    const total = 6
-    let i = 0
-    const tick = () => {
-      i++
-      setStep(i)
-      if (i === 1) {
-        push('✓ Server created')
-        push('→ Pulling OS image (debian/trixie/cloud)')
-      } else if (i === 2) {
-        push('✓ Image ready (386 MB)')
-        push('→ Configuring cloud-init')
-      } else if (i === 3) {
-        push('✓ cloud-init configured (hostname, timezone, dns)')
-        push(noKeysSelected ? '→ Generating root password' : `→ Injecting ${selectedKeys.size} SSH key(s)`)
-      } else if (i === 4) {
-        push(noKeysSelected ? '✓ Root password generated' : '✓ SSH keys injected')
-        push('→ Starting server')
-      } else if (i === 5) {
-        push('✓ Server started')
-        push('→ Waiting for network')
-      }
-      if (i >= total) {
-        push('✓ Network OK — 5.231.32.70')
-        push('✓ Provisioning complete')
-        setTimeout(() => {
-          if (noKeysSelected) {
-            const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'
-            const bytes = crypto.getRandomValues(new Uint8Array(12))
-            setPassword([...bytes].map((b) => alphabet[b % alphabet.length]).join(''))
-          }
-          setPhase('panel')
-        }, 900)
-        return
-      }
-      setTimeout(tick, 800)
+    push(`\u2192 Creating server "${name || 'server'}"`)
+    push(`\u2192 Resolving template ${osLabel}`)
+
+    const swapMb = swap === 'None' ? 0 : Math.round(parseFloat(swap) * (swap.includes('GB') ? 1024 : 1))
+    const dnsServers = [DNS_PROVIDERS[dns1].primary, DNS_PROVIDERS[dns2].secondary].filter(Boolean)
+
+    const progressTimer = setInterval(() => setStep((v) => Math.min(v + 1, 5)), 4000)
+
+    const res = await api.createInstance({
+      name: name.trim().toLowerCase(),
+      type: 'kvm',
+      templateId: selectedOs.id,
+      hostname: hostname.trim() || undefined,
+      timezone: tz,
+      swapMb,
+      dnsServers,
+      sshKeyIds: [...selectedKeys],
+      directSsh,
+    })
+    clearInterval(progressTimer)
+
+    if (!res.ok) {
+      push('\u2717 ' + (res.error.message || 'Provisioning failed.'))
+      setCreateError(res.error.message || 'Provisioning failed.')
+      return
     }
-    setTimeout(tick, 800)
+
+    const created = res.data
+    push('\u2713 Server created')
+    push('\u2192 Pulling OS image')
+    push('\u2713 Image ready')
+    push('\u2192 Configuring cloud-init')
+    push(created.rootPassword ? '\u2192 Generating root password' : `\u2192 Injecting ${selectedKeys.size} SSH key(s)`)
+    push(created.rootPassword ? '\u2713 Root password generated' : '\u2713 SSH keys injected')
+    push('\u2192 Starting server')
+    push(created.sshHostPort ? `\u2713 Direct SSH enabled (port ${created.sshHostPort})` : '\u2713 Server started')
+    push('\u2713 Provisioning complete')
+    setStep(6)
+    if (created.rootPassword) setPassword(created.rootPassword)
+    setSshHostPort(created.sshHostPort ?? null)
+    setInstanceId(created.id)
+    setTimeout(() => setPhase('panel'), 1200)
   }
 
   if (phase === 'panel') {
@@ -307,14 +314,14 @@ export function ServerSetupPage() {
             <span className="ml-auto flex gap-2">
               <Button variant="secondary" size="sm">Reboot</Button>
               <Button variant="secondary" size="sm">Shutdown</Button>
-              <Button variant="secondary" size="sm">Console</Button>
+              <Button variant="secondary" size="sm">Console</Button>{instanceId && <a href={`/servers/${instanceId}`}><Button size="sm">Open Server</Button></a>}
             </span>
           </div>
           <div className="mt-6 rounded-panel border border-border bg-surface p-5">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div><p className="text-fg-subtle">IPv4</p><p className="font-medium">5.231.32.70</p></div>
               <div><p className="text-fg-subtle">Operating System</p><p className="font-medium">{osLabel}</p></div>
-              <div><p className="text-fg-subtle">SSH</p><p className="font-mono text-[13px]">ssh -p 22222 root@5.231.32.70</p></div>
+              <div><p className="text-fg-subtle">SSH</p><p className="font-mono text-[13px]">{sshHostPort ? `ssh -p ${sshHostPort} root@5.231.32.70` : "—"}</p></div>
               <div><p className="text-fg-subtle">Timezone</p><p className="font-medium">{tz}</p></div>
             </div>
             {password && (
@@ -353,6 +360,11 @@ export function ServerSetupPage() {
               </div>
             </div>
           </div>
+          {createError && (
+            <div className="mt-4 rounded-panel border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
+              {createError}
+            </div>
+          )}
           <div className="mt-4 overflow-hidden rounded-panel border border-border bg-black">
             <div className="border-b border-border bg-surface px-4 py-2.5">
               <span className="text-[12px] text-fg-subtle">provisioning log</span>

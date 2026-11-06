@@ -189,6 +189,10 @@ const SCHEMA = `
     created_at  timestamptz NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS instances_user_idx ON instances (user_id, created_at DESC);
+  ALTER TABLE instances ADD COLUMN IF NOT EXISTS hostname text NOT NULL DEFAULT '';
+  ALTER TABLE instances ADD COLUMN IF NOT EXISTS timezone text NOT NULL DEFAULT '';
+  ALTER TABLE instances ADD COLUMN IF NOT EXISTS swap_mb integer NOT NULL DEFAULT 0;
+  ALTER TABLE instances ADD COLUMN IF NOT EXISTS dns_servers jsonb NOT NULL DEFAULT '[]'::jsonb;
 
   CREATE TABLE IF NOT EXISTS ssh_keys (
     id          uuid PRIMARY KEY,
@@ -575,6 +579,10 @@ export interface InstanceRow {
   cores: number
   memory_mb: number
   disk_gb: number
+  hostname?: string
+  timezone?: string
+  swap_mb?: number
+  dns_servers?: unknown
   node_id?: string | null
   suspend_reason?: string | null
   created_at: Date | string
