@@ -5,7 +5,6 @@
 import { CaretDown } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
 
-import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { api, type ApiSshKey } from '@/lib/api'
@@ -184,7 +183,7 @@ export function ServerSetupPage() {
 
   if (phase === 'panel') {
     return (
-      <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
+      <div className="min-h-[100dvh] bg-bg px-5 py-8 sm:px-8">
         <div className="mx-auto w-full max-w-3xl">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold">{name || 'my-server'}</h1>
@@ -213,7 +212,7 @@ export function ServerSetupPage() {
             <p className="mt-4 text-center text-xs text-fg-subtle">TEST PAGE — mock control panel, nothing was provisioned</p>
           </div>
         </div>
-      </AppShell>
+      </div>
     )
   }
 
@@ -227,7 +226,7 @@ export function ServerSetupPage() {
       'Waiting for network',
     ]
     return (
-      <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
+      <div className="min-h-[100dvh] bg-bg px-5 py-8 sm:px-8">
         <div className="mx-auto w-full max-w-3xl">
           <h1 className="text-2xl font-bold">Installing {osLabel}...</h1>
           <div className="mt-6 rounded-panel border border-border bg-surface p-5">
@@ -244,15 +243,23 @@ export function ServerSetupPage() {
             </div>
           </div>
         </div>
-      </AppShell>
+      </div>
     )
   }
 
   return (
-    <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
-      <div className="mx-auto w-full max-w-3xl py-8">
+    <div className="min-h-[100dvh] bg-bg px-5 py-8 sm:px-8">
+      <div className="mx-auto w-full max-w-3xl">
+        <div className="mb-8 flex items-center gap-3">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-accent font-bold text-accent-fg">S</span>
+          <div>
+            <p className="text-[15px] font-semibold leading-tight">Solstice</p>
+            <p className="text-[11px] uppercase tracking-wide text-fg-subtle">Server Setup</p>
+          </div>
+          <span className="ml-auto rounded-full bg-warning/15 px-3 py-1 text-[11px] font-medium text-warning">TEST PAGE</span>
+        </div>
 
-        <section className="mt-8">
+        <section>
           <h2 className="text-[15px] font-semibold">Name</h2>
           <p className="text-[12px] text-fg-subtle">The server name allows you to easily identify the server under your account.</p>
           <div className="mt-2 flex gap-2">
@@ -445,6 +452,6 @@ export function ServerSetupPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </AppShell>
+    </div>
   )
 }
