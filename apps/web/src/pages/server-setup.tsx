@@ -314,8 +314,7 @@ export function ServerSetupPage() {
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
         <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
-          <h1 className="text-2xl font-bold">Installing {osLabel}...</h1>
-          <div className="mt-6 rounded-panel border border-border bg-surface p-5">
+          <div className="rounded-panel border border-border bg-surface p-5">
             <div className="h-2 overflow-hidden rounded-full bg-field">
               <div className="h-full bg-accent transition-all" style={{ width: `${(step / steps.length) * 100}%` }} />
             </div>
