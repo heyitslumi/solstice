@@ -7,6 +7,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { OsLogoImage } from '@/components/os-icons'
@@ -18,6 +19,7 @@ import { api, type OsGroupItem, type OsTemplate } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export function AdminTemplatesPage() {
+  const navigate = useNavigate()
   const [templates, setTemplates] = useState<OsTemplate[]>([])
   const [groups, setGroups] = useState<OsGroupItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,17 +31,6 @@ export function AdminTemplatesPage() {
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  // Modal
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingTemplate, setEditingTemplate] = useState<OsTemplate | null>(null)
-  const [formName, setFormName] = useState('')
-  const [formGroupId, setFormGroupId] = useState<string>('')
-  const [formVersion, setFormVersion] = useState('1.00')
-  const [formArch, setFormArch] = useState('x86_64')
-  const [formImageAlias, setFormImageAlias] = useState('')
-  const [formCloudInit, setFormCloudInit] = useState(true)
-  const [formEnabled, setFormEnabled] = useState(true)
-  const [saving, setSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<OsTemplate | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -99,65 +90,6 @@ export function AdminTemplatesPage() {
     setSelectedIds(new Set())
     await loadData()
     setDeleting(false)
-    setTimeout(() => setSuccessMsg(null), 3500)
-  }
-
-  function openCreate() {
-    setEditingTemplate(null)
-    setFormName('')
-    setFormGroupId(groups[0]?.id || '')
-    setFormVersion('1.00')
-    setFormArch('x86_64')
-    setFormImageAlias('')
-    setFormCloudInit(true)
-    setFormEnabled(true)
-    setModalOpen(true)
-  }
-
-  function openEdit(t: OsTemplate) {
-    setEditingTemplate(t)
-    setFormName(t.name)
-    setFormGroupId(t.groupId || '')
-    setFormVersion(t.version || '1.00')
-    setFormArch(t.arch === 'amd64' ? 'x86_64' : t.arch || 'x86_64')
-    setFormImageAlias(t.imageAlias)
-    setFormCloudInit(t.cloudInit !== false)
-    setFormEnabled(t.enabled !== false)
-    setModalOpen(true)
-  }
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    if (!formName.trim() || !formImageAlias.trim()) return
-    setSaving(true)
-    setError(null)
-
-    const payload = {
-      name: formName.trim(),
-      groupId: formGroupId || null,
-      version: formVersion.trim() || '1.00',
-      arch: formArch === 'x86_64' ? 'amd64' : formArch,
-      imageAlias: formImageAlias.trim(),
-      cloudInit: formCloudInit,
-      enabled: formEnabled,
-    }
-
-    const res = editingTemplate
-      ? await api.adminUpdateOsTemplate(editingTemplate.id, payload)
-      : await api.adminCreateOsTemplate(payload)
-
-    if (res.ok) {
-      setSuccessMsg(
-        editingTemplate
-          ? `Template "${formName}" updated.`
-          : `Template "${formName}" added.`,
-      )
-      setModalOpen(false)
-      await loadData()
-    } else {
-      setError(res.error.message || 'Failed to save template.')
-    }
-    setSaving(false)
     setTimeout(() => setSuccessMsg(null), 3500)
   }
 
@@ -268,7 +200,7 @@ export function AdminTemplatesPage() {
             {/* Add Template Button */}
             <Button
               variant="primary"
-              onClick={openCreate}
+              onClick={() => navigate('/admin/templates/new')}
               className="gap-1.5 text-[13px]"
             >
               <Plus size={16} weight="bold" />
@@ -406,7 +338,7 @@ export function AdminTemplatesPage() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openEdit(t)}
+                            onClick={() => navigate(`/admin/templates/${t.id}/edit`)}
                             className="h-7 gap-1 px-2.5 text-[11px]"
                           >
                             <PencilSimple size={12} />
@@ -430,151 +362,6 @@ export function AdminTemplatesPage() {
           </table>
         </div>
       </div>
-
-      {/* Create / Edit Template Modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>
-            {editingTemplate ? `Edit Template: ${editingTemplate.name}` : 'Add OS Template'}
-          </DialogTitle>
-          <DialogDescription>
-            Configure template distribution image, group, version, and architecture.
-          </DialogDescription>
-
-          <form onSubmit={handleSave} className="mt-4 flex flex-col gap-4">
-            <div>
-              <label className="text-[12px] font-semibold text-fg">
-                Name <span className="text-danger">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. Ubuntu 24.04 LTS, Debian 12"
-                className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[12px] font-semibold text-fg">Template Group</label>
-                <select
-                  value={formGroupId}
-                  onChange={(e) => setFormGroupId(e.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-                >
-                  <option value="">(None)</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[12px] font-semibold text-fg">Version</label>
-                <input
-                  type="text"
-                  value={formVersion}
-                  onChange={(e) => setFormVersion(e.target.value)}
-                  placeholder="1.00"
-                  className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[12px] font-semibold text-fg">Architecture</label>
-                <select
-                  value={formArch}
-                  onChange={(e) => setFormArch(e.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-                >
-                  <option value="x86_64">x86_64</option>
-                  <option value="arm64">arm64 (aarch64)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[12px] font-semibold text-fg">Cloud-Init</label>
-                <div className="mt-1.5 flex h-10 items-center justify-between rounded-control border border-field-border bg-field px-3">
-                  <span className="text-[12px] text-fg">Support</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={formCloudInit}
-                    onClick={() => setFormCloudInit(!formCloudInit)}
-                    className={cn(
-                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                      formCloudInit ? 'bg-sun-500' : 'bg-surface-3',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                        formCloudInit ? 'translate-x-4' : 'translate-x-0',
-                      )}
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[12px] font-semibold text-fg">
-                Image Alias <span className="text-danger">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formImageAlias}
-                onChange={(e) => setFormImageAlias(e.target.value)}
-                placeholder="e.g. ubuntu/noble/cloud or debian/12/cloud"
-                className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
-              />
-              <span className="mt-1 block text-[11px] text-fg-subtle">
-                LinuxContainers or Incus remote image alias name.
-              </span>
-            </div>
-
-            <div>
-              <label className="text-[12px] font-semibold text-fg">Status</label>
-              <div className="mt-1.5 flex h-10 items-center justify-between rounded-control border border-field-border bg-field px-3">
-                <span className="text-[12px] text-fg">Enabled</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={formEnabled}
-                  onClick={() => setFormEnabled(!formEnabled)}
-                  className={cn(
-                    'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                    formEnabled ? 'bg-sun-500' : 'bg-surface-3',
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                      formEnabled ? 'translate-x-4' : 'translate-x-0',
-                    )}
-                  />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-2 flex justify-end gap-2.5 border-t border-border pt-4">
-              <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" disabled={saving}>
-                {saving ? 'Saving...' : editingTemplate ? 'Update Template' : 'Add Template'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Modal */}
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(o) => !o && setDeleteTarget(null)}>

@@ -7,6 +7,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { OsLogoImage, OS_LOGOS } from '@/components/os-icons'
@@ -28,20 +29,13 @@ interface OsGroupItem {
 }
 
 export function AdminTemplateGroupsPage() {
+  const navigate = useNavigate()
   const [groups, setGroups] = useState<OsGroupItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  // Dialogs
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingGroup, setEditingGroup] = useState<OsGroupItem | null>(null)
-  const [formName, setFormName] = useState('')
-  const [formDesc, setFormDesc] = useState('')
-  const [formLogo, setFormLogo] = useState('linux')
-  const [formEnabled, setFormEnabled] = useState(true)
-  const [saving, setSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<OsGroupItem | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -139,52 +133,6 @@ export function AdminTemplateGroupsPage() {
     void loadGroups()
   }, [])
 
-  function openCreate() {
-    setEditingGroup(null)
-    setFormName('')
-    setFormDesc('')
-    setFormLogo('linux')
-    setFormEnabled(true)
-    setModalOpen(true)
-  }
-
-  function openEdit(g: OsGroupItem) {
-    setEditingGroup(g)
-    setFormName(g.name)
-    setFormDesc(g.description || '')
-    setFormLogo(g.logo || 'linux')
-    setFormEnabled(g.enabled !== false)
-    setModalOpen(true)
-  }
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    if (!formName.trim()) return
-    setSaving(true)
-    setError(null)
-
-    const payload = {
-      name: formName.trim(),
-      description: formDesc.trim(),
-      logo: formLogo,
-      enabled: formEnabled,
-    }
-
-    const res = editingGroup
-      ? await api.adminUpdateOsGroup(editingGroup.id, payload)
-      : await api.adminCreateOsGroup(payload)
-
-    if (res.ok) {
-      setSuccessMsg(editingGroup ? `Group "${formName}" updated.` : `Group "${formName}" created.`)
-      setModalOpen(false)
-      await loadGroups()
-    } else {
-      setError(res.error.message || 'Failed to save group.')
-    }
-    setSaving(false)
-    setTimeout(() => setSuccessMsg(null), 3500)
-  }
-
   async function handleDelete() {
     if (!deleteTarget) return
     setDeleting(true)
@@ -270,7 +218,7 @@ export function AdminTemplateGroupsPage() {
             {/* Add Group Button */}
             <Button
               variant="primary"
-              onClick={openCreate}
+              onClick={() => navigate('/admin/template-groups/new')}
               className="gap-1.5 text-[13px]"
             >
               <Plus size={16} weight="bold" />
@@ -463,7 +411,7 @@ export function AdminTemplateGroupsPage() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openEdit(g)}
+                            onClick={() => navigate(`/admin/template-groups/${g.id}/edit`)}
                             className="h-7 gap-1 px-2.5 text-[11px]"
                           >
                             <PencilSimple size={12} />
@@ -487,99 +435,6 @@ export function AdminTemplateGroupsPage() {
           </table>
         </div>
       </div>
-
-      {/* Create / Edit Group Modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>
-            {editingGroup ? `Edit Group: ${editingGroup.name}` : 'Add Template Group'}
-          </DialogTitle>
-          <DialogDescription>
-            Configure operating system distribution family and brand icon.
-          </DialogDescription>
-
-          <form onSubmit={handleSave} className="mt-4 flex flex-col gap-4">
-            <div>
-              <label className="text-[12px] font-semibold text-fg">
-                Name <span className="text-danger">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. Ubuntu, Debian, Alpine"
-                className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="text-[12px] font-semibold text-fg">Description</label>
-              <textarea
-                rows={2}
-                value={formDesc}
-                onChange={(e) => setFormDesc(e.target.value)}
-                placeholder="Distribution overview and purpose..."
-                className="mt-1.5 w-full rounded-control border border-field-border bg-field p-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-[12px] font-semibold text-fg">Brand Logo</label>
-                <select
-                  value={formLogo}
-                  onChange={(e) => setFormLogo(e.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-                >
-                  {Object.entries(OS_LOGOS).map(([key, def]) => (
-                    <option key={key} value={key}>
-                      {def.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-[11px] text-fg-subtle">Preview:</span>
-                  <OsLogoImage logoKey={formLogo} size={20} />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[12px] font-semibold text-fg">Status</label>
-                <div className="mt-1.5 flex h-10 items-center justify-between rounded-control border border-field-border bg-field px-3">
-                  <span className="text-[12px] text-fg">Enabled</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={formEnabled}
-                    onClick={() => setFormEnabled(!formEnabled)}
-                    className={cn(
-                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                      formEnabled ? 'bg-sun-500' : 'bg-surface-3',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                        formEnabled ? 'translate-x-4' : 'translate-x-0',
-                      )}
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-2 flex justify-end gap-2.5 border-t border-border pt-4">
-              <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="primary" disabled={saving}>
-                {saving ? 'Saving...' : editingGroup ? 'Update' : 'Create Group'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Group Modal */}
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(o) => !o && setDeleteTarget(null)}>

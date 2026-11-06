@@ -22,7 +22,9 @@ import { AdminOAuthProvidersPage } from '@/pages/admin-oauth-providers'
 import { AdminServerDetailPage } from '@/pages/admin-server-detail'
 import { AdminServerFormPage } from '@/pages/admin-server-form'
 import { AdminServersPage } from '@/pages/admin-servers'
+import { AdminTemplateGroupFormPage } from '@/pages/admin-template-group-form'
 import { AdminTemplateGroupsPage } from '@/pages/admin-template-groups'
+import { AdminTemplateFormPage } from '@/pages/admin-template-form'
 import { AdminTemplatesPage } from '@/pages/admin-templates'
 import { AdminPortForwardsPage } from '@/pages/admin-port-forwards'
 import { AdminUserDetailPage } from '@/pages/admin-user-detail'
@@ -322,11 +324,51 @@ function App() {
           }
         />
         <Route
+          path="/admin/template-groups/new"
+          element={
+            <RequireAuth>
+              <RequireAdmin>
+                <AdminTemplateGroupFormPage />
+              </RequireAdmin>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/template-groups/:id/edit"
+          element={
+            <RequireAuth>
+              <RequireAdmin>
+                <AdminTemplateGroupFormPage />
+              </RequireAdmin>
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/admin/templates"
           element={
             <RequireAuth>
               <RequireAdmin>
                 <AdminTemplatesPage />
+              </RequireAdmin>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/templates/new"
+          element={
+            <RequireAuth>
+              <RequireAdmin>
+                <AdminTemplateFormPage />
+              </RequireAdmin>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/templates/:id/edit"
+          element={
+            <RequireAuth>
+              <RequireAdmin>
+                <AdminTemplateFormPage />
               </RequireAdmin>
             </RequireAuth>
           }
