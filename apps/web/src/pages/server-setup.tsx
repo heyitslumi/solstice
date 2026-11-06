@@ -60,6 +60,21 @@ function variantDesc(o: OsOption): string {
   return 'Standard installation.'
 }
 
+const GROUP_DESC: Record<string, string> = {
+  debian: 'Debian GNU/Linux, is a Linux distribution composed of free and open-source software, developed by the community-supported Debian Project.',
+  ubuntu: 'Ubuntu is a free and open-source Linux distribution based on Debian, developed by Canonical.',
+  almalinux: 'AlmaLinux is a free, open-source, RHEL-compatible Linux distribution.',
+  centos: 'CentOS is a free, open-source, RHEL-compatible Linux distribution.',
+  fedora: 'Fedora is a free, open-source Linux distribution created by the Fedora Project.',
+  rockylinux: 'Rocky Linux is a community enterprise operating system, binary-compatible with RHEL.',
+  opensuse: 'openSUSE is a free, open-source Linux distribution developed by the openSUSE Project.',
+  oracle: 'Oracle Linux is a free, open-source Linux distribution based on RHEL.',
+}
+
+function groupDesc(group: string): string {
+  return GROUP_DESC[group.toLowerCase().replace(/[^a-z]/g, '')] || 'Linux distribution images for Incus.'
+}
+
 function tzOffsetLabel(tz: string): string {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -304,8 +319,13 @@ export function ServerSetupPage() {
                   <span className="rounded-full bg-field px-2 py-0.5 text-[11px] text-fg-subtle">{options.length}</span>
                   <CaretDown size={15} className={`ml-auto flex-none text-fg-subtle transition-transform ${openGroup === group ? 'rotate-180' : ''}`} />
                 </button>
-                {openGroup === group && (
-                  <div className="space-y-2 p-3">
+                <div
+                  className="grid transition-[grid-template-rows] duration-300 ease-out"
+                  style={{ gridTemplateRows: openGroup === group ? '1fr' : '0fr' }}
+                >
+                  <div className="overflow-hidden">
+                    <p className="px-4 pt-3 text-[12px] text-fg-subtle">{groupDesc(group)}</p>
+                    <div className="space-y-2 p-3">
                     {options.map((o) => (
                       <button
                         key={o.id}
@@ -323,8 +343,9 @@ export function ServerSetupPage() {
                         <p className="mt-1 text-[12px] text-fg-subtle">{variantDesc(o)}</p>
                       </button>
                     ))}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             ))}
             {osOptions.length === 0 && <p className="text-sm text-fg-subtle">No OS templates available.</p>}
