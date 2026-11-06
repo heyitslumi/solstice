@@ -32,7 +32,11 @@ export function ServerConsolePage() {
   const [takenCode, setTakenCode] = useState<number | null>(null)
   const [takeover, setTakeover] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  const [mode, setMode] = useState<'shell' | 'console'>('shell')
+  const [mode, setMode] = useState<'shell' | 'console' | 'graphical'>('shell')
+  const [instanceType, setInstanceType] = useState<string>('')
+  const spiceRef = useRef<any>(null)
+  const spiceScreenRef = useRef<HTMLDivElement>(null)
+  const spiceMsgRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -42,12 +46,15 @@ export function ServerConsolePage() {
   useEffect(() => {
     if (!id) return
     void api.getInstance(id).then((res) => {
-      if (res.ok) setServerName(res.data.instance.name)
+      if (res.ok) {
+        setServerName(res.data.instance.name)
+        setInstanceType(res.data.instance.type || '')
+      }
     })
   }, [id])
 
   const connect = useCallback(() => {
-    if (!id || !containerRef.current) return
+    if (!id || !containerRef.current || mode === 'graphical') return
     setState('connecting')
     setReason(null)
 
@@ -167,6 +174,47 @@ export function ServerConsolePage() {
 
   useEffect(() => connect(), [connect])
 
+  // Graphical (SPICE) mode: load the vendored spice-html5 bundle once and
+  // connect its main channel to our vga websocket endpoint.
+  useEffect(() => {
+    if (mode !== 'graphical' || !id) return
+    let cancelled = false
+    const SpiceHtml5 = (window as any).SpiceHtml5
+    const start = () => {
+      if (cancelled || !spiceScreenRef.current) return
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const uri = `${proto}://${window.location.host}/api/instances/${encodeURIComponent(id)}/console?mode=vga${takeover ? '&takeover=1' : ''}`
+      const sc = new SpiceHtml5.SpiceMainConn({
+        uri,
+        password: '',
+        screen_id: 'spice-screen',
+        message_id: 'spice-message',
+        onerror: (e: Error) => {
+          if (!cancelled) {
+            setState('closed')
+            setReason(e?.message || 'Graphical console failed.')
+          }
+        },
+        onagent: () => SpiceHtml5.resize_helper(sc),
+      })
+      spiceRef.current = sc
+      setState('open')
+    }
+    if (SpiceHtml5) {
+      start()
+    } else {
+      const script = document.createElement('script')
+      script.src = '/spice-html5/spice-html5.js'
+      script.onload = start
+      document.head.appendChild(script)
+    }
+    return () => {
+      cancelled = true
+      try { spiceRef.current?.stop() } catch { /* ignore */ }
+      spiceRef.current = null
+    }
+  }, [mode, id, takeover])
+
   useEffect(() => {
     const onChange = () => setIsFullscreen(document.fullscreenElement != null)
     document.addEventListener('fullscreenchange', onChange)
@@ -206,10 +254,13 @@ export function ServerConsolePage() {
               {([
                 { id: 'shell', label: 'Shell' },
                 { id: 'console', label: 'Console' },
+                { id: 'graphical', label: 'Graphical' },
               ] as const).map((m) => (
                 <button
                   key={m.id}
                   type="button"
+                  disabled={m.id === 'graphical' && !!instanceType && instanceType !== 'kvm'}
+                  title={m.id === 'graphical' && instanceType && instanceType !== 'kvm' ? 'Graphical console is only available for VMs' : undefined}
                   onClick={() => setMode(m.id)}
                   className={cn(
                     'rounded-control px-2.5 py-1 text-[12px] font-medium transition-colors',
@@ -282,6 +333,12 @@ export function ServerConsolePage() {
           </DialogContent>
         </Dialog>
 
+        {mode === 'graphical' ? (
+          <div className="overflow-hidden rounded-panel border border-border bg-black">
+            <div id="spice-screen" ref={spiceScreenRef} className="h-[60vh] min-h-[420px] w-full" />
+            <div id="spice-message" ref={spiceMsgRef} className="px-3 py-2 text-[12px] text-fg-subtle" />
+          </div>
+        ) : (
         <div
           ref={wrapRef}
           className="overflow-hidden rounded-panel border border-border bg-[#0d1117] [&:fullscreen]:rounded-none [&:fullscreen]:border-0"
@@ -295,11 +352,14 @@ export function ServerConsolePage() {
             }
           />
         </div>
+        )}
 
         <p className="text-[12px] text-fg-subtle">
           {mode === 'shell'
             ? 'Root shell inside the server over an encrypted channel. Idle sessions close after 20 minutes.'
-            : 'Raw serial/text console — boot output and a login prompt. Only one client can hold it; opening it here takes it over from the Incus UI or CLI and releases it when you leave.'}
+            : mode === 'graphical'
+              ? 'Graphical console (SPICE) — full framebuffer, works even before the guest boots. VMs only.'
+              : 'Raw serial/text console — boot output and a login prompt. Only one client can hold it; opening it here takes it over from the Incus UI or CLI and releases it when you leave.'}
         </p>
       </div>
     </AppShell>

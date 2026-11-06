@@ -517,6 +517,107 @@ async function serveConsole(
   ).catch(() => {})
 }
 
+
+/* VGA (SPICE) graphical console.
+   Incus returns one data fd + one control fd for a vga op; every browser
+   websocket presenting the fd-0 secret gets its own QEMU SPICE connection
+   (spice-html5 opens one WS per SPICE channel to the same URI). Backend
+   pipes binary frames verbatim — no SPICE parsing here. */
+interface VgaSession {
+  instanceName: string
+  opId: string
+  secret: string
+  control: IncusWs
+  refs: number
+  teardownTimer: ReturnType<typeof setTimeout> | null
+}
+
+const vgaSessions = new Map<string, VgaSession>()
+
+async function getVgaSession(instanceName: string, takeover: boolean): Promise<VgaSession> {
+  const existing = vgaSessions.get(instanceName)
+  if (existing) {
+    if (existing.teardownTimer) {
+      clearTimeout(existing.teardownTimer)
+      existing.teardownTimer = null
+    }
+    existing.refs++
+    return existing
+  }
+  const path = `/1.0/instances/${encodeURIComponent(instanceName)}/console`
+  const body = { type: 'vga', width: 1024, height: 768 }
+  let res: any
+  try {
+    res = await incusRequest<any>('POST', path, body, 30000)
+  } catch (err: any) {
+    if (/already connected/i.test(err?.message || '')) {
+      if (!takeover) throw new Error('CONSOLE_TAKEN')
+      await releaseStaleConsoles(instanceName).catch(() => {})
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await new Promise((r) => setTimeout(r, 1500))
+        try {
+          res = await incusRequest<any>('POST', path, body, 30000)
+          break
+        } catch (retryErr: any) {
+          if (!/already connected/i.test(retryErr?.message || '')) throw retryErr
+          if (attempt === 4) throw retryErr
+        }
+      }
+    } else {
+      throw err
+    }
+  }
+  const opId = String(res.operation || '').split('/').pop()
+  const fds = res.metadata?.metadata?.fds as Record<string, string> | undefined
+  if (!opId || !fds?.['0'] || !fds?.control) {
+    throw new Error('Incus did not return VGA console channels.')
+  }
+  // Hold the control channel for the op lifetime; closing it ends the op.
+  const control = new IncusWs(net.connect(SOCKET_PATH))
+  await control.handshake(`/1.0/operations/${opId}/websocket?secret=${fds.control}`)
+  const session: VgaSession = { instanceName, opId, secret: fds['0'], control, refs: 1, teardownTimer: null }
+  vgaSessions.set(instanceName, session)
+  return session
+}
+
+function releaseVgaSession(session: VgaSession) {
+  session.refs--
+  if (session.refs > 0) return
+  session.teardownTimer = setTimeout(() => {
+    if (session.refs > 0) return
+    vgaSessions.delete(session.instanceName)
+    try {
+      session.control.close()
+    } catch {}
+    void incusRequest('DELETE', `/1.0/operations/${session.opId}`).catch(() => {})
+  }, 5000)
+}
+
+async function serveVgaChannel(ws: WebSocket, session: VgaSession) {
+  const stdio = new IncusWs(net.connect(SOCKET_PATH))
+  let closed = false
+  const cleanup = () => {
+    if (closed) return
+    closed = true
+    try { stdio.close() } catch {}
+    try { ws.close(1000, 'Channel closed.') } catch {}
+    releaseVgaSession(session)
+  }
+  stdio.onMessage = (op, payload) => {
+    if ((op === 0x2 || op === 0x1) && payload.length > 0 && ws.readyState === ws.OPEN) {
+      ws.send(payload, { binary: true })
+    }
+  }
+  stdio.onClose = cleanup
+  ws.on('message', (data: WebSocket.RawData) => {
+    const buf = Buffer.isBuffer(data) ? data : data instanceof ArrayBuffer ? Buffer.from(data) : Buffer.concat(data as Buffer[])
+    if (buf.length > 0) stdio.sendBinary(buf)
+  })
+  ws.on('close', cleanup)
+  ws.on('error', cleanup)
+  await stdio.handshake(`/1.0/operations/${session.opId}/websocket?secret=${session.secret}`)
+}
+
 export function attachConsoleServer(server: Server) {
   const wss = new WebSocketServer({ noServer: true })
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -526,7 +627,36 @@ export function attachConsoleServer(server: Server) {
       socket.destroy()
       return
     }
-    wss.handleUpgrade(req, socket as any, head, (ws) => {
+    wss.handleUpgrade(req, socket as any, head, async (ws) => {
+      // VGA (SPICE) channels: auth, resolve the instance, then pipe one
+      // Incus channel websocket per browser websocket.
+      const q = new URL(req.url || '', 'http://localhost')
+      if (q.searchParams.get('mode') === 'vga') {
+        try {
+          const sessionAuth = await readSession(parseCookies(req.headers.cookie)[SESSION_COOKIE]).catch(() => null)
+          if (!sessionAuth) { ws.close(4401, 'Not signed in.'); return }
+          const me = await queryOne<{ is_admin: boolean }>(
+            'SELECT is_admin FROM users WHERE id = $1',
+            [sessionAuth.user_id],
+          ).catch(() => null)
+          const vgaInstance = await queryOne<InstanceRow>(
+            me?.is_admin ? 'SELECT * FROM instances WHERE id = $1' : 'SELECT * FROM instances WHERE id = $1 AND user_id = $2',
+            me?.is_admin ? [decodeURIComponent(match[1])] : [decodeURIComponent(match[1]), sessionAuth.user_id],
+          ).catch(() => null)
+          if (!vgaInstance) { ws.close(4404, 'Instance not found.'); return }
+          const liveState = await incusRequest<any>('GET', `/1.0/instances/${encodeURIComponent(vgaInstance.name)}`).then((r) => r.metadata).catch(() => null)
+          if (!liveState || (liveState.status || '').toLowerCase() !== 'running') {
+            ws.close(4410, 'Start the server first.')
+            return
+          }
+          const vga = await getVgaSession(vgaInstance.name, q.searchParams.get('takeover') === '1')
+          await serveVgaChannel(ws, vga)
+        } catch (err: any) {
+          if (err?.message === 'CONSOLE_TAKEN') ws.close(4409, 'Someone is already using this console.')
+          else ws.close(4500, err?.message || 'VGA console failed.')
+        }
+        return
+      }
       // Buffer anything the browser sends during auth + exec setup so the
       // first keystrokes are never lost to the async gap.
       const early: Array<{ data: WebSocket.RawData; isBinary: boolean }> = []
