@@ -329,10 +329,10 @@ export function ServerSetupPage() {
     <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
       <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
 
-        <section>
+        <section className="mt-4">
           <h2 className="text-[15px] font-semibold">Name</h2>
-          <p className="text-[12px] text-fg-subtle">The server name allows you to easily identify the server under your account.</p>
-          <div className="mt-2 flex gap-2">
+          <p className="mt-0.5 text-[12px] leading-relaxed text-fg-subtle">The server name allows you to easily identify the server under your account.</p>
+          <div className="mt-3 flex gap-2.5">
             <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="my-server" />
             <Button variant="secondary" onClick={() => setName(`server-${Math.floor(Math.random() * 900 + 100)}`)}>Random</Button>
           </div>
@@ -482,7 +482,7 @@ export function ServerSetupPage() {
             </Button>
           </div>
           <div className="grid transition-[grid-template-rows] duration-300 ease-out" style={{ gridTemplateRows: advOpen ? '1fr' : '0fr' }}>
-            <div className="overflow-hidden">
+            <div style={{ overflow: advOpen ? 'visible' : 'hidden' }}>
           <div className="mt-3 rounded-panel border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
               <div>
