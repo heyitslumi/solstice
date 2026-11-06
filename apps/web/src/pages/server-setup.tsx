@@ -341,7 +341,7 @@ export function ServerSetupPage() {
     ]
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
-        <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
+        <div className="-mt-8 flex min-h-[calc(100dvh-10rem)] flex-col lg:-mt-10">
           <div className="rounded-panel border border-border bg-surface p-10 text-center">
             <div className="mx-auto size-20 animate-spin rounded-full border-4 border-border border-t-accent" />
             <h2 className="mt-7 text-xl font-semibold">Installing {osLabel}...</h2>
@@ -357,7 +357,7 @@ export function ServerSetupPage() {
             <div className="border-b border-border bg-surface px-4 py-2.5">
               <span className="text-[12px] text-fg-subtle">provisioning log</span>
             </div>
-            <div className="h-64 overflow-y-auto p-5 font-mono text-[13px] leading-loose">
+            <div className="min-h-[40vh] flex-1 overflow-y-auto p-5 font-mono text-[13px] leading-loose">
               {logLines.map((line, i) => (
                 <p key={i} className={line.includes('✓') || line.includes('OK') ? 'text-emerald-400' : line.includes('→') ? 'text-accent' : 'text-fg-muted'}>
                   <span className="mr-4 text-fg-subtle">{lineTime(i)}</span>{line}
