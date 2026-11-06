@@ -19,19 +19,19 @@ interface OsOption {
 }
 
 const SWAPS = ['None', '256 MB', '512 MB', '768 MB', '1 GB', '1.5 GB']
-const DNS_PROVIDERS: Array<{ icon: string; name: string; primary: string; secondary: string }> = [
-  { icon: '🌐', name: 'System Default', primary: '8.8.8.8', secondary: '8.8.4.4' },
-  { icon: '🔍', name: 'Google', primary: '8.8.8.8', secondary: '8.8.4.4' },
-  { icon: '☁️', name: 'Cloudflare', primary: '1.1.1.1', secondary: '1.0.0.1' },
-  { icon: '🛡️', name: 'Quad9', primary: '9.9.9.9', secondary: '149.112.112.112' },
-  { icon: '🟠', name: 'OpenDNS', primary: '208.67.222.222', secondary: '208.67.220.220' },
-  { icon: '🔒', name: 'AdGuard', primary: '94.140.14.14', secondary: '94.140.15.15' },
-  { icon: '🦌', name: 'Mullvad', primary: '193.138.218.74', secondary: '193.138.218.75' },
-  { icon: '🇨🇦', name: 'Canadian Shield', primary: '93.146.6.10', secondary: '93.146.6.11' },
-  { icon: '🕊️', name: 'LibreDNS', primary: '116.203.185.107', secondary: '116.203.185.108' },
-  { icon: '👁️', name: 'DNS.Watch', primary: '84.200.69.80', secondary: '84.200.70.40' },
-  { icon: '🇷🇺', name: 'Yandex', primary: '77.88.8.8', secondary: '77.88.8.1' },
-  { icon: '🏠', name: 'Use node default (DHCP)', primary: '', secondary: '' },
+const DNS_PROVIDERS: Array<{ slug: string | null; name: string; primary: string; secondary: string }> = [
+  { slug: null, name: 'System Default', primary: '8.8.8.8', secondary: '8.8.4.4' },
+  { slug: 'google', name: 'Google', primary: '8.8.8.8', secondary: '8.8.4.4' },
+  { slug: 'cloudflare', name: 'Cloudflare', primary: '1.1.1.1', secondary: '1.0.0.1' },
+  { slug: 'quad9', name: 'Quad9', primary: '9.9.9.9', secondary: '149.112.112.112' },
+  { slug: null, name: 'OpenDNS', primary: '208.67.222.222', secondary: '208.67.220.220' },
+  { slug: 'adguard', name: 'AdGuard', primary: '94.140.14.14', secondary: '94.140.15.15' },
+  { slug: 'mullvad', name: 'Mullvad', primary: '193.138.218.74', secondary: '193.138.218.75' },
+  { slug: null, name: 'Canadian Shield', primary: '93.146.6.10', secondary: '93.146.6.11' },
+  { slug: null, name: 'LibreDNS', primary: '116.203.185.107', secondary: '116.203.185.108' },
+  { slug: null, name: 'DNS.Watch', primary: '84.200.69.80', secondary: '84.200.70.40' },
+  { slug: null, name: 'Yandex', primary: '77.88.8.8', secondary: '77.88.8.1' },
+  { slug: null, name: 'Use node default (DHCP)', primary: '', secondary: '' },
 ]
 
 const DISTRO_SLUG: Record<string, string> = {
@@ -108,7 +108,11 @@ function DnsDropdown({
         onClick={() => setOpen(!open)}
         className={`${inputClass} flex h-auto items-center gap-3 py-2 text-left`}
       >
-        <span className="text-lg">{current.icon}</span>
+        {current.slug ? (
+          <img src={`https://cdn.simpleicons.org/${current.slug}`} alt="" className="size-4 flex-none" />
+        ) : (
+          <span className="flex size-4 flex-none items-center justify-center rounded-full bg-field text-[9px] font-bold text-fg-muted">{current.name[0]}</span>
+        )}
         <span className="min-w-0">
           <span className="block truncate text-[13px] font-medium">{current.name}</span>
           {ip && <span className="block text-[11px] text-fg-subtle">{ip}</span>}
@@ -116,7 +120,7 @@ function DnsDropdown({
         <CaretDown size={14} className={`ml-auto flex-none text-fg-subtle transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-control border border-border bg-surface p-1 shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-44 overflow-y-auto rounded-control border border-border bg-surface p-1 shadow-xl">
           {DNS_PROVIDERS.map((d, i) => {
             const dip = secondary ? d.secondary : d.primary
             return (
@@ -124,9 +128,13 @@ function DnsDropdown({
                 key={d.name}
                 type="button"
                 onClick={() => { onChange(i); setOpen(false) }}
-                className={`flex w-full items-center gap-3 rounded-control px-2.5 py-2 text-left hover:bg-field ${i === value ? 'bg-field' : ''}`}
+                className={`flex w-full items-center gap-2.5 rounded-control px-2 py-1.5 text-left hover:bg-field ${i === value ? 'bg-field' : ''}`}
               >
-                <span className="text-lg">{d.icon}</span>
+                {d.slug ? (
+                  <img src={`https://cdn.simpleicons.org/${d.slug}`} alt="" className="size-4 flex-none" />
+                ) : (
+                  <span className="flex size-4 flex-none items-center justify-center rounded-full bg-field text-[9px] font-bold text-fg-muted">{d.name[0]}</span>
+                )}
                 <span className="min-w-0">
                   <span className="block truncate text-[13px] font-medium">{d.name}</span>
                   {dip && <span className="block text-[11px] text-fg-subtle">{dip}</span>}
@@ -473,8 +481,8 @@ export function ServerSetupPage() {
               {advOpen ? 'Hide Advanced Options' : 'Advanced Options'}
             </Button>
           </div>
-          {advOpen && (
-          <>
+          <div className="grid transition-[grid-template-rows] duration-300 ease-out" style={{ gridTemplateRows: advOpen ? '1fr' : '0fr' }}>
+            <div className="overflow-hidden">
           <div className="mt-3 rounded-panel border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -498,8 +506,8 @@ export function ServerSetupPage() {
               <DnsDropdown value={dns2} onChange={setDns2} secondary />
             </div>
           </div>
-          </>
-          )}
+            </div>
+          </div>
         </section>
 
         <Button className="mt-8 w-full" disabled={!selectedOs} onClick={() => setConfirmOpen(true)}>
