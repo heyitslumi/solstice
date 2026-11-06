@@ -3503,6 +3503,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     row: { kind: string; host_port: number; container_port: number; protocol: string },
     containerIp: string,
   ) {
+    // NAT-mode proxies require the connect IP to be a *static* instance
+    // address. Pin the DHCP lease as a static IP on the default NIC first.
+    await incus
+      .addInstanceDevice(instanceName, 'eth0', { type: 'nic', 'ipv4.address': containerIp })
+      .catch(() => {})
     for (const dev of forwardDeviceNames(row.kind, row.host_port, row.protocol)) {
       await incus.addInstanceDevice(instanceName, dev.name, {
         type: 'proxy',
