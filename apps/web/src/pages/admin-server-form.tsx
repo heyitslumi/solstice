@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { api, type AdminUser, type ApiLocation, type ApiNode, type OsTemplate } from '@/lib/api'
+import { api, type AdminUser, type ApiLocation, type ApiNode } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export function AdminServerFormPage() {
@@ -14,15 +14,12 @@ export function AdminServerFormPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [nodes, setNodes] = useState<ApiNode[]>([])
   const [locations, setLocations] = useState<ApiLocation[]>([])
-  const [templates, setTemplates] = useState<OsTemplate[]>([])
   const [loading, setLoading] = useState(true)
 
   const [userQuery, setUserQuery] = useState('')
   const [userId, setUserId] = useState('')
   const [nodeId, setNodeId] = useState('')
-  const [name, setName] = useState('')
   const [type, setType] = useState<'lxc' | 'kvm'>('lxc')
-  const [templateId, setTemplateId] = useState('')
   const [cores, setCores] = useState(2)
   const [memoryMb, setMemoryMb] = useState(2048)
   const [diskGb, setDiskGb] = useState(20)
@@ -34,10 +31,9 @@ export function AdminServerFormPage() {
     let active = true
     async function init() {
       setLoading(true)
-      const [usersRes, nodesRes, tplRes] = await Promise.all([
+      const [usersRes, nodesRes] = await Promise.all([
         api.adminListUsers(),
         api.adminListNodes(),
-        api.adminListOsTemplates(),
       ])
       if (!active) return
       if (usersRes.ok) setUsers(usersRes.data || [])
@@ -46,11 +42,6 @@ export function AdminServerFormPage() {
         setNodes(list)
         const local = list.find((n) => n.name === 'local-incus') || list[0]
         if (local) setNodeId(local.id)
-      }
-      if (tplRes.ok) {
-        const enabled = (tplRes.data || []).filter((t) => t.enabled)
-        setTemplates(enabled)
-        if (enabled[0]) setTemplateId(enabled[0].id)
       }
       if (nodesRes.ok && 'locations' in (nodesRes.data as object)) {
         setLocations((nodesRes.data as { locations?: ApiLocation[] }).locations || [])
@@ -76,22 +67,16 @@ export function AdminServerFormPage() {
 
   const selectedUser = useMemo(() => users.find((u) => u.id === userId) || null, [users, userId])
   const selectedNode = useMemo(() => nodes.find((n) => n.id === nodeId) || null, [nodes, nodeId])
-  const selectedTemplate = useMemo(
-    () => templates.find((t) => t.id === templateId) || null,
-    [templates, templateId],
-  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!userId || !name.trim() || !nodeId || !templateId) return
+    if (!userId || !nodeId) return
     setSaving(true)
     setError(null)
 
     const res = await api.adminCreateInstance({
       userId,
-      name: name.trim().toLowerCase(),
       type,
-      templateId,
       nodeId,
       cores: Number(cores),
       memoryMb: Number(memoryMb),
@@ -109,7 +94,7 @@ export function AdminServerFormPage() {
   return (
     <AppShell
       title="New Server"
-      description="Provision an LXC container or KVM virtual machine for a user."
+      description="Create a bare server for a user. They install the OS on first access."
     >
       <div className="flex w-full flex-col gap-6">
         <div className="flex items-center gap-4">
@@ -229,43 +214,9 @@ export function AdminServerFormPage() {
               </div>
 
               <div>
-                <label className="text-[12px] font-semibold text-fg">
-                  Hostname <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value.toLowerCase())}
-                  placeholder="my-vps-01"
-                  pattern="[a-z0-9][a-z0-9-]{1,30}[a-z0-9]"
-                  className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
-                />
-                <span className="mt-1 block text-[11px] text-fg-subtle">
-                  3-32 chars, lowercase letters, numbers, hyphens.
-                </span>
-              </div>
-
-              <div>
-                <label className="text-[12px] font-semibold text-fg">
-                  OS Template <span className="text-danger">*</span>
-                </label>
-                <select
-                  value={templateId}
-                  onChange={(e) => setTemplateId(e.target.value)}
-                  required
-                  className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-                >
-                  <option value="">Select an OS...</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} — {t.imageAlias} ({t.arch})
-                    </option>
-                  ))}
-                </select>
-                <span className="mt-1 block font-mono text-[11px] text-fg-subtle">
-                  {selectedTemplate ? selectedTemplate.imageAlias : 'Manage templates under OS Templates.'}
-                </span>
+                <label className="text-[12px] font-semibold text-fg">Server Name</label>
+                <p className="mt-1.5 text-[13px] text-fg-muted">Auto-generated. The owner picks the OS on first access.</p>
+                <span className="mt-1 block text-[11px] text-fg-subtle">A bare server is created — no OS installed yet.</span>
               </div>
             </div>
 

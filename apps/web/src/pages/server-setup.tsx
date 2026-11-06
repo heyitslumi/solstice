@@ -165,14 +165,20 @@ function DnsDropdown({
 const inputClass =
   'h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none'
 
-export function ServerSetupPage() {
+export function ServerSetupPage({
+  instanceId,
+  instanceName,
+}: {
+  instanceId?: string
+  instanceName?: string
+} = {}) {
   const [osOptions, setOsOptions] = useState<OsOption[]>([])
   const [sshKeys, setSshKeys] = useState<ApiSshKey[]>([])
   const [selectedOs, setSelectedOs] = useState<OsOption | null>(null)
   const [openGroup, setOpenGroup] = useState<string | null>(null)
   const [swap, setSwap] = useState('512 MB')
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
-  const [name, setName] = useState('')
+  const [name, setName] = useState(instanceName || '')
   const [hostname, setHostname] = useState('')
   const [tz, setTz] = useState('Europe/Paris')
   const [dns1, setDns1] = useState(0)
@@ -184,7 +190,7 @@ export function ServerSetupPage() {
   const [step, setStep] = useState(0)
   const [password, setPassword] = useState<string | null>(null)
   const [sshHostPort, setSshHostPort] = useState<number | null>(null)
-  const [instanceId, setInstanceId] = useState<string | null>(null)
+  const [createdId, setCreatedId] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [logLines, setLogLines] = useState<string[]>([])
 
@@ -276,17 +282,27 @@ export function ServerSetupPage() {
 
     const progressTimer = setInterval(() => setStep((v) => Math.min(v + 1, 5)), 4000)
 
-    const res = await api.createInstance({
-      name: name.trim().toLowerCase(),
-      type: 'kvm',
-      templateId: selectedOs.id,
-      hostname: hostname.trim() || undefined,
-      timezone: tz,
-      swapMb,
-      dnsServers,
-      sshKeyIds: [...selectedKeys],
-      directSsh,
-    })
+    const res = instanceId
+      ? await api.installOs(instanceId, {
+          templateId: selectedOs.id,
+          hostname: hostname.trim() || undefined,
+          timezone: tz,
+          swapMb,
+          dnsServers,
+          sshKeyIds: [...selectedKeys],
+          directSsh,
+        })
+      : await api.createInstance({
+          name: name.trim().toLowerCase(),
+          type: 'kvm',
+          templateId: selectedOs.id,
+          hostname: hostname.trim() || undefined,
+          timezone: tz,
+          swapMb,
+          dnsServers,
+          sshKeyIds: [...selectedKeys],
+          directSsh,
+        })
     clearInterval(progressTimer)
 
     if (!res.ok) {
@@ -308,7 +324,7 @@ export function ServerSetupPage() {
     setStep(6)
     if (created.rootPassword) setPassword(created.rootPassword)
     setSshHostPort(created.sshHostPort ?? null)
-    setInstanceId(created.id)
+    setCreatedId(created.id)
     setTimeout(() => setPhase('panel'), 1200)
   }
 
@@ -324,7 +340,7 @@ export function ServerSetupPage() {
             <span className="ml-auto flex gap-2">
               <Button variant="secondary" size="sm">Reboot</Button>
               <Button variant="secondary" size="sm">Shutdown</Button>
-              <Button variant="secondary" size="sm">Console</Button>{instanceId && <a href={`/servers/${instanceId}`}><Button size="sm">Open Server</Button></a>}
+              <Button variant="secondary" size="sm">Console</Button>{createdId && <a href={`/servers/${createdId}`}><Button size="sm">Open Server</Button></a>}
             </span>
           </div>
           <div className="mt-6 rounded-panel border border-border bg-surface p-5">
@@ -401,7 +417,7 @@ export function ServerSetupPage() {
           <h2 className="text-[15px] font-semibold">Name</h2>
           <p className="mt-0.5 text-[12px] leading-relaxed text-fg-subtle">The server name allows you to easily identify the server under your account.</p>
           <div className="mt-3 flex gap-2.5">
-            <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="my-server" />
+            <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="my-server" disabled={!!instanceId} />
             <Button variant="secondary" onClick={() => setName(`server-${Math.floor(Math.random() * 900 + 100)}`)}>Random</Button>
           </div>
         </section>

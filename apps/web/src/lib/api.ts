@@ -762,6 +762,18 @@ export const api = {
     return post<ApiInstance & { sshHostPort?: number | null; rootPassword?: string | null }>('/api/instances', input)
   },
 
+  installOs(id: string, input: {
+    templateId: string
+    hostname?: string
+    timezone?: string
+    swapMb?: number
+    dnsServers?: string[]
+    sshKeyIds?: string[]
+    directSsh?: boolean
+  }) {
+    return post<{ id: string; name: string; os: string; sshHostPort?: number | null; rootPassword?: string | null }>(`/api/instances/${encodeURIComponent(id)}/install-os`, input)
+  },
+
   instanceAction(id: string, action: 'start' | 'stop' | 'restart' | 'freeze' | 'unfreeze', force = false) {
     return post<{ ok: true; action: string }>(`/api/instances/${encodeURIComponent(id)}/action`, {
       action,
@@ -1238,7 +1250,7 @@ export const api = {
 
   adminCreateInstance(input: {
     userId: string
-    name: string
+    name?: string
     type: 'kvm' | 'lxc'
     os?: string
     templateId?: string

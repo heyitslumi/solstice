@@ -40,6 +40,7 @@ interface FirewallRule {
   remote: string
   state: string
 }
+import { ServerSetupPage } from '@/pages/server-setup'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
@@ -572,6 +573,11 @@ export function ServerDetailPage() {
   }
 
   if (!instance) return null
+
+  // Bare server (no OS installed yet) — owner picks the OS on first access.
+  if (!instance.os) {
+    return <ServerSetupPage instanceId={instance.id} instanceName={instance.name} />
+  }
 
   const isRunning = instance.status === 'running'
   const isFrozen = instance.status === 'frozen'

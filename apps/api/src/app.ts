@@ -2885,6 +2885,162 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
   })
 
+  // Install an OS on a bare server (created by an admin without a template).
+  // The owner picks the OS from the setup page on first access.
+  app.post('/api/instances/:id/install-os', async (c) => {
+    const session = await authIdentity(c)
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+    const instance = await resolveInstance(c, session.user_id)
+    if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+    if (instance.os) {
+      return c.json({ message: 'This server already has an OS installed.' }, 409)
+    }
+
+    const body = await c.req
+      .json<{
+        templateId?: string
+        hostname?: string
+        timezone?: string
+        swapMb?: number
+        dnsServers?: string[]
+        sshKeyIds?: string[]
+        directSsh?: boolean
+      }>()
+      .catch(() => null)
+    if (!body?.templateId) return c.json({ message: 'An OS template is required.' }, 400)
+
+    let osConfig
+    try {
+      osConfig = await resolveOsSource({ templateId: body.templateId })
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Invalid OS selection.' }, 400)
+    }
+
+    const hostname = String(body.hostname || instance.hostname || '').trim().toLowerCase()
+    if (hostname && !/^[a-z0-9][a-z0-9.-]{0,62}[a-z0-9]$/.test(hostname)) {
+      return c.json({ message: 'Hostname must be a valid DNS hostname.' }, 400)
+    }
+    const timezone = String(body.timezone || '').trim()
+    if (timezone) {
+      let validTz = false
+      try {
+        validTz = (Intl.supportedValuesOf('timeZone') as string[]).includes(timezone)
+      } catch {
+        validTz = true
+      }
+      if (!validTz) return c.json({ message: 'Invalid timezone.' }, 400)
+    }
+    const swapMb = Math.max(0, Math.min(16384, Number(body.swapMb) || 0))
+    const dnsServers = Array.isArray(body.dnsServers)
+      ? body.dnsServers.map((d) => String(d).trim()).filter((d) => /^\d{1,3}(\.\d{1,3}){3}$/.test(d)).slice(0, 3)
+      : []
+    const directSsh = body.directSsh === true
+
+    let userSshKeys: SshKeyRow[]
+    if (Array.isArray(body.sshKeyIds)) {
+      const ids = body.sshKeyIds.filter((id) => typeof id === 'string')
+      userSshKeys =
+        ids.length > 0
+          ? await query<SshKeyRow>('SELECT public_key FROM ssh_keys WHERE user_id = $1 AND id = ANY($2::uuid[])', [session.user_id, ids])
+          : []
+    } else {
+      userSshKeys = await query<SshKeyRow>('SELECT public_key FROM ssh_keys WHERE user_id = $1', [session.user_id])
+    }
+    const sshPublicKeys = userSshKeys.map((k) => k.public_key)
+
+    try {
+      await incus.createInstance({
+        name: instance.name,
+        type: instance.type === 'kvm' ? 'virtual-machine' : 'container',
+        imageAlias: osConfig.alias,
+        cpu: instance.cores,
+        memory: `${instance.memory_mb}MiB`,
+        disk: `${instance.disk_gb}GiB`,
+        sshKeys: sshPublicKeys,
+        uefi: osConfig.uefi,
+        hostname: hostname || undefined,
+        timezone: timezone || undefined,
+        swapMb,
+        dnsServers,
+      })
+      await incus.setInstanceState(instance.name, 'start').catch((e) => {
+        console.warn('Failed to start newly installed instance:', e)
+      })
+
+      let rootPassword: string | null = null
+      let sshHostPort: number | null = null
+      if (sshPublicKeys.length === 0 || directSsh) {
+        try {
+          let containerIp: string | null = null
+          for (let attempt = 0; attempt < 15 && !containerIp; attempt++) {
+            const state = await incus.getInstanceState(instance.name).catch(() => null)
+            containerIp = containerGlobalIpv4(state)
+            if (!containerIp) await new Promise((r) => setTimeout(r, 3000))
+          }
+          if (containerIp) {
+            const config = await getSystemSettings()
+            const { start, end } = portForwardRange(config)
+            const taken = new Set(
+              (await query<{ host_port: number }>(
+                'SELECT host_port FROM port_forwards WHERE host_port BETWEEN $1 AND $2',
+                [start, end],
+              )).map((r) => r.host_port),
+            )
+            const free: number[] = []
+            for (let port = start; port <= end; port++) if (!taken.has(port)) free.push(port)
+            if (free.length > 0) {
+              sshHostPort = free[Math.floor(Math.random() * free.length)]
+              await attachForward(
+                instance.name,
+                { kind: 'ssh', host_port: sshHostPort, container_port: 22, protocol: 'tcp' },
+                containerIp,
+              )
+              await query(
+                `INSERT INTO port_forwards (id, instance_id, kind, host_port, container_port, protocol)
+                 VALUES ($1, $2, 'ssh', $3, 22, 'tcp')`,
+                [randomUUID(), instance.id, sshHostPort],
+              ).catch(() => {})
+            }
+          }
+        } catch (err: any) {
+          console.warn('Direct SSH setup warning:', err?.message)
+          sshHostPort = null
+        }
+      }
+      if (sshPublicKeys.length === 0) {
+        try {
+          rootPassword = await issueRootPassword(instance.name)
+        } catch (err: any) {
+          console.warn('Root password setup warning:', err?.message)
+        }
+      }
+
+      await query(
+        `UPDATE instances SET os = $1, image_alias = $2, hostname = $3, timezone = $4, swap_mb = $5, dns_servers = $6::jsonb, updated_at = now()
+         WHERE id = $7`,
+        [osConfig.name, osConfig.alias, hostname, timezone, swapMb, JSON.stringify(dnsServers), instance.id],
+      )
+
+      await logActivity(
+        session.user_id,
+        'install_os',
+        `Installed ${osConfig.name} on "${instance.name}"`,
+        clientKey(c),
+      )
+
+      return c.json({
+        id: instance.id,
+        name: instance.name,
+        os: osConfig.name,
+        sshHostPort,
+        rootPassword,
+      })
+    } catch (err: any) {
+      console.error('OS install failed:', err)
+      return c.json({ message: err?.message || 'Failed to install OS.' }, 500)
+    }
+  })
+
   app.post('/api/instances/:id/action', async (c) => {
     const session = await authIdentity(c)
     if (!session) return c.json({ message: 'Not signed in.' }, 401)
@@ -6370,21 +6526,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!body?.userId || typeof body.userId !== 'string') {
       return c.json({ message: 'Target user is required.' }, 400)
     }
-    if (!body.name || typeof body.name !== 'string') {
-      return c.json({ message: 'Instance name is required.' }, 400)
-    }
-
     const owner = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [body.userId])
     if (!owner) return c.json({ message: 'Target user not found.' }, 404)
 
-    const cleanName = body.name.trim().toLowerCase()
-    if (!/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(cleanName)) {
-      return c.json(
-        { message: 'Name must be 3-32 characters, lowercase alphanumeric and hyphens only.' },
-        400,
-      )
-    }
-
+    const cleanName = String(body.name || '').trim().toLowerCase()
     const type = body.type === 'kvm' ? 'kvm' : 'lxc'
     const osKey = body.os || 'debian-12'
     let osConfig: { name: string; alias: string; uefi?: boolean } = OS_MAP[osKey] || { name: 'Debian 12 Bookworm', alias: 'debian/12' }
@@ -6396,6 +6541,39 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const cores = Math.max(1, Math.min(8, Number(body.cores) || 1))
     const memoryMb = Math.max(512, Math.min(16384, Number(body.memoryMb) || 1024))
     const diskGb = Math.max(5, Math.min(200, Number(body.diskGb) || 10))
+    const type2 = body.type === 'kvm' ? 'kvm' : 'lxc'
+
+    // Bare server: no OS/template chosen yet. Create the record only —
+    // the owner installs an OS from the setup page on first access.
+    if (!body.templateId && !body.imageAlias && !body.os) {
+      let bareName = cleanName
+      if (!bareName) {
+        bareName = 'srv-' + randomBytes(3).toString('hex')
+      } else if (!/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(bareName)) {
+        return c.json({ message: 'Name must be 3-32 characters, lowercase alphanumeric and hyphens only.' }, 400)
+      }
+      const clash = await queryOne('SELECT id FROM instances WHERE name = $1', [bareName])
+      if (clash) return c.json({ message: 'An instance with this name already exists.' }, 409)
+      let bareNodeId: string | null = null
+      if (body.nodeId) {
+        const node = await queryOne<{ id: string }>('SELECT id FROM nodes WHERE id = $1', [body.nodeId])
+        if (!node) return c.json({ message: 'Target node not found.' }, 404)
+        bareNodeId = node.id
+      } else {
+        bareNodeId = await defaultNodeId()
+      }
+      const bareId = randomUUID()
+      await query(
+        `INSERT INTO instances (id, user_id, name, type, os, image_alias, cores, memory_mb, disk_gb, node_id)
+         VALUES ($1, $2, $3, $4, '', '', $5, $6, $7, $8)`,
+        [bareId, owner.id, bareName, type2, cores, memoryMb, diskGb, bareNodeId],
+      )
+      await logActivity(admin.user.id, 'admin_create_instance', `Created bare server "${bareName}" for ${owner.email} (no OS installed yet)`, clientKey(c))
+      return c.json(
+        { id: bareId, name: bareName, type: type2, os: '', status: 'awaiting_os', cores, memoryMb, diskGb, ownerId: owner.id },
+        201,
+      )
+    }
 
     const existing = await queryOne('SELECT id FROM instances WHERE name = $1', [cleanName])
     if (existing) {
