@@ -3016,7 +3016,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       }
 
       await query(
-        `UPDATE instances SET os = $1, image_alias = $2, hostname = $3, timezone = $4, swap_mb = $5, dns_servers = $6::jsonb, updated_at = now()
+        `UPDATE instances SET os = $1, image_alias = $2, hostname = $3, timezone = $4, swap_mb = $5, dns_servers = $6::jsonb
          WHERE id = $7`,
         [osConfig.name, osConfig.alias, hostname, timezone, swapMb, JSON.stringify(dnsServers), instance.id],
       )
