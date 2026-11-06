@@ -331,7 +331,7 @@ export function ServerSetupPage() {
                         key={o.id}
                         type="button"
                         onClick={() => setSelectedOs(o)}
-                        className={`relative w-full rounded-control border bg-field p-3 text-left ${selectedOs?.id === o.id ? 'border-emerald-500' : 'border-border'}`}
+                        className={`relative w-full rounded-control border bg-field text-left transition-all ${selectedOs?.id === o.id ? 'border-emerald-500 p-5' : 'border-border p-4 hover:border-fg-subtle/40'}`}
                       >
                         {selectedOs?.id === o.id && <span className="absolute right-3 top-3 font-bold text-emerald-500">✓</span>}
                         <div className="flex items-center gap-2.5">
@@ -340,7 +340,7 @@ export function ServerSetupPage() {
                           )}
                           <p className="text-sm font-medium">{`${o.name} ${o.version} ${o.variant}`.trim()}</p>
                         </div>
-                        <p className="mt-1 text-[12px] text-fg-subtle">{variantDesc(o)}</p>
+                        <p className={`text-fg-subtle ${selectedOs?.id === o.id ? 'mt-2 text-[13px] leading-relaxed' : 'mt-1 text-[12px]'}`}>{variantDesc(o)}</p>
                       </button>
                     ))}
                     </div>
