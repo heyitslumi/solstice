@@ -2,6 +2,7 @@
 // setup flow. Nothing here provisions anything: Install runs a
 // simulated progress sequence. Do not wire to the API until the
 // layout is approved. Route: /servers/setup (test).
+import { CaretDown } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { AppShell } from '@/components/app-shell'
@@ -31,6 +32,33 @@ const DNS_PROVIDERS: Array<{ icon: string; name: string; primary: string; second
   { icon: '🇷🇺', name: 'Yandex', primary: '77.88.8.8', secondary: '77.88.8.1' },
   { icon: '🏠', name: 'Use node default (DHCP)', primary: '', secondary: '' },
 ]
+
+const DISTRO_SLUG: Record<string, string> = {
+  debian: 'debian',
+  ubuntu: 'ubuntu',
+  almalinux: 'almalinux',
+  almaLinux: 'almalinux',
+  centos: 'centos',
+  fedora: 'fedora',
+  rocky: 'rockylinux',
+  opensuse: 'opensuse',
+  oracle: 'oracle',
+}
+
+function slugFor(group: string): string | null {
+  const normalized = group.toLowerCase().replace(/[^a-z]/g, '')
+  for (const [key, slug] of Object.entries(DISTRO_SLUG)) {
+    if (normalized.includes(key)) return slug
+  }
+  return null
+}
+
+function variantDesc(o: OsOption): string {
+  const v = o.variant.toLowerCase()
+  if (v.includes('minimal')) return 'Minimal installation with limited packages. New packages are easily installed using the distro package manager.'
+  if (v.includes('cloud')) return 'Cloud image with cloud-init support for automated provisioning.'
+  return 'Standard installation.'
+}
 
 function tzOffsetLabel(tz: string): string {
   try {
@@ -157,7 +185,7 @@ export function ServerSetupPage() {
   if (phase === 'panel') {
     return (
       <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
-        <div className="mx-auto w-full max-w-3xl py-8">
+        <div className="mx-auto w-full max-w-3xl">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold">{name || 'my-server'}</h1>
             <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-400">
@@ -200,7 +228,7 @@ export function ServerSetupPage() {
     ]
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
-        <div className="mx-auto w-full max-w-3xl py-8">
+        <div className="mx-auto w-full max-w-3xl">
           <h1 className="text-2xl font-bold">Installing {osLabel}...</h1>
           <div className="mt-6 rounded-panel border border-border bg-surface p-5">
             <div className="h-2 overflow-hidden rounded-full bg-field">
@@ -242,11 +270,14 @@ export function ServerSetupPage() {
           <div>
             <h2 className="text-[15px] font-semibold">Timezone</h2>
             <p className="text-[12px] text-fg-subtle">The timezone that should be set on the server.</p>
-            <select className={`${inputClass} mt-2`} value={tz} onChange={(e) => setTz(e.target.value)}>
-              {timezones.map((z) => (
-                <option key={z} value={z}>({tzOffsetLabel(z)}) {z}</option>
-              ))}
-            </select>
+            <div className="relative mt-2">
+              <select className={`${inputClass} appearance-none pr-8`} value={tz} onChange={(e) => setTz(e.target.value)}>
+                {timezones.map((z) => (
+                  <option key={z} value={z}>({tzOffsetLabel(z)}) {z}</option>
+                ))}
+              </select>
+              <CaretDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-fg-subtle" />
+            </div>
           </div>
         </section>
 
@@ -258,11 +289,20 @@ export function ServerSetupPage() {
               <div key={group} className="overflow-hidden rounded-panel border border-border bg-surface">
                 <button
                   type="button"
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium ${openGroup === group ? 'bg-accent text-white' : ''}`}
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium ${openGroup === group ? 'bg-surface-2' : ''}`}
                   onClick={() => setOpenGroup(openGroup === group ? null : group)}
                 >
+                  {slugFor(group) && (
+                    <img
+                      src={`https://cdn.simpleicons.org/${slugFor(group)}`}
+                      alt=""
+                      className="size-5 flex-none"
+                      loading="lazy"
+                    />
+                  )}
                   {group}
-                  <span className="ml-auto">{openGroup === group ? '⌃' : '⌄'}</span>
+                  <span className="rounded-full bg-field px-2 py-0.5 text-[11px] text-fg-subtle">{options.length}</span>
+                  <CaretDown size={15} className={`ml-auto flex-none text-fg-subtle transition-transform ${openGroup === group ? 'rotate-180' : ''}`} />
                 </button>
                 {openGroup === group && (
                   <div className="space-y-2 p-3">
@@ -274,8 +314,13 @@ export function ServerSetupPage() {
                         className={`relative w-full rounded-control border bg-field p-3 text-left ${selectedOs?.id === o.id ? 'border-emerald-500' : 'border-border'}`}
                       >
                         {selectedOs?.id === o.id && <span className="absolute right-3 top-3 font-bold text-emerald-500">✓</span>}
-                        <p className="text-sm font-medium">{`${o.name} ${o.version} ${o.variant}`.trim()}</p>
-                        <p className="text-[12px] text-fg-subtle">{o.id}</p>
+                        <div className="flex items-center gap-2.5">
+                          {slugFor(group) && (
+                            <img src={`https://cdn.simpleicons.org/${slugFor(group)}`} alt="" className="size-4 flex-none opacity-80" loading="lazy" />
+                          )}
+                          <p className="text-sm font-medium">{`${o.name} ${o.version} ${o.variant}`.trim()}</p>
+                        </div>
+                        <p className="mt-1 text-[12px] text-fg-subtle">{variantDesc(o)}</p>
                       </button>
                     ))}
                   </div>
@@ -366,15 +411,21 @@ export function ServerSetupPage() {
           <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <p className="text-[12px] text-fg-subtle">Primary</p>
-              <select className={inputClass} value={dns1} onChange={(e) => setDns1(Number(e.target.value))}>
-                {DNS_PROVIDERS.map((d, i) => <option key={d.name} value={i}>{d.icon} {d.name}{d.primary ? ` — ${d.primary}` : ''}</option>)}
-              </select>
+              <div className="relative">
+                <select className={`${inputClass} appearance-none pr-8`} value={dns1} onChange={(e) => setDns1(Number(e.target.value))}>
+                  {DNS_PROVIDERS.map((d, i) => <option key={d.name} value={i}>{d.icon} {d.name}{d.primary ? ` — ${d.primary}` : ''}</option>)}
+                </select>
+                <CaretDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-fg-subtle" />
+              </div>
             </div>
             <div>
               <p className="text-[12px] text-fg-subtle">Secondary</p>
-              <select className={inputClass} value={dns2} onChange={(e) => setDns2(Number(e.target.value))}>
-                {DNS_PROVIDERS.map((d, i) => <option key={d.name} value={i}>{d.icon} {d.name}{d.secondary ? ` — ${d.secondary}` : ''}</option>)}
-              </select>
+              <div className="relative">
+                <select className={`${inputClass} appearance-none pr-8`} value={dns2} onChange={(e) => setDns2(Number(e.target.value))}>
+                  {DNS_PROVIDERS.map((d, i) => <option key={d.name} value={i}>{d.icon} {d.name}{d.secondary ? ` — ${d.secondary}` : ''}</option>)}
+                </select>
+                <CaretDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-fg-subtle" />
+              </div>
             </div>
           </div>
         </section>
