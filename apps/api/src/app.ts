@@ -3506,6 +3506,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     for (const dev of forwardDeviceNames(row.kind, row.host_port, row.protocol)) {
       await incus.addInstanceDevice(instanceName, dev.name, {
         type: 'proxy',
+        // VMs only support NAT-mode proxies; default mode is rejected by Incus.
+        mode: 'nat',
         'listen': `${dev.proto}:0.0.0.0:${row.host_port}`,
         'connect': `${dev.proto}:${containerIp}:${row.container_port}`,
       })
