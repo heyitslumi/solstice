@@ -250,9 +250,9 @@ export function ServerSetupPage() {
 
   return (
     <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
-      <div className="mx-auto w-full max-w-3xl py-8">
+      <div className="mx-auto -mt-8 w-full max-w-3xl lg:-mt-10">
 
-        <section className="mt-8">
+        <section>
           <h2 className="text-[15px] font-semibold">Name</h2>
           <p className="text-[12px] text-fg-subtle">The server name allows you to easily identify the server under your account.</p>
           <div className="mt-2 flex gap-2">
