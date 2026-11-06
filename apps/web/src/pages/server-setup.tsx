@@ -20,7 +20,8 @@ interface OsOption {
 
 const SWAPS = ['None', '256 MB', '512 MB', '768 MB', '1 GB', '1.5 GB']
 const DNS_PROVIDERS: Array<{ icon: string; name: string; primary: string; secondary: string }> = [
-  { icon: '🌐', name: 'Google', primary: '8.8.8.8', secondary: '8.8.4.4' },
+  { icon: '🌐', name: 'System Default', primary: '8.8.8.8', secondary: '8.8.4.4' },
+  { icon: '🔍', name: 'Google', primary: '8.8.8.8', secondary: '8.8.4.4' },
   { icon: '☁️', name: 'Cloudflare', primary: '1.1.1.1', secondary: '1.0.0.1' },
   { icon: '🛡️', name: 'Quad9', primary: '9.9.9.9', secondary: '149.112.112.112' },
   { icon: '🟠', name: 'OpenDNS', primary: '208.67.222.222', secondary: '208.67.220.220' },
@@ -88,6 +89,58 @@ function tzOffsetLabel(tz: string): string {
   }
 }
 
+function DnsDropdown({
+  value,
+  onChange,
+  secondary,
+}: {
+  value: number
+  onChange: (i: number) => void
+  secondary?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const current = DNS_PROVIDERS[value]
+  const ip = secondary ? current.secondary : current.primary
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`${inputClass} flex h-auto items-center gap-3 py-2 text-left`}
+      >
+        <span className="text-lg">{current.icon}</span>
+        <span className="min-w-0">
+          <span className="block truncate text-[13px] font-medium">{current.name}</span>
+          {ip && <span className="block text-[11px] text-fg-subtle">{ip}</span>}
+        </span>
+        <CaretDown size={14} className={`ml-auto flex-none text-fg-subtle transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-control border border-border bg-surface p-1 shadow-xl">
+          {DNS_PROVIDERS.map((d, i) => {
+            const dip = secondary ? d.secondary : d.primary
+            return (
+              <button
+                key={d.name}
+                type="button"
+                onClick={() => { onChange(i); setOpen(false) }}
+                className={`flex w-full items-center gap-3 rounded-control px-2.5 py-2 text-left hover:bg-field ${i === value ? 'bg-field' : ''}`}
+              >
+                <span className="text-lg">{d.icon}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-medium">{d.name}</span>
+                  {dip && <span className="block text-[11px] text-fg-subtle">{dip}</span>}
+                </span>
+                {i === value && <span className="ml-auto font-bold text-emerald-500">✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const inputClass =
   'h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none'
 
@@ -104,6 +157,7 @@ export function ServerSetupPage() {
   const [dns1, setDns1] = useState(0)
   const [dns2, setDns2] = useState(0)
   const [directSsh, setDirectSsh] = useState(true)
+  const [advOpen, setAdvOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [phase, setPhase] = useState<'form' | 'progress' | 'panel'>('form')
   const [step, setStep] = useState(0)
@@ -415,7 +469,12 @@ export function ServerSetupPage() {
         <section className="mt-8">
           <div className="flex items-center justify-between">
             <h2 className="text-[15px] font-semibold">Advanced</h2>
+            <Button variant="secondary" size="sm" onClick={() => setAdvOpen(!advOpen)}>
+              {advOpen ? 'Hide Advanced Options' : 'Advanced Options'}
+            </Button>
           </div>
+          {advOpen && (
+          <>
           <div className="mt-3 rounded-panel border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -432,23 +491,15 @@ export function ServerSetupPage() {
           <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <p className="text-[12px] text-fg-subtle">Primary</p>
-              <div className="relative">
-                <select className={`${inputClass} appearance-none pr-8`} value={dns1} onChange={(e) => setDns1(Number(e.target.value))}>
-                  {DNS_PROVIDERS.map((d, i) => <option key={d.name} value={i}>{d.icon} {d.name}{d.primary ? ` — ${d.primary}` : ''}</option>)}
-                </select>
-                <CaretDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-fg-subtle" />
-              </div>
+              <DnsDropdown value={dns1} onChange={setDns1} />
             </div>
             <div>
               <p className="text-[12px] text-fg-subtle">Secondary</p>
-              <div className="relative">
-                <select className={`${inputClass} appearance-none pr-8`} value={dns2} onChange={(e) => setDns2(Number(e.target.value))}>
-                  {DNS_PROVIDERS.map((d, i) => <option key={d.name} value={i}>{d.icon} {d.name}{d.secondary ? ` — ${d.secondary}` : ''}</option>)}
-                </select>
-                <CaretDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-fg-subtle" />
-              </div>
+              <DnsDropdown value={dns2} onChange={setDns2} secondary />
             </div>
           </div>
+          </>
+          )}
         </section>
 
         <Button className="mt-8 w-full" disabled={!selectedOs} onClick={() => setConfirmOpen(true)}>
