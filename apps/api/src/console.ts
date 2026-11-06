@@ -247,6 +247,7 @@ async function openConsoleSession(
   instanceName: string,
   cols: number,
   rows: number,
+  takeover = false,
 ): Promise<ExecSession> {
   const path = `/1.0/instances/${encodeURIComponent(instanceName)}/console`
   const body = { width: cols, height: rows }
@@ -258,6 +259,10 @@ async function openConsoleSession(
     // `force` takeover breaks forkconsole for containers, so clear the stale
     // operation(s) and retry once instead.
     if (/already connected/i.test(err?.message || '')) {
+      if (!takeover) {
+        // Someone else is holding the console — ask the user before taking over.
+        throw new Error('CONSOLE_TAKEN')
+      }
       await releaseStaleConsoles(instanceName).catch(() => {})
       res = await incusRequest<any>('POST', path, body, 30000)
     } else {
@@ -372,6 +377,7 @@ async function serveConsole(
   const rows = Math.min(100, Math.max(5, Math.floor(Number(url.searchParams.get('rows')) || 24)))
 
   const mode = url.searchParams.get('mode') === 'console' ? 'console' : 'shell'
+  const takeover = url.searchParams.get('takeover') === '1'
 
   let exec: ExecSession | null = null
   try {
@@ -379,7 +385,7 @@ async function serveConsole(
       // Retry across the forkconsole teardown window of a previous session.
       for (let attempt = 0; ; attempt++) {
         try {
-          exec = await openConsoleSession(instance.name, cols, rows)
+          exec = await openConsoleSession(instance.name, cols, rows, takeover)
           break
         } catch (err: any) {
           if (err?.message === 'CONSOLE_BUSY' && attempt < 3) {
@@ -401,6 +407,10 @@ async function serveConsole(
       exec = await openExecSession(instance.name, cols, rows, shell)
     }
   } catch (err: any) {
+    if (err?.message === 'CONSOLE_TAKEN') {
+      ws.close(4409, 'Someone is already using this console.')
+      return
+    }
     const msg =
       mode === 'console'
         ? err?.message || 'Could not attach to the console.'

@@ -8,6 +8,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -18,6 +19,7 @@ const CLOSE_REASONS: Record<number, string> = {
   4401: 'Not signed in — sign in again and retry.',
   4404: 'Server not found.',
   4408: 'Closed after 20 minutes idle.',
+  4409: 'Someone is already using this console.',
   4410: 'Start the server first.',
   4500: 'Could not open a shell inside the server.',
 }
@@ -27,6 +29,8 @@ export function ServerConsolePage() {
   const [serverName, setServerName] = useState('')
   const [state, setState] = useState<ConnState>('connecting')
   const [reason, setReason] = useState<string | null>(null)
+  const [takenCode, setTakenCode] = useState<number | null>(null)
+  const [takeover, setTakeover] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [mode, setMode] = useState<'shell' | 'console'>('shell')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -97,7 +101,7 @@ export function ServerConsolePage() {
       }
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const ws = new WebSocket(
-        `${proto}://${window.location.host}/api/instances/${encodeURIComponent(id)}/console?mode=${mode}&cols=${term.cols}&rows=${term.rows}`,
+        `${proto}://${window.location.host}/api/instances/${encodeURIComponent(id)}/console?mode=${mode}&cols=${term.cols}&rows=${term.rows}${takeover ? '&takeover=1' : ''}`,
       )
       wsRef.current = ws
       ws.binaryType = 'arraybuffer'
@@ -112,6 +116,8 @@ export function ServerConsolePage() {
       }
       ws.onclose = (evt) => {
         setState('closed')
+        setTakenCode(evt.code === 4409 ? evt.code : null)
+        if (evt.code === 4409) setTakeover(false)
         if (evt.code !== 1000 || evt.reason) {
           setReason(
             evt.reason || CLOSE_REASONS[evt.code] || `Connection closed (${evt.code}).`,
@@ -252,6 +258,29 @@ export function ServerConsolePage() {
         </div>
 
         {reason && state === 'closed' && <Alert tone="warning">{reason}</Alert>}
+
+        <Dialog open={takenCode === 4409 && state === 'closed'} onOpenChange={() => {}}>
+          <DialogContent className="max-w-md p-6 text-center" style={{ width: 'min(26rem, calc(100vw - 2rem))' }}>
+            <DialogTitle className="text-center text-[15px] font-semibold">Someone is already using this console</DialogTitle>
+            <DialogDescription className="mt-2 text-center text-[13px]">
+              Another user is connected right now. Taking over will disconnect them.
+            </DialogDescription>
+            <div className="mt-5 flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={() => setTakenCode(null)}>Cancel</Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                onClick={() => {
+                  setTakenCode(null)
+                  setTakeover(true)
+                  setAttempt((n) => n + 1)
+                }}
+              >
+                Take Over
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <div
           ref={wrapRef}
