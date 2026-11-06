@@ -202,7 +202,7 @@ export function AdminTemplateFormPage() {
           <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
             {/* Left card: identity & source */}
             <div className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs">
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <Field label="Name" help="Name of the template shown to the end user." required>
                   <input
                     type="text"
@@ -219,15 +219,6 @@ export function AdminTemplateFormPage() {
                     value={formVariant}
                     onChange={(e) => setFormVariant(e.target.value)}
                     placeholder="cloud"
-                    className={inputClass}
-                  />
-                </Field>
-                <Field label="Version" help="Version of the template shown to the end user.">
-                  <input
-                    type="text"
-                    value={formVersion}
-                    onChange={(e) => setFormVersion(e.target.value)}
-                    placeholder="24.04 LTS (Noble Numbat)"
                     className={inputClass}
                   />
                 </Field>
@@ -319,6 +310,20 @@ export function AdminTemplateFormPage() {
                   </p>
                 </div>
                 <Toggle checked={formCloudInit} onChange={setFormCloudInit} label="Cloud-Init" />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 border-t border-border px-5 py-4">
+                <div>
+                  <p className="text-[13px] font-semibold text-fg">Version</p>
+                  <p className="text-[11px] text-fg-subtle">Version of the template shown to the end user.</p>
+                </div>
+                <input
+                  type="text"
+                  value={formVersion}
+                  onChange={(e) => setFormVersion(e.target.value)}
+                  placeholder="24.04 LTS (Noble Numbat)"
+                  className="h-9 w-44 rounded-control border border-field-border bg-field px-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
+                />
               </div>
             </aside>
           </form>
