@@ -342,18 +342,22 @@ export function ServerSetupPage() {
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
         <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
-          <div className="flex min-h-[65vh] flex-col overflow-hidden rounded-panel border border-border bg-black">
-            <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-2.5">
-              <span className="flex size-5 items-center justify-center rounded-full bg-[#ff5f57] text-[12px] font-bold leading-none text-black/70">×</span>
-              <span className="flex size-5 items-center justify-center rounded-full bg-[#febc2e] text-[12px] font-bold leading-none text-black/70">−</span>
-              <span className="flex size-5 items-center justify-center rounded-full bg-[#28c840] text-[12px] font-bold leading-none text-black/70">+</span>
-              <span className="ml-2 text-[12px] text-fg-subtle">provisioning — {name || 'server'}</span>
-              <span className="ml-auto text-[12px] text-fg-subtle">{Math.round((step / steps.length) * 100)}%</span>
+          <div className="rounded-panel border border-border bg-surface p-10 text-center">
+            <div className="mx-auto size-20 animate-spin rounded-full border-4 border-border border-t-accent" />
+            <h2 className="mt-7 text-xl font-semibold">Installing {osLabel}...</h2>
+            <p className="mt-2 text-sm text-fg-subtle">{steps[Math.min(step, steps.length - 1)]}</p>
+            <div className="mx-auto mt-6 max-w-md">
+              <div className="h-2.5 overflow-hidden rounded-full bg-field">
+                <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${(step / steps.length) * 100}%` }} />
+              </div>
+              <p className="mt-2 text-right text-[12px] text-fg-subtle">{Math.round((step / steps.length) * 100)}%</p>
             </div>
-            <div className="h-2 bg-field">
-              <div className="h-full bg-accent transition-all duration-500" style={{ width: `${(step / steps.length) * 100}%` }} />
+          </div>
+          <div className="mt-4 overflow-hidden rounded-panel border border-border bg-black">
+            <div className="border-b border-border bg-surface px-4 py-2.5">
+              <span className="text-[12px] text-fg-subtle">provisioning log</span>
             </div>
-            <div className="min-h-[55vh] overflow-y-auto p-5 font-mono text-[13px] leading-loose">
+            <div className="h-64 overflow-y-auto p-5 font-mono text-[13px] leading-loose">
               {logLines.map((line, i) => (
                 <p key={i} className={line.includes('✓') || line.includes('OK') ? 'text-emerald-400' : line.includes('→') ? 'text-accent' : 'text-fg-muted'}>
                   <span className="mr-4 text-fg-subtle">{lineTime(i)}</span>{line}
