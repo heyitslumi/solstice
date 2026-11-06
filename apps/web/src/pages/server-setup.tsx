@@ -357,13 +357,13 @@ export function ServerSetupPage() {
             <section className="mt-8">
               <h2 className="text-[15px] font-semibold">Swap Space</h2>
               <p className="text-[12px] text-fg-subtle">Swap acts as backup memory to prevent crashes when physical memory is full. The chosen amount will be reserved on the storage disk.</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2.5">
                 {SWAPS.map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => setSwap(s)}
-                    className={`relative rounded-control border px-4 py-2 text-[13px] ${swap === s ? 'border-emerald-500' : 'border-border bg-field'}`}
+                    className={`relative flex-1 rounded-control border px-6 py-3 text-[14px] font-medium transition-all ${swap === s ? 'border-emerald-500 bg-emerald-500/10' : 'border-border bg-field hover:border-fg-subtle/40'}`}
                   >
                     {swap === s && <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-emerald-950">✓</span>}
                     {s}
