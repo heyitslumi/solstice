@@ -4,6 +4,7 @@
 // for bare servers awaiting their first OS install.
 import { CaretDown } from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
@@ -166,12 +167,18 @@ const inputClass =
   'h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none'
 
 export function ServerSetupPage({
-  instanceId,
+  instanceId: instanceIdProp,
   instanceName,
+  hostMode: hostModeProp,
 }: {
   instanceId?: string
   instanceName?: string
+  hostMode?: 'create' | 'install' | 'rebuild'
 } = {}) {
+  const navigate = useNavigate()
+  const routeParams = useParams<{ id?: string }>()
+  const isRebuild = hostModeProp === 'rebuild'
+  const instanceId = instanceIdProp || (isRebuild ? routeParams.id : undefined)
   const [osOptions, setOsOptions] = useState<OsOption[]>([])
   const [sshKeys, setSshKeys] = useState<ApiSshKey[]>([])
   const [selectedOs, setSelectedOs] = useState<OsOption | null>(null)
@@ -179,6 +186,16 @@ export function ServerSetupPage({
   const [swap, setSwap] = useState('512 MB')
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [name, setName] = useState(instanceName || '')
+  useEffect(() => {
+    if (!isRebuild || !instanceId) return
+    let active = true
+    api.getInstance(instanceId).then((res) => {
+      if (active && res.ok) setName(res.data.instance.name)
+    })
+    return () => {
+      active = false
+    }
+  }, [isRebuild, instanceId])
   const [hostname, setHostname] = useState('')
   const [tz, setTz] = useState('Europe/Paris')
   const [dns1, setDns1] = useState(0)
@@ -302,7 +319,17 @@ export function ServerSetupPage({
       }
     }, 5000)
 
-    const res = instanceId
+    const res = isRebuild && instanceId
+      ? await api.rebuildInstance(instanceId, {
+          templateId: selectedOs.id,
+          hostname: hostname.trim() || undefined,
+          timezone: tz,
+          swapMb,
+          dnsServers,
+          sshKeyIds: [...selectedKeys],
+          directSsh,
+        })
+      : instanceId
       ? await api.installOs(instanceId, {
           templateId: selectedOs.id,
           hostname: hostname.trim() || undefined,
@@ -432,6 +459,22 @@ export function ServerSetupPage({
   return (
     <AppShell title="Server Setup" description="Choose an operating system and configure your server.">
       <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
+        {isRebuild && (
+          <div className="mb-6 flex items-center gap-4 rounded-panel border border-warning/60 bg-warning/10 p-4">
+            <span className="flex size-8 flex-none items-center justify-center rounded-lg bg-warning font-bold text-warning">i</span>
+            <p className="flex-1 text-[13px] leading-relaxed text-fg-muted">
+              Rebuilding <b className="text-fg">will</b> delete all existing <b className="text-fg">data</b> and install a fresh
+              operating system. It's still not too late to cancel this rebuild.
+            </p>
+            <Button
+              size="sm"
+              className="flex-none bg-emerald-600 hover:bg-emerald-500"
+              onClick={() => navigate(`/servers/${instanceId}`)}
+            >
+              Cancel Rebuild
+            </Button>
+          </div>
+        )}
 
         <section className="mt-4">
           <h2 className="text-[15px] font-semibold">Name</h2>

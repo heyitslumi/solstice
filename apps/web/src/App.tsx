@@ -97,6 +97,14 @@ function App() {
           }
         />
         <Route
+          path="/servers/:id/rebuild"
+          element={
+            <RequireAuth>
+              <ServerSetupPage hostMode="rebuild" />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/servers/:id"
           element={
             <RequireAuth>

@@ -762,6 +762,18 @@ export const api = {
     return post<ApiInstance & { sshHostPort?: number | null; rootPassword?: string | null }>('/api/instances', input)
   },
 
+  rebuildInstance(id: string, input: {
+    templateId: string
+    hostname?: string
+    timezone?: string
+    swapMb?: number
+    dnsServers?: string[]
+    sshKeyIds?: string[]
+    directSsh?: boolean
+  }) {
+    return post<{ id: string; name: string; os: string; sshHostPort?: number | null; rootPassword?: string | null }>(`/api/instances/${encodeURIComponent(id)}/rebuild`, input)
+  },
+
   installOs(id: string, input: {
     templateId: string
     hostname?: string

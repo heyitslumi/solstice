@@ -3041,6 +3041,169 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
   })
 
+  app.post('/api/instances/:id/rebuild', async (c) => {
+    const session = await authIdentity(c)
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+    const instance = await resolveInstance(c, session.user_id)
+    if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+    if (!instance.os) {
+      return c.json({ message: 'This server has no OS to rebuild — use the setup page.' }, 409)
+    }
+    // Rebuild wipes the existing system: stop + delete the Incus instance
+    // and drop its port forwards before provisioning the fresh OS.
+    try {
+      await incus.setInstanceState(instance.name, 'stop', true).catch(() => {})
+      await incus.deleteInstance(instance.name)
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Failed to delete the existing instance.' }, 500)
+    }
+    await query('DELETE FROM port_forwards WHERE instance_id = $1', [instance.id])
+
+    const body = await c.req
+      .json<{
+        templateId?: string
+        hostname?: string
+        timezone?: string
+        swapMb?: number
+        dnsServers?: string[]
+        sshKeyIds?: string[]
+        directSsh?: boolean
+      }>()
+      .catch(() => null)
+    if (!body?.templateId) return c.json({ message: 'An OS template is required.' }, 400)
+
+    let osConfig
+    try {
+      osConfig = await resolveOsSource({ templateId: body.templateId })
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Invalid OS selection.' }, 400)
+    }
+
+    const hostname = String(body.hostname || instance.hostname || '').trim().toLowerCase()
+    if (hostname && !/^[a-z0-9][a-z0-9.-]{0,62}[a-z0-9]$/.test(hostname)) {
+      return c.json({ message: 'Hostname must be a valid DNS hostname.' }, 400)
+    }
+    const timezone = String(body.timezone || '').trim()
+    if (timezone) {
+      let validTz = false
+      try {
+        validTz = (Intl.supportedValuesOf('timeZone') as string[]).includes(timezone)
+      } catch {
+        validTz = true
+      }
+      if (!validTz) return c.json({ message: 'Invalid timezone.' }, 400)
+    }
+    const swapMb = Math.max(0, Math.min(16384, Number(body.swapMb) || 0))
+    const dnsServers = Array.isArray(body.dnsServers)
+      ? body.dnsServers.map((d) => String(d).trim()).filter((d) => /^\d{1,3}(\.\d{1,3}){3}$/.test(d)).slice(0, 3)
+      : []
+    const directSsh = body.directSsh === true
+
+    let userSshKeys: SshKeyRow[]
+    if (Array.isArray(body.sshKeyIds)) {
+      const ids = body.sshKeyIds.filter((id) => typeof id === 'string')
+      userSshKeys =
+        ids.length > 0
+          ? await query<SshKeyRow>('SELECT public_key FROM ssh_keys WHERE user_id = $1 AND id = ANY($2::uuid[])', [session.user_id, ids])
+          : []
+    } else {
+      userSshKeys = await query<SshKeyRow>('SELECT public_key FROM ssh_keys WHERE user_id = $1', [session.user_id])
+    }
+    const sshPublicKeys = userSshKeys.map((k) => k.public_key)
+
+    try {
+      await incus.createInstance({
+        name: instance.name,
+        type: instance.type === 'kvm' ? 'virtual-machine' : 'container',
+        imageAlias: osConfig.alias,
+        cpu: instance.cores,
+        memory: `${instance.memory_mb}MiB`,
+        disk: `${instance.disk_gb}GiB`,
+        sshKeys: sshPublicKeys,
+        uefi: osConfig.uefi,
+        hostname: hostname || undefined,
+        timezone: timezone || undefined,
+        swapMb,
+        dnsServers,
+      })
+      await incus.setInstanceState(instance.name, 'start').catch((e) => {
+        console.warn('Failed to start newly installed instance:', e)
+      })
+
+      let rootPassword: string | null = null
+      let sshHostPort: number | null = null
+      if (sshPublicKeys.length === 0 || directSsh) {
+        try {
+          let containerIp: string | null = null
+          for (let attempt = 0; attempt < 15 && !containerIp; attempt++) {
+            const state = await incus.getInstanceState(instance.name).catch(() => null)
+            containerIp = containerGlobalIpv4(state)
+            if (!containerIp) await new Promise((r) => setTimeout(r, 3000))
+          }
+          if (containerIp) {
+            const config = await getSystemSettings()
+            const { start, end } = portForwardRange(config)
+            const taken = new Set(
+              (await query<{ host_port: number }>(
+                'SELECT host_port FROM port_forwards WHERE host_port BETWEEN $1 AND $2',
+                [start, end],
+              )).map((r) => r.host_port),
+            )
+            const free: number[] = []
+            for (let port = start; port <= end; port++) if (!taken.has(port)) free.push(port)
+            if (free.length > 0) {
+              sshHostPort = free[Math.floor(Math.random() * free.length)]
+              await attachForward(
+                instance.name,
+                { kind: 'ssh', host_port: sshHostPort, container_port: 22, protocol: 'tcp' },
+                containerIp,
+              )
+              await query(
+                `INSERT INTO port_forwards (id, instance_id, kind, host_port, container_port, protocol)
+                 VALUES ($1, $2, 'ssh', $3, 22, 'tcp')`,
+                [randomUUID(), instance.id, sshHostPort],
+              ).catch(() => {})
+            }
+          }
+        } catch (err: any) {
+          console.warn('Direct SSH setup warning:', err?.message)
+          sshHostPort = null
+        }
+      }
+      if (sshPublicKeys.length === 0) {
+        try {
+          rootPassword = await issueRootPassword(instance.name)
+        } catch (err: any) {
+          console.warn('Root password setup warning:', err?.message)
+        }
+      }
+
+      await query(
+        `UPDATE instances SET os = $1, image_alias = $2, hostname = $3, timezone = $4, swap_mb = $5, dns_servers = $6::jsonb
+         WHERE id = $7`,
+        [osConfig.name, osConfig.alias, hostname, timezone, swapMb, JSON.stringify(dnsServers), instance.id],
+      )
+
+      await logActivity(
+        session.user_id,
+        'rebuild_instance',
+        `Rebuilt "${instance.name}" with ${osConfig.name}`,
+        clientKey(c),
+      )
+
+      return c.json({
+        id: instance.id,
+        name: instance.name,
+        os: osConfig.name,
+        sshHostPort,
+        rootPassword,
+      })
+    } catch (err: any) {
+      console.error('Rebuild failed:', err)
+      return c.json({ message: err?.message || 'Failed to rebuild. The previous system may be gone.' }, 500)
+    }
+  })
+
   app.post('/api/instances/:id/action', async (c) => {
     const session = await authIdentity(c)
     if (!session) return c.json({ message: 'Not signed in.' }, 401)

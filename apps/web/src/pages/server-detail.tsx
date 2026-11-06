@@ -129,7 +129,6 @@ export function ServerDetailPage() {
 
   const [instance, setInstance] = useState<ApiInstanceDetail | null>(null)
   const [snapshots, setSnapshots] = useState<InstanceSnapshot[]>([])
-  const [templates, setTemplates] = useState<Array<{ id: string; name: string; imageAlias: string; arch: string }>>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [confirmAction, setConfirmAction] = useState<ConfirmablePowerAction | null>(null)
@@ -174,9 +173,6 @@ export function ServerDetailPage() {
   // Quick action dialogs
   const [sshDialogOpen, setSshDialogOpen] = useState(false)
   const [reinstallOpen, setReinstallOpen] = useState(false)
-  const [reinstallTemplate, setReinstallTemplate] = useState('')
-  const [reinstallConfirm, setReinstallConfirm] = useState('')
-  const [reinstalling, setReinstalling] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [renaming, setRenaming] = useState(false)
@@ -216,7 +212,6 @@ export function ServerDetailPage() {
     const fwdRes = await api.getSshForward(id)
     if (fwdRes.ok) setSshForward(fwdRes.data.forward)
     if (tplRes.ok) {
-      setTemplates(tplRes.data.templates || [])
     }
     setLoading(false)
   }, [id])
@@ -350,24 +345,6 @@ export function ServerDetailPage() {
     setSshSessionStarting(false)
   }
 
-  async function handleReinstall(e: React.FormEvent) {
-    e.preventDefault()
-    if (!id || !instance || reinstallConfirm.trim().toLowerCase() !== instance.name.toLowerCase()) {
-      return
-    }
-    setReinstalling(true)
-    setError(null)
-    const res = await api.reinstallInstance(id, reinstallTemplate || undefined)
-    if (res.ok) {
-      flashNotice(`Reinstalled with ${res.data.os}. Previous data was destroyed.`)
-      setReinstallOpen(false)
-      setReinstallConfirm('')
-      await loadAll()
-    } else {
-      setError(res.error.message || 'Failed to reinstall.')
-    }
-    setReinstalling(false)
-  }
 
   async function handleRename(e: React.FormEvent) {
     e.preventDefault()
@@ -624,13 +601,9 @@ export function ServerDetailPage() {
       id: 'reinstall',
       icon: <ArrowClockwise size={20} aria-hidden />,
       tint: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-      title: 'Reinstall OS',
-      desc: 'Fresh installation',
-      onClick: () => {
-        setReinstallTemplate('')
-        setReinstallConfirm('')
-        setReinstallOpen(true)
-      },
+      title: 'Rebuild',
+      desc: 'Wipe and reinstall OS',
+      onClick: () => setReinstallOpen(true),
     },
     {
       id: 'rename',
@@ -1591,61 +1564,36 @@ export function ServerDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reinstall dialog */}
+      {/* Rebuild dialog */}
       <Dialog open={reinstallOpen} onOpenChange={setReinstallOpen}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>Reinstall OS</DialogTitle>
-          <DialogDescription>
-            Destroy everything on <strong className="text-fg">{instance.name}</strong> and install
-            a fresh system. All data will be lost.
-          </DialogDescription>
-
-          <form onSubmit={handleReinstall} className="mt-4 flex flex-col gap-4">
-            <div>
-              <label className="text-[12px] font-semibold text-fg">Operating System</label>
-              <select
-                value={reinstallTemplate}
-                onChange={(e) => setReinstallTemplate(e.target.value)}
-                className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-              >
-                <option value="">Keep current ({instance.os})</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.arch})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-[12px] font-semibold text-fg">
-                Type <span className="font-mono text-fg">{instance.name}</span> to confirm
-              </label>
-              <input
-                type="text"
-                value={reinstallConfirm}
-                onChange={(e) => setReinstallConfirm(e.target.value)}
-                placeholder={instance.name}
-                className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2.5">
-              <Button type="button" variant="secondary" onClick={() => setReinstallOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="danger"
-                disabled={
-                  reinstalling ||
-                  reinstallConfirm.trim().toLowerCase() !== instance.name.toLowerCase()
-                }
-              >
-                {reinstalling ? 'Reinstalling...' : 'Wipe & Reinstall'}
-              </Button>
-            </div>
-          </form>
+        <DialogContent className="max-w-md border-red-600 bg-red-600 p-8 text-center" style={{ width: 'min(30rem, calc(100vw - 2rem))' }}>
+          <DialogTitle className="text-center text-xl font-bold text-white">
+            Are you sure you want to rebuild this server?
+          </DialogTitle>
+          <DialogDescription className="sr-only">Confirm rebuilding this server. All data will be deleted.</DialogDescription>
+          <div className="mx-auto mt-6 flex size-16 items-center justify-center rounded-full bg-white text-3xl font-black text-red-600">
+            !
+          </div>
+          <div className="mt-8 flex gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1 border-red-800 bg-red-800 text-white hover:bg-red-900"
+              onClick={() => setReinstallOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 bg-transparent text-white hover:bg-white/10"
+              onClick={() => {
+                setReinstallOpen(false)
+                navigate(`/servers/${id}/rebuild`)
+              }}
+            >
+              Continue
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
