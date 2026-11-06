@@ -6014,7 +6014,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           str(body.os).trim(),
           str(body.release).trim(),
           str(body.arch).trim() || 'amd64',
-          str(body.variant).trim() || 'cloud',
+          str(body.variant).trim(),
           str(body.imageAlias).trim(),
           body.cloudInit !== false,
           body.enabled !== false,
@@ -6081,7 +6081,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
     if (body.variant !== undefined) {
       fields.push(`variant = $${idx++}`)
-      values.push(str(body.variant).trim() || 'cloud')
+      values.push(str(body.variant).trim())
     }
     if (body.imageAlias !== undefined) {
       fields.push(`image_alias = $${idx++}`)

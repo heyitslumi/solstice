@@ -431,10 +431,10 @@ export async function migrate() {
     await query(
       `INSERT INTO os_templates (name, version, os, release, arch, variant, image_alias)
        VALUES
-         ('Ubuntu', '24.04 LTS (Noble Numbat)', 'Ubuntu', 'noble', 'amd64', 'cloud', 'ubuntu/noble/cloud'),
-         ('Ubuntu', '22.04 LTS (Jammy Jellyfish)', 'Ubuntu', 'jammy', 'amd64', 'cloud', 'ubuntu/jammy/cloud'),
-         ('Debian', '13 (Trixie)', 'Debian', 'trixie', 'amd64', 'cloud', 'debian/trixie/cloud'),
-         ('AlmaLinux', '9', 'Almalinux', '9', 'amd64', 'cloud', 'almalinux/9/cloud')`,
+         ('Ubuntu Server', '24.04 LTS (Noble Numbat)', 'Ubuntu', 'noble', 'amd64', 'Minimal', 'ubuntu/noble/cloud'),
+         ('Ubuntu Server', '22.04 LTS (Jammy Jellyfish)', 'Ubuntu', 'jammy', 'amd64', 'Minimal', 'ubuntu/jammy/cloud'),
+         ('Debian', '13 (Trixie)', 'Debian', 'trixie', 'amd64', 'Minimal', 'debian/trixie/cloud'),
+         ('AlmaLinux', '9', 'Almalinux', '9', 'amd64', '', 'almalinux/9/cloud')`,
     )
   }
 
