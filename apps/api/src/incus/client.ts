@@ -211,11 +211,7 @@ ${rootKeysFormatted || '      []'}
       source: {
         type: 'image',
         mode: 'pull',
-        server:
-          params.server ||
-          ((params.imageAlias || '').startsWith('solstice/')
-            ? 'https://dev.goon.codes/images'
-            : 'https://images.linuxcontainers.org'),
+        server: params.server || 'https://images.linuxcontainers.org',
         protocol: 'simplestreams',
         alias: params.imageAlias || (params.type === 'virtual-machine' ? 'debian/12' : 'debian/12'),
       },
