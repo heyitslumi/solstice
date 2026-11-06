@@ -280,27 +280,26 @@ export function ServerSetupPage({
     const swapMb = swap === 'None' ? 0 : Math.round(parseFloat(swap) * (swap.includes('GB') ? 1024 : 1))
     const dnsServers = [DNS_PROVIDERS[dns1].primary, DNS_PROVIDERS[dns2].secondary].filter(Boolean)
 
+    let stepCount = 0
     const progressTimer = setInterval(() => {
-      setStep((v) => {
-        const next = Math.min(v + 1, 5)
-        if (next === 1) {
-          push('✓ Server created')
-          push('→ Pulling OS image')
-        } else if (next === 2) {
-          push('✓ Image ready')
-          push('→ Configuring cloud-init')
-        } else if (next === 3) {
-          push('✓ cloud-init configured (hostname, timezone, dns)')
-          push(noKeysSelected ? '→ Generating root password' : `→ Injecting ${selectedKeys.size} SSH key(s)`)
-        } else if (next === 4) {
-          push(noKeysSelected ? '✓ Root password generated' : '✓ SSH keys injected')
-          push('→ Starting server')
-        } else if (next === 5) {
-          push('✓ Server started')
-          push('→ Waiting for network')
-        }
-        return next
-      })
+      stepCount = Math.min(stepCount + 1, 5)
+      setStep(stepCount)
+      if (stepCount === 1) {
+        push('✓ Server created')
+        push('→ Pulling OS image')
+      } else if (stepCount === 2) {
+        push('✓ Image ready')
+        push('→ Configuring cloud-init')
+      } else if (stepCount === 3) {
+        push('✓ cloud-init configured (hostname, timezone, dns)')
+        push(noKeysSelected ? '→ Generating root password' : `→ Injecting ${selectedKeys.size} SSH key(s)`)
+      } else if (stepCount === 4) {
+        push(noKeysSelected ? '✓ Root password generated' : '✓ SSH keys injected')
+        push('→ Starting server')
+      } else if (stepCount === 5) {
+        push('✓ Server started')
+        push('→ Waiting for network')
+      }
     }, 5000)
 
     const res = instanceId
