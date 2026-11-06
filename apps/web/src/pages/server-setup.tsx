@@ -3,7 +3,7 @@
 // simulated progress sequence. Do not wire to the API until the
 // layout is approved. Route: /servers/setup (test).
 import { CaretDown } from '@phosphor-icons/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
@@ -98,10 +98,19 @@ function DnsDropdown({
   secondary?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
   const current = DNS_PROVIDERS[value]
   const ip = secondary ? current.secondary : current.primary
   return (
-    <div className="relative">
+    <div className="relative" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
