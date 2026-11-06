@@ -342,21 +342,21 @@ export function ServerSetupPage() {
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
         <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
-          <div className="overflow-hidden rounded-panel border border-border bg-black">
+          <div className="flex min-h-[65vh] flex-col overflow-hidden rounded-panel border border-border bg-black">
             <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-2.5">
-              <span className="size-3 rounded-full bg-red-500/70" />
-              <span className="size-3 rounded-full bg-yellow-500/70" />
-              <span className="size-3 rounded-full bg-emerald-500/70" />
+              <span className="flex size-3.5 items-center justify-center rounded-full bg-[#ff5f57] text-[9px] font-bold text-black/60">×</span>
+              <span className="flex size-3.5 items-center justify-center rounded-full bg-[#febc2e] text-[9px] font-bold text-black/60">–</span>
+              <span className="flex size-3.5 items-center justify-center rounded-full bg-[#28c840] text-[9px] font-bold text-black/60">+</span>
               <span className="ml-2 text-[12px] text-fg-subtle">provisioning — {name || 'server'}</span>
               <span className="ml-auto text-[12px] text-fg-subtle">{Math.round((step / steps.length) * 100)}%</span>
             </div>
             <div className="h-2 bg-field">
               <div className="h-full bg-accent transition-all duration-500" style={{ width: `${(step / steps.length) * 100}%` }} />
             </div>
-            <div className="h-72 overflow-y-auto p-4 font-mono text-[12px] leading-relaxed">
+            <div className="min-h-[55vh] overflow-y-auto p-5 font-mono text-[13px] leading-loose">
               {logLines.map((line, i) => (
                 <p key={i} className={line.includes('✓') || line.includes('OK') ? 'text-emerald-400' : line.includes('→') ? 'text-accent' : 'text-fg-muted'}>
-                  <span className="mr-2 text-fg-subtle">{lineTime(i)}</span>{line}
+                  <span className="mr-4 text-fg-subtle">{lineTime(i)}</span>{line}
                 </p>
               ))}
               {step < steps.length && <p className="animate-pulse text-fg-subtle">▌</p>}
