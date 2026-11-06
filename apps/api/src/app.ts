@@ -5799,6 +5799,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       })
     }
     entries.sort((a, b) => a.os.localeCompare(b.os) || a.release.localeCompare(b.release))
+    // Solstice-hosted images (custom cloud images on our simplestreams remote)
+    entries.push({
+      os: 'Solstice',
+      release: 'trixie',
+      arch: 'amd64',
+      variant: 'cloud',
+      alias: 'solstice/debian/13/cloud',
+    })
     osCatalogCache = { at: Date.now(), entries }
     return entries
   }

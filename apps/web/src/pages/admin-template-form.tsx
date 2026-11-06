@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { api, type OsGroupItem } from '@/lib/api'
+import { api, type OsCatalogEntry, type OsGroupItem } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 const inputClass =
@@ -78,6 +78,7 @@ export function AdminTemplateFormPage() {
   const [formGroupId, setFormGroupId] = useState('')
   const [formArch, setFormArch] = useState('x86_64')
   const [formImageAlias, setFormImageAlias] = useState('')
+  const [catalog, setCatalog] = useState<OsCatalogEntry[]>([])
   const [formCloudInit, setFormCloudInit] = useState(true)
   const [formEnabled, setFormEnabled] = useState(true)
 
@@ -95,6 +96,8 @@ export function AdminTemplateFormPage() {
       ])
       if (!active) return
       if (resGrp.ok) setGroups(resGrp.data || [])
+      const resCat = await api.adminListOsCatalog()
+      if (active && resCat.ok) setCatalog(resCat.data || [])
       if (id) {
         if (resTpl.ok) {
           const found = (resTpl.data || []).find((t) => t.id === id)
@@ -230,17 +233,33 @@ export function AdminTemplateFormPage() {
 
               <Field
                 label="Image Alias"
-                help="Incus remote image alias, e.g. ubuntu/noble/cloud or debian/trixie/cloud."
+                help="Cloud image alias from the Incus image remotes. Solstice-hosted images start with solstice/."
                 required
               >
-                <input
-                  type="text"
+                <select
                   required
                   value={formImageAlias}
                   onChange={(e) => setFormImageAlias(e.target.value)}
-                  placeholder="ubuntu/noble/cloud"
                   className={cn(inputClass, 'font-mono')}
-                />
+                >
+                  <option value="">Select a cloud image...</option>
+                  {catalog
+                    .filter(
+                      (e) =>
+                        e.variant.toLowerCase().includes('cloud') ||
+                        e.alias.toLowerCase().endsWith('/cloud') ||
+                        e.alias.startsWith('solstice/'),
+                    )
+                    .map((e) => (
+                      <option key={`${e.alias}|${e.arch}`} value={e.alias}>
+                        {e.alias} ({e.os} {e.release} {e.arch})
+                      </option>
+                    ))}
+                  {formImageAlias &&
+                    !catalog.some((e) => e.alias === formImageAlias) && (
+                      <option value={formImageAlias}>{formImageAlias} (current)</option>
+                    )}
+                </select>
               </Field>
 
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
