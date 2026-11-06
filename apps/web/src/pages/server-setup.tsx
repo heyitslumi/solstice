@@ -341,7 +341,7 @@ export function ServerSetupPage() {
     ]
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
-        <div className="-mt-8 flex min-h-[calc(100dvh-10rem)] flex-col lg:-mt-10">
+        <div className="flex min-h-[calc(100dvh-14rem)] flex-col">
           <div className="flex flex-1 flex-col items-center justify-center rounded-panel border border-border bg-surface p-10 text-center">
             <div className="size-24 animate-spin rounded-full border-[6px] border-fg-subtle/25 border-t-accent" />
             <h2 className="mt-8 text-2xl font-semibold">Installing {osLabel}...</h2>
