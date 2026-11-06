@@ -2663,14 +2663,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     templateId?: string
     imageAlias?: string
     os?: string
-  }): Promise<{ name: string; alias: string }> {
+  }): Promise<{ name: string; alias: string; uefi?: boolean }> {
     if (body.templateId) {
-      const tpl = await queryOne<{ name: string; image_alias: string }>(
-        'SELECT name, image_alias FROM os_templates WHERE id = $1 AND enabled = true',
+      const tpl = await queryOne<{ name: string; image_alias: string; uefi: boolean }>(
+        'SELECT name, image_alias, uefi FROM os_templates WHERE id = $1 AND enabled = true',
         [body.templateId],
       )
       if (!tpl) throw new Error('Selected OS template is not available.')
-      return { name: tpl.name, alias: tpl.image_alias }
+      return { name: tpl.name, alias: tpl.image_alias, uefi: !!tpl.uefi }
     }
     if (body.imageAlias && body.imageAlias.trim()) {
       return { name: body.imageAlias.trim(), alias: body.imageAlias.trim() }
@@ -2750,6 +2750,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         memory: `${memoryMb}MiB`,
         disk: `${diskGb}GiB`,
         sshKeys: sshPublicKeys,
+        uefi: osConfig.uefi,
       })
 
       // Start the newly provisioned instance
@@ -6324,6 +6325,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         memory: `${memoryMb}MiB`,
         disk: `${diskGb}GiB`,
         sshKeys: sshPublicKeys,
+        uefi: osConfig.uefi,
       })
 
       await incus.setInstanceState(cleanName, 'start').catch((e) => {

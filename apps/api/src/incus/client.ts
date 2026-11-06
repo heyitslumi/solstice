@@ -183,6 +183,9 @@ export const incus = {
     memory?: string
     disk?: string
     sshKeys?: string[]
+    // Only meaningful for VMs. true = UEFI boot, false = BIOS (CSM) boot.
+    // undefined leaves the Incus default (UEFI w/ secure boot).
+    uefi?: boolean
   }) {
     // Always ensure an SSH daemon exists so generated credentials and key
     // auth work out of the box; owner keys are appended when present.
@@ -216,6 +219,15 @@ ${rootKeysFormatted || '      []'}
         alias: params.imageAlias || (params.type === 'virtual-machine' ? 'debian/12' : 'debian/12'),
       },
       config: {
+        // Firmware mode (VMs only): Incus boots UEFI by default.
+        // uefi=true forces generic UEFI (no secure boot), uefi=false
+        // forces legacy BIOS via CSM.
+        ...(params.type === 'virtual-machine' && params.uefi === true
+          ? { 'security.csm': 'false', 'security.secureboot': 'false' }
+          : {}),
+        ...(params.type === 'virtual-machine' && params.uefi === false
+          ? { 'security.csm': 'true', 'security.secureboot': 'false' }
+          : {}),
         ...(params.cpu ? { 'limits.cpu': String(params.cpu) } : {}),
         ...(params.memory ? { 'limits.memory': params.memory } : {}),
         ...cloudInitConfig,
