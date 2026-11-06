@@ -1591,7 +1591,7 @@ export function AccountPage() {
                     Add SSH Key
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-md" style={{ width: 'min(30rem, calc(100vw - 2rem))' }}>
                   <DialogTitle>Add Public SSH Key</DialogTitle>
                   <DialogDescription>
                     Paste your OpenSSH public key. It will be injected via cloud-init into all new
