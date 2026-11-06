@@ -122,6 +122,7 @@ export interface OsTemplate {
   variant: string
   imageAlias: string
   cloudInit?: boolean
+  uefi?: boolean
   enabled: boolean
   createdAt: string
   updatedAt: string

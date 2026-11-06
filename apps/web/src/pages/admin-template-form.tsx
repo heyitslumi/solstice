@@ -80,6 +80,7 @@ export function AdminTemplateFormPage() {
   const [formImageAlias, setFormImageAlias] = useState('')
   const [catalog, setCatalog] = useState<OsCatalogEntry[]>([])
   const [formCloudInit, setFormCloudInit] = useState(true)
+  const [formUefi, setFormUefi] = useState(false)
   const [formEnabled, setFormEnabled] = useState(true)
 
   const [loading, setLoading] = useState(isEdit)
@@ -111,6 +112,7 @@ export function AdminTemplateFormPage() {
             setFormArch(found.arch === 'amd64' ? 'x86_64' : found.arch || 'x86_64')
             setFormImageAlias(found.imageAlias)
             setFormCloudInit(found.cloudInit !== false)
+            setFormUefi(found.uefi === true)
             setFormEnabled(found.enabled !== false)
           } else {
             setError('Template not found.')
@@ -143,6 +145,7 @@ export function AdminTemplateFormPage() {
       arch: formArch === 'x86_64' ? 'amd64' : formArch,
       imageAlias: formImageAlias.trim(),
       cloudInit: formCloudInit,
+      uefi: formUefi,
       enabled: formEnabled,
     }
 
@@ -333,6 +336,16 @@ export function AdminTemplateFormPage() {
                   </p>
                 </div>
                 <Toggle checked={formCloudInit} onChange={setFormCloudInit} label="Cloud-Init" />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 border-t border-border px-5 py-4">
+                <div>
+                  <p className="text-[13px] font-semibold text-fg">UEFI</p>
+                  <p className="text-[11px] text-fg-subtle">
+                    Only affects VMs, and only works on templates whose image supports UEFI boot.
+                  </p>
+                </div>
+                <Toggle checked={formUefi} onChange={setFormUefi} label="UEFI" />
               </div>
 
             </aside>

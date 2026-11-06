@@ -5755,6 +5755,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       variant: row.variant ?? 'cloud',
       imageAlias: row.image_alias,
       cloudInit: row.cloud_init !== false,
+      uefi: !!row.uefi,
       enabled: !!row.enabled,
       createdAt: toIso(row.created_at),
       updatedAt: toIso(row.updated_at),
@@ -6004,8 +6005,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<OsTemplateRow>(
-        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, enabled)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
           str(body.name).trim(),
@@ -6017,6 +6018,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           str(body.variant).trim(),
           str(body.imageAlias).trim(),
           body.cloudInit !== false,
+          body.uefi === true,
           body.enabled !== false,
         ],
       )
@@ -6090,6 +6092,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.cloudInit !== undefined) {
       fields.push(`cloud_init = $${idx++}`)
       values.push(body.cloudInit !== false)
+    }
+    if (body.uefi !== undefined) {
+      fields.push(`uefi = $${idx++}`)
+      values.push(body.uefi === true)
     }
     if (body.enabled !== undefined) {
       fields.push(`enabled = $${idx++}`)
