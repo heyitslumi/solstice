@@ -468,7 +468,8 @@ export function ServerSetupPage({
             </p>
             <Button
               size="sm"
-              className="flex-none bg-emerald-600 hover:bg-emerald-500"
+              variant="secondary"
+              className="flex-none"
               onClick={() => navigate(`/servers/${instanceId}`)}
             >
               Cancel Rebuild

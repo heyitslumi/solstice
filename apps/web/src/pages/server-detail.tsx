@@ -1578,14 +1578,15 @@ export function ServerDetailPage() {
             <Button
               type="button"
               variant="secondary"
-              className="flex-1 border-red-800 bg-red-800 text-white hover:bg-red-900"
+              className="flex-1 border-white/20 bg-white/10 text-white hover:bg-white/20"
               onClick={() => setReinstallOpen(false)}
             >
               Cancel
             </Button>
             <Button
               type="button"
-              className="flex-1 bg-transparent text-white hover:bg-white/10"
+              variant="danger"
+              className="flex-1"
               onClick={() => {
                 setReinstallOpen(false)
                 navigate(`/servers/${id}/rebuild`)
