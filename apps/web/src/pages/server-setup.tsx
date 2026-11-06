@@ -344,9 +344,9 @@ export function ServerSetupPage() {
         <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
           <div className="flex min-h-[65vh] flex-col overflow-hidden rounded-panel border border-border bg-black">
             <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-2.5">
-              <span className="flex size-3.5 items-center justify-center rounded-full bg-[#ff5f57] text-[9px] font-bold text-black/60">×</span>
-              <span className="flex size-3.5 items-center justify-center rounded-full bg-[#febc2e] text-[9px] font-bold text-black/60">–</span>
-              <span className="flex size-3.5 items-center justify-center rounded-full bg-[#28c840] text-[9px] font-bold text-black/60">+</span>
+              <span className="flex size-5 items-center justify-center rounded-full bg-[#ff5f57] text-[12px] font-bold leading-none text-black/70">×</span>
+              <span className="flex size-5 items-center justify-center rounded-full bg-[#febc2e] text-[12px] font-bold leading-none text-black/70">−</span>
+              <span className="flex size-5 items-center justify-center rounded-full bg-[#28c840] text-[12px] font-bold leading-none text-black/70">+</span>
               <span className="ml-2 text-[12px] text-fg-subtle">provisioning — {name || 'server'}</span>
               <span className="ml-auto text-[12px] text-fg-subtle">{Math.round((step / steps.length) * 100)}%</span>
             </div>
