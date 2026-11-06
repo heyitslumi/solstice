@@ -263,8 +263,21 @@ async function openConsoleSession(
         // Someone else is holding the console — ask the user before taking over.
         throw new Error('CONSOLE_TAKEN')
       }
+      // Force-release the holder, then retry while forkconsole tears down.
       await releaseStaleConsoles(instanceName).catch(() => {})
-      res = await incusRequest<any>('POST', path, body, 30000)
+      let lastErr: any = err
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await new Promise((r) => setTimeout(r, 1500))
+        try {
+          res = await incusRequest<any>('POST', path, body, 30000)
+          lastErr = null
+          break
+        } catch (retryErr: any) {
+          lastErr = retryErr
+          if (!/already connected/i.test(retryErr?.message || '')) break
+        }
+      }
+      if (lastErr) throw lastErr
     } else {
       throw err
     }
