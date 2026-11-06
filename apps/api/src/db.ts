@@ -429,12 +429,12 @@ export async function migrate() {
   const tplCount = await queryOne<{ count: string }>('SELECT count(*) FROM os_templates')
   if (tplCount && Number(tplCount.count) === 0) {
     await query(
-      `INSERT INTO os_templates (name, os, release, arch, variant, image_alias)
+      `INSERT INTO os_templates (name, version, os, release, arch, variant, image_alias)
        VALUES
-         ('Ubuntu 24.04 LTS', 'Ubuntu', 'noble', 'amd64', 'cloud', 'ubuntu/noble/cloud'),
-         ('Ubuntu 22.04 LTS', 'Ubuntu', 'jammy', 'amd64', 'cloud', 'ubuntu/jammy/cloud'),
-         ('Debian 13', 'Debian', 'trixie', 'amd64', 'cloud', 'debian/trixie/cloud'),
-         ('AlmaLinux 9', 'Almalinux', '9', 'amd64', 'cloud', 'almalinux/9/cloud')`,
+         ('Ubuntu', '24.04 LTS (Noble Numbat)', 'Ubuntu', 'noble', 'amd64', 'cloud', 'ubuntu/noble/cloud'),
+         ('Ubuntu', '22.04 LTS (Jammy Jellyfish)', 'Ubuntu', 'jammy', 'amd64', 'cloud', 'ubuntu/jammy/cloud'),
+         ('Debian', '13 (Trixie)', 'Debian', 'trixie', 'amd64', 'cloud', 'debian/trixie/cloud'),
+         ('AlmaLinux', '9', 'Almalinux', '9', 'amd64', 'cloud', 'almalinux/9/cloud')`,
     )
   }
 

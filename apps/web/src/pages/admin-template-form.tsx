@@ -72,7 +72,6 @@ export function AdminTemplateFormPage() {
   const [groups, setGroups] = useState<OsGroupItem[]>([])
   const [formName, setFormName] = useState('')
   const [formVersion, setFormVersion] = useState('')
-  const [formVariant, setFormVariant] = useState('cloud')
   const [formOs, setFormOs] = useState('')
   const [formRelease, setFormRelease] = useState('')
   const [formGroupId, setFormGroupId] = useState('')
@@ -101,7 +100,6 @@ export function AdminTemplateFormPage() {
           if (found) {
             setFormName(found.name)
             setFormVersion(found.version || '')
-            setFormVariant(found.variant || 'cloud')
             setFormOs(found.os || '')
             setFormRelease(found.release || '')
             setFormGroupId(found.groupId || '')
@@ -133,7 +131,6 @@ export function AdminTemplateFormPage() {
     const payload = {
       name: formName.trim(),
       version: formVersion.trim() || '1.00',
-      variant: formVariant.trim() || 'cloud',
       os: formOs.trim(),
       release: formRelease.trim(),
       groupId: formGroupId || null,
@@ -213,12 +210,12 @@ export function AdminTemplateFormPage() {
                     className={inputClass}
                   />
                 </Field>
-                <Field label="Variant" help="Variant of the template (e.g. cloud, minimal).">
+                <Field label="Version" help="Version of the template shown to the end user.">
                   <input
                     type="text"
-                    value={formVariant}
-                    onChange={(e) => setFormVariant(e.target.value)}
-                    placeholder="cloud"
+                    value={formVersion}
+                    onChange={(e) => setFormVersion(e.target.value)}
+                    placeholder="24.04 LTS (Noble Numbat)"
                     className={inputClass}
                   />
                 </Field>
@@ -312,19 +309,6 @@ export function AdminTemplateFormPage() {
                 <Toggle checked={formCloudInit} onChange={setFormCloudInit} label="Cloud-Init" />
               </div>
 
-              <div className="flex items-center justify-between gap-4 border-t border-border px-5 py-4">
-                <div>
-                  <p className="text-[13px] font-semibold text-fg">Version</p>
-                  <p className="text-[11px] text-fg-subtle">Version of the template shown to the end user.</p>
-                </div>
-                <input
-                  type="text"
-                  value={formVersion}
-                  onChange={(e) => setFormVersion(e.target.value)}
-                  placeholder="24.04 LTS (Noble Numbat)"
-                  className="h-9 w-44 rounded-control border border-field-border bg-field px-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
-                />
-              </div>
             </aside>
           </form>
         )}
