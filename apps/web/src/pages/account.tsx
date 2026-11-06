@@ -42,6 +42,7 @@ import {
 import { TextField } from '@/components/ui/field'
 import { EMAIL_PATTERN, api, type ApiActivity, type ApiEmailLog, type ApiPasskey, type ApiSshKey, type OAuthLink, type PendingEmailChange, type PublicOAuthProvider } from '@/lib/api'
 import { useAppConfig } from '@/lib/config'
+import { generateSshKeyPair, type GeneratedKeyType } from '@/lib/ssh-generate'
 import { useSession } from '@/lib/session'
 import { THEME_PRESETS } from '@/lib/theme-utils'
 
@@ -372,6 +373,13 @@ export function AccountPage() {
   const [sshPublicKey, setSshPublicKey] = useState('')
   const [sshError, setSshError] = useState<string | null>(null)
   const [sshSubmitting, setSshSubmitting] = useState(false)
+  // Key pair generation (client-side; private key never leaves the browser)
+  const [genType, setGenType] = useState<GeneratedKeyType>('ed25519')
+  const [genSize, setGenSize] = useState<number>(2048)
+  const [genPrivateKey, setGenPrivateKey] = useState<string | null>(null)
+  const [genFingerprint, setGenFingerprint] = useState<string | null>(null)
+  const [genGenerating, setGenGenerating] = useState(false)
+  const [genCopied, setGenCopied] = useState(false)
 
   // OAuth links
   const [searchParams, setSearchParams] = useSearchParams()
@@ -455,10 +463,47 @@ export function AccountPage() {
       setSshDialogOpen(false)
       setSshKeyName('')
       setSshPublicKey('')
+      setGenPrivateKey(null)
+      setGenFingerprint(null)
       await loadSshKeys()
     } finally {
       setSshSubmitting(false)
     }
+  }
+
+  async function handleGenerateKeyPair() {
+    setGenGenerating(true)
+    setSshError(null)
+    setGenCopied(false)
+    try {
+      const pair = await generateSshKeyPair({
+        type: genType,
+        size: genSize,
+        comment: sshKeyName.trim() || undefined,
+      })
+      setSshPublicKey(pair.publicKey)
+      setGenPrivateKey(pair.privateKeyPem)
+      setGenFingerprint(pair.fingerprint)
+      if (!sshKeyName.trim()) {
+        setSshKeyName(`generated-${pair.typeLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)
+      }
+    } catch (err) {
+      setSshError(
+        err instanceof Error
+          ? `Key generation failed: ${err.message}`
+          : 'Key generation failed in this browser.',
+      )
+    } finally {
+      setGenGenerating(false)
+    }
+  }
+
+  function handleCopyPrivateKey() {
+    if (!genPrivateKey) return
+    navigator.clipboard?.writeText(genPrivateKey).then(() => {
+      setGenCopied(true)
+      setTimeout(() => setGenCopied(false), 2000)
+    })
   }
 
   async function handleDeleteSshKey(id: string) {
@@ -1539,14 +1584,14 @@ export function AccountPage() {
           <Panel
             title="SSH Keys"
             action={
-              <Dialog open={sshDialogOpen} onOpenChange={setSshDialogOpen}>
+              <Dialog open={sshDialogOpen} onOpenChange={(open) => { setSshDialogOpen(open); if (!open) { setGenPrivateKey(null); setGenFingerprint(null) } }}>
                 <DialogTrigger asChild>
                   <Button size="sm" variant="secondary">
                     <Plus size={15} aria-hidden />
                     Add SSH Key
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-lg">
                   <DialogTitle>Add Public SSH Key</DialogTitle>
                   <DialogDescription>
                     Paste your OpenSSH public key. It will be injected via cloud-init into all new
@@ -1579,6 +1624,101 @@ export function AccountPage() {
                         required
                       />
                     </div>
+
+                    {/* Generate Key Pair (client-side; private key is never sent to the server) */}
+                    <div className="flex flex-col gap-3 rounded-control border border-border bg-field-bg p-3">
+                      <p className="text-[13px] font-semibold text-fg">Generate Key Pair</p>
+
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[12px] font-medium text-fg-muted">Key Type</span>
+                        <div className="flex flex-wrap gap-2">
+                          {(
+                            [
+                              ['ed25519', 'Ed25519'],
+                              ['rsa', 'RSA'],
+                              ['ecdsa', 'ECDSA'],
+                            ] as Array<[GeneratedKeyType, string]>
+                          ).map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setGenType(value)}
+                              className={
+                                genType === value
+                                  ? 'rounded-control border border-accent bg-accent/15 px-2.5 py-1 text-[12px] font-medium text-fg'
+                                  : 'rounded-control border border-border bg-field-bg px-2.5 py-1 text-[12px] text-fg-muted hover:text-fg'
+                              }
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {genType !== 'ed25519' && (
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[12px] font-medium text-fg-muted">Key Size</span>
+                          <div className="flex flex-wrap gap-2">
+                            {(genType === 'rsa' ? [2048, 4096] : [256, 384]).map((bits) => (
+                              <button
+                                key={bits}
+                                type="button"
+                                onClick={() => setGenSize(bits)}
+                                className={
+                                  genSize === bits
+                                    ? 'rounded-control border border-accent bg-accent/15 px-2.5 py-1 text-[12px] font-medium text-fg'
+                                    : 'rounded-control border border-border bg-field-bg px-2.5 py-1 text-[12px] text-fg-muted hover:text-fg'
+                                }
+                              >
+                                {bits} bit
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={handleGenerateKeyPair}
+                          disabled={genGenerating}
+                        >
+                          {genGenerating ? 'Generating...' : 'Generate'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {genPrivateKey && (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="ssh-private-key" className="text-[13px] font-medium text-fg-muted">
+                            Private Key {genFingerprint ? <span className="text-fg-subtle">({genFingerprint})</span> : null}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleCopyPrivateKey}
+                            className="inline-flex items-center gap-1 text-[12px] text-fg-muted hover:text-fg"
+                          >
+                            <Copy size={13} aria-hidden />
+                            {genCopied ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
+                        <textarea
+                          id="ssh-private-key"
+                          rows={6}
+                          readOnly
+                          value={genPrivateKey}
+                          className="w-full rounded-control border border-border bg-field-bg p-3 font-mono text-xs text-fg focus:border-accent focus:outline-none"
+                        />
+                        <div className="rounded-control border border-warning/50 bg-warning/10 p-3 text-[12px] leading-snug text-fg-muted">
+                          Copy the generated private key to a safe place. It won't be shown again and
+                          won't be stored on our system. The public key will be saved on our system
+                          ready for use when installing a server.
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-2 flex justify-end gap-2.5">
                       <DialogClose asChild>
