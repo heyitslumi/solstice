@@ -185,7 +185,7 @@ export function ServerSetupPage() {
   if (phase === 'panel') {
     return (
       <AppShell title="Server Setup" description="TEST PAGE — frontend mockup only, install does not provision anything">
-        <div className="mx-auto -mt-6 w-full max-w-3xl lg:-mt-8">
+        <div className="mx-auto -mt-8 w-full max-w-3xl lg:-mt-10">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-bold">{name || 'my-server'}</h1>
             <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-400">
@@ -228,7 +228,7 @@ export function ServerSetupPage() {
     ]
     return (
       <AppShell title="Server Setup" description="TEST PAGE — simulating provisioning">
-        <div className="mx-auto -mt-6 w-full max-w-3xl lg:-mt-8">
+        <div className="mx-auto -mt-8 w-full max-w-3xl lg:-mt-10">
           <h1 className="text-2xl font-bold">Installing {osLabel}...</h1>
           <div className="mt-6 rounded-panel border border-border bg-surface p-5">
             <div className="h-2 overflow-hidden rounded-full bg-field">
