@@ -18,8 +18,8 @@ export function BrandPanel() {
       ) : null}
 
       <PointerParallax className="absolute inset-0 mix-blend-screen">
-        <div className="absolute -right-56 -bottom-80 size-[46rem] rounded-full sun-glow opacity-20 blur-[100px]" />
-        <div className="absolute -right-28 -bottom-64 size-[32rem] rounded-full sun-glow opacity-30 blur-[60px]" />
+        <div className="absolute -right-40 -bottom-56 size-[40rem] rounded-full sun-glow opacity-25 blur-[90px]" />
+        <div className="absolute -right-16 -bottom-40 size-[26rem] rounded-full sun-glow opacity-40 blur-[50px]" />
       </PointerParallax>
 
       <div

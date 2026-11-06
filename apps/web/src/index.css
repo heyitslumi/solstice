@@ -321,13 +321,16 @@
 
 /* Single-hue ambient glow for large blurred surfaces. The linear
    sun-gradient mixes gold and ember on a big blob (muddy yellow/red);
-   a radial fade of the mid orange only keeps the warmth without the split. */
+   a radial fade of the mid orange only keeps the warmth without the split.
+   Stops stay saturated out to ~45% so the part of the blob that is
+   actually on-panel still reads as colour, not just the transparent tail. */
 @utility sun-glow {
   background-image: radial-gradient(
     circle,
     var(--color-sun-500) 0%,
-    color-mix(in srgb, var(--color-sun-500) 45%, transparent) 48%,
-    transparent 70%
+    color-mix(in srgb, var(--color-sun-500) 65%, transparent) 38%,
+    color-mix(in srgb, var(--color-sun-500) 30%, transparent) 58%,
+    transparent 78%
   );
 }
 
