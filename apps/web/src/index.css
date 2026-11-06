@@ -319,6 +319,18 @@
   );
 }
 
+/* Single-hue ambient glow for large blurred surfaces. The linear
+   sun-gradient mixes gold and ember on a big blob (muddy yellow/red);
+   a radial fade of the mid orange only keeps the warmth without the split. */
+@utility sun-glow {
+  background-image: radial-gradient(
+    circle,
+    var(--color-sun-500) 0%,
+    color-mix(in srgb, var(--color-sun-500) 45%, transparent) 48%,
+    transparent 70%
+  );
+}
+
 @layer base {
   * {
     border-color: var(--border);
