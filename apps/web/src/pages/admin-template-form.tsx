@@ -72,6 +72,7 @@ export function AdminTemplateFormPage() {
   const [groups, setGroups] = useState<OsGroupItem[]>([])
   const [formName, setFormName] = useState('')
   const [formVersion, setFormVersion] = useState('')
+  const [formVariant, setFormVariant] = useState('')
   const [formOs, setFormOs] = useState('')
   const [formRelease, setFormRelease] = useState('')
   const [formGroupId, setFormGroupId] = useState('')
@@ -100,6 +101,7 @@ export function AdminTemplateFormPage() {
           if (found) {
             setFormName(found.name)
             setFormVersion(found.version || '')
+            setFormVariant(found.variant && found.variant !== 'cloud' ? found.variant : '')
             setFormOs(found.os || '')
             setFormRelease(found.release || '')
             setFormGroupId(found.groupId || '')
@@ -131,6 +133,7 @@ export function AdminTemplateFormPage() {
     const payload = {
       name: formName.trim(),
       version: formVersion.trim() || '1.00',
+      variant: formVariant.trim(),
       os: formOs.trim(),
       release: formRelease.trim(),
       groupId: formGroupId || null,
@@ -184,11 +187,6 @@ export function AdminTemplateFormPage() {
           </p>
         </div>
 
-        <div className="rounded-control border border-accent/40 bg-accent/10 px-4 py-3 text-[13px] leading-snug text-fg">
-          Templates use Incus remote image aliases (images.linuxcontainers.org). The image is pulled
-          from the node&apos;s Incus remote when a server is provisioned.
-        </div>
-
         {error && <Alert tone="danger">{error}</Alert>}
 
         {loading ? (
@@ -199,7 +197,7 @@ export function AdminTemplateFormPage() {
           <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
             {/* Left card: identity & source */}
             <div className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs">
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                 <Field label="Name" help="Name of the template shown to the end user." required>
                   <input
                     type="text"
@@ -216,6 +214,15 @@ export function AdminTemplateFormPage() {
                     value={formVersion}
                     onChange={(e) => setFormVersion(e.target.value)}
                     placeholder="24.04 LTS (Noble Numbat)"
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Variant" help="Optional variant tag, e.g. minimal or latest.">
+                  <input
+                    type="text"
+                    value={formVariant}
+                    onChange={(e) => setFormVariant(e.target.value)}
+                    placeholder="minimal, latest..."
                     className={inputClass}
                   />
                 </Field>
