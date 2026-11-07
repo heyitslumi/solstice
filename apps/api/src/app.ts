@@ -2895,7 +2895,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     const nodeId = await defaultNodeId()
     const targetNode = nodeId
-      ? await queryOne<{ cpu_model: string; server_limit: number }>('SELECT cpu_model, server_limit FROM nodes WHERE id = $1', [nodeId])
+      ? await queryOne<{ cpu_model: string; server_limit: number; primary_network: string }>('SELECT cpu_model, server_limit, primary_network FROM nodes WHERE id = $1', [nodeId])
       : null
 
     if (targetNode && targetNode.server_limit > 0) {
@@ -2929,6 +2929,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         swapMb,
         dnsServers,
         rawQemu,
+        network: targetNode?.primary_network || 'incusbr0',
       })
 
       // Start the newly provisioned instance
@@ -3104,6 +3105,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
     const sshPublicKeys = userSshKeys.map((k) => k.public_key)
 
+    const node = instance.node_id
+      ? await queryOne<{ primary_network: string }>('SELECT primary_network FROM nodes WHERE id = $1', [instance.node_id])
+      : null
+
     try {
       await incus.createInstance({
         name: instance.name,
@@ -3118,6 +3123,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         timezone: timezone || undefined,
         swapMb,
         dnsServers,
+        network: node?.primary_network || 'incusbr0',
       })
       await incus.setInstanceState(instance.name, 'start').catch((e) => {
         console.warn('Failed to start newly installed instance:', e)
@@ -3304,6 +3310,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
     const sshPublicKeys = userSshKeys.map((k) => k.public_key)
 
+    const rebuildNode = instance.node_id
+      ? await queryOne<{ primary_network: string }>('SELECT primary_network FROM nodes WHERE id = $1', [instance.node_id])
+      : null
+
     try {
       await incus.createInstance({
         name: newName,
@@ -3318,6 +3328,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         timezone: timezone || undefined,
         swapMb,
         dnsServers,
+        network: rebuildNode?.primary_network || 'incusbr0',
       })
       await incus.setInstanceState(newName, 'start').catch((e) => {
         console.warn('Failed to start newly installed instance:', e)
@@ -3736,13 +3747,28 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     row: { kind: string; host_port: number; container_port: number; protocol: string },
     containerIp: string,
   ) {
+    // Look up the instance's node primary network or active device network
+    let netName = 'incusbr0'
+    try {
+      const instRow = await queryOne<{ primary_network: string | null }>(
+        `SELECT n.primary_network
+           FROM instances i
+           LEFT JOIN nodes n ON n.id = i.node_id
+          WHERE i.name = $1`,
+        [instanceName],
+      )
+      if (instRow?.primary_network) netName = instRow.primary_network
+    } catch {
+      // fallback
+    }
+
     // NAT-mode proxies in Incus require the connect IP to be a *static* instance
-    // address attached to the NIC on a managed network (e.g. incusbr0).
+    // address attached to the NIC on a managed network.
     // Ensure eth0 defines network and ipv4.address explicitly so Incus validates the static IP.
     await incus
       .addInstanceDevice(instanceName, 'eth0', {
         type: 'nic',
-        network: 'incusbr0',
+        network: netName,
         name: 'eth0',
         'ipv4.address': containerIp,
       })
@@ -7493,7 +7519,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
 
     const targetNode = nodeId
-      ? await queryOne<{ cpu_model: string; server_limit: number }>('SELECT cpu_model, server_limit FROM nodes WHERE id = $1', [nodeId])
+      ? await queryOne<{ cpu_model: string; server_limit: number; primary_network: string }>('SELECT cpu_model, server_limit, primary_network FROM nodes WHERE id = $1', [nodeId])
       : null
 
     if (targetNode && targetNode.server_limit > 0) {
@@ -7522,6 +7548,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         sshKeys: sshPublicKeys,
         uefi: osConfig.uefi,
         rawQemu,
+        network: targetNode?.primary_network || 'incusbr0',
       })
 
       await incus.setInstanceState(cleanName, 'start').catch((e) => {

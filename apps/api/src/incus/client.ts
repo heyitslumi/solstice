@@ -190,6 +190,7 @@ export const incus = {
     timezone?: string
     swapMb?: number
     dnsServers?: string[]
+    network?: string
     rawQemu?: string
   }) {
     // Always ensure an SSH daemon exists so generated credentials and key
@@ -273,6 +274,15 @@ ${runcmd.map((r) => `  - ${r}`).join('\n')}
           type: 'disk',
           ...(params.disk ? { size: params.disk } : {}),
         },
+        ...(params.network
+          ? {
+              eth0: {
+                name: 'eth0',
+                network: params.network,
+                type: 'nic',
+              },
+            }
+          : {}),
       },
     }
 
