@@ -618,16 +618,6 @@ export function AdminNodeFormPage() {
 
                   <div className="mt-4 flex flex-col gap-4">
                     <div>
-                      <label className="text-[12px] font-semibold text-fg">Virtualization Engine</label>
-                      <input
-                        type="text"
-                        disabled
-                        value="Incus (LXD / KVM Engine) • Unlimited Instances"
-                        className="mt-1 h-9 w-full rounded-control border border-field-border bg-surface-2 px-3 text-[12px] text-fg-subtle opacity-80 cursor-not-allowed"
-                      />
-                    </div>
-
-                    <div>
                       <label className="text-[12px] font-semibold text-fg">
                         Node Name <span className="text-danger">*</span>
                       </label>
