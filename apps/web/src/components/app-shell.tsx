@@ -28,6 +28,7 @@ import { UserMenu } from '@/components/user-menu'
 import { AnnouncementBanners } from '@/components/announcement-banner'
 import { Button } from '@/components/ui/button'
 import { useAppConfig } from '@/lib/config'
+import { SiteFooter } from '@/components/site-footer'
 import { useSession } from '@/lib/session'
 import { cn } from '@/lib/utils'
 
@@ -416,6 +417,7 @@ export function AppShell({ title, description, actions, children }: AppShellProp
           <AnnouncementBanners />
           {children}
         </main>
+        <SiteFooter />
       </div>
     </div>
   )
