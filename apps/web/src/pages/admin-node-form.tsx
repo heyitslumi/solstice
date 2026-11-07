@@ -1,13 +1,17 @@
 import {
   ArrowLeft,
+  CheckCircle,
+  ClockCounterClockwise,
   Database,
   FloppyDisk,
   Globe,
   HardDrives,
+  ListChecks,
   PencilSimple,
   Plus,
   ShareNetwork,
   Trash,
+  WarningCircle,
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -47,7 +51,7 @@ export function AdminNodeFormPage() {
 
   const isDefaultLocalNode = isEdit && (name === 'local-incus' || fqdn === 'localhost')
 
-  type NodeTab = 'general' | 'network' | 'storage'
+  type NodeTab = 'general' | 'network' | 'storage' | 'tasks'
   const [activeTab, setActiveTab] = useState<NodeTab>('general')
   const [nodeNetwork, setNodeNetwork] = useState<{
     primaryNetwork: string
@@ -211,6 +215,36 @@ export function AdminNodeFormPage() {
     })
   }
 
+  // Tasks tab state
+  const [nodeTasks, setNodeTasks] = useState<
+    Array<{
+      id: string
+      task: string
+      action: string
+      details: string
+      server: string
+      serverId: string | null
+      started: string
+      finished: string | null
+      durationSec: number
+      progress: number
+      status: string
+      user: string | null
+    }>
+  >([])
+  const [loadingTasks, setLoadingTasks] = useState(false)
+
+  function loadTasksData() {
+    if (!id) return
+    setLoadingTasks(true)
+    void api.adminGetNodeTasks(id).then((res) => {
+      if (res.ok) {
+        setNodeTasks(res.data.tasks)
+      }
+      setLoadingTasks(false)
+    })
+  }
+
   useEffect(() => {
     if (id && !nodeNetwork) {
       loadNetworkData()
@@ -218,7 +252,10 @@ export function AdminNodeFormPage() {
     if (id && !nodeStorage) {
       loadStorageData()
     }
-  }, [id, nodeNetwork, nodeStorage])
+    if (id && activeTab === 'tasks') {
+      loadTasksData()
+    }
+  }, [id, nodeNetwork, nodeStorage, activeTab])
 
   async function handleToggleSystem(key: 'maintenance' | 'isPublic', nextVal: boolean) {
     if (!id) return
@@ -485,6 +522,19 @@ export function AdminNodeFormPage() {
             >
               <Database size={15} aria-hidden />
               Storage
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('tasks')}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                activeTab === 'tasks'
+                  ? 'bg-surface-2 text-fg shadow-xs'
+                  : 'text-fg-subtle hover:text-fg',
+              )}
+            >
+              <ClockCounterClockwise size={15} aria-hidden />
+              Tasks
             </button>
           </div>
         )}
@@ -1324,7 +1374,7 @@ export function AdminNodeFormPage() {
                 })}
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'storage' ? (
           /* Storage Tab (VirtFusion style Square Cards Grid) */
           <div className="flex flex-col gap-6">
             {storageSavedMsg && (
@@ -1393,8 +1443,7 @@ export function AdminNodeFormPage() {
                               : 'bg-surface-2 text-fg-subtle',
                           )}
                         >
-                          {storageEnabled ? 'Enabled' : 'Disabled'}
-                        </span>
+                          {storageEnabled ? 'Enabled' : 'Disabled'}\n                        </span>
                       </div>
 
                       {/* Card Body */}
@@ -1491,6 +1540,163 @@ export function AdminNodeFormPage() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        ) : (
+          /* Tasks Tab (VirtFusion Node Tasks List) */
+          <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-[15px] font-semibold text-fg">Node Tasks & Activity</h2>
+                <p className="text-[11px] text-fg-subtle">
+                  Chronological history of provisioning, rebuilds, console, and management tasks executed on this node.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                {loadingTasks && (
+                  <span className="text-[12px] text-fg-subtle">Refreshing tasks...</span>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={loadTasksData}
+                  disabled={loadingTasks}
+                  className="gap-1.5"
+                >
+                  <ClockCounterClockwise size={14} />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-panel border border-border bg-surface shadow-2xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-border/80 bg-surface-2/40 text-[12px] font-semibold text-fg-subtle">
+                      <th className="py-3.5 pl-6 pr-4">Task</th>
+                      <th className="py-3.5 px-4">Server</th>
+                      <th className="py-3.5 px-4">Started</th>
+                      <th className="py-3.5 px-4">Finished</th>
+                      <th className="py-3.5 px-4 text-right">Duration</th>
+                      <th className="py-3.5 pl-4 pr-6 text-right">Progress</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {nodeTasks.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-[13px] text-fg-subtle">
+                          {loadingTasks ? 'Loading node tasks...' : 'No tasks recorded for this node yet.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      nodeTasks.map((t) => {
+                        const isSuccess = t.status === 'success'
+                        const isFailed = t.status === 'failure' || t.status === 'failed'
+                        const progressColor = isFailed
+                          ? 'bg-rose-500'
+                          : isSuccess
+                            ? 'bg-emerald-500'
+                            : 'bg-amber-500'
+
+                        const formatDate = (iso: string | null) => {
+                          if (!iso) return '—'
+                          try {
+                            const d = new Date(iso)
+                            return d.toLocaleString('en-US', {
+                              month: 'short',
+                              day: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: false,
+                            })
+                          } catch {
+                            return iso
+                          }
+                        }
+
+                        return (
+                          <tr
+                            key={t.id}
+                            className="transition-colors hover:bg-surface-2/20"
+                          >
+                            {/* Task Column */}
+                            <td className="py-3 pl-6 pr-4">
+                              <div className="flex items-center gap-2.5">
+                                <span className="text-fg-subtle/80">
+                                  <ListChecks size={15} />
+                                </span>
+                                <span className="font-medium text-fg">{t.task}</span>
+                              </div>
+                            </td>
+
+                            {/* Server Column */}
+                            <td className="py-3 px-4">
+                              {t.serverId ? (
+                                <a
+                                  href={`/servers/${t.serverId}`}
+                                  className="font-medium text-accent hover:underline"
+                                >
+                                  {t.server}
+                                </a>
+                              ) : (
+                                <span className="text-fg-subtle">{t.server}</span>
+                              )}
+                            </td>
+
+                            {/* Started */}
+                            <td className="py-3 px-4 font-mono text-[12px] text-fg-subtle">
+                              {formatDate(t.started)}
+                            </td>
+
+                            {/* Finished */}
+                            <td className="py-3 px-4 font-mono text-[12px] text-fg-subtle">
+                              {formatDate(t.finished)}
+                            </td>
+
+                            {/* Duration */}
+                            <td className="py-3 px-4 text-right font-mono text-[12px] text-fg">
+                              {t.durationSec} sec
+                            </td>
+
+                            {/* Progress Bar + Percentage + Status Indicator */}
+                            <td className="py-3 pl-4 pr-6">
+                              <div className="flex items-center justify-end gap-2.5">
+                                <div className="flex w-32 items-center gap-2">
+                                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+                                    <div
+                                      className={`h-full ${progressColor}`}
+                                      style={{ width: `${Math.min(100, Math.max(5, t.progress))}%` }}
+                                    />
+                                  </div>
+                                  <span className="w-9 text-right font-mono text-[11px] text-fg-subtle">
+                                    {t.progress}%
+                                  </span>
+                                </div>
+                                {isFailed ? (
+                                  <span title="Failed">
+                                    <WarningCircle size={14} className="shrink-0 text-rose-500" />
+                                  </span>
+                                ) : isSuccess ? (
+                                  <span title="Completed">
+                                    <CheckCircle size={14} className="shrink-0 text-emerald-500" />
+                                  </span>
+                                ) : (
+                                  <span title="Running">
+                                    <ClockCounterClockwise size={14} className="shrink-0 animate-spin text-amber-500" />
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

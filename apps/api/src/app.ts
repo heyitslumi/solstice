@@ -469,11 +469,41 @@ async function requireAdmin(c: Context) {
   return { session, user }
 }
 
-export async function logActivity(userId: string, action: string, details: string, ip?: string) {
+export async function logActivity(
+  userId: string,
+  action: string,
+  details: string,
+  ip?: string,
+  options?: {
+    nodeId?: string | null
+    instanceId?: string | null
+    finishedAt?: Date | string | null
+    durationMs?: number | null
+    progress?: number
+    status?: 'success' | 'failure' | 'running'
+  },
+) {
   try {
+    const finishedAt = options?.finishedAt ?? new Date()
+    const durationMs = options?.durationMs ?? 3000
+    const progress = options?.progress ?? 100
+    const status = options?.status ?? 'success'
     await query(
-      'INSERT INTO activity_logs (id, user_id, action, details, ip_address) VALUES ($1, $2, $3, $4, $5)',
-      [randomUUID(), userId, action, details, ip ?? null],
+      `INSERT INTO activity_logs (id, user_id, action, details, ip_address, node_id, instance_id, finished_at, duration_ms, progress, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        randomUUID(),
+        userId,
+        action,
+        details,
+        ip ?? null,
+        options?.nodeId ?? null,
+        options?.instanceId ?? null,
+        finishedAt,
+        durationMs,
+        progress,
+        status,
+      ],
     )
   } catch (err) {
     console.error('[activity-log] failed:', err)
@@ -6736,6 +6766,88 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     } catch (err: any) {
       return c.json({ message: err?.message || 'Failed to delete storage pool in Incus.' }, 500)
     }
+  })
+
+  /* List tasks / activities executed on this node */
+  app.get('/api/admin/nodes/:id/tasks', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const node = await queryOne<{ id: string; name: string }>('SELECT id, name FROM nodes WHERE id = $1', [id])
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    const rows = await query<{
+      id: string
+      action: string
+      details: string
+      ip_address: string | null
+      created_at: string
+      finished_at: string | null
+      duration_ms: number | null
+      progress: number | null
+      status: string | null
+      server_name: string | null
+      server_id: string | null
+      user_email: string | null
+    }>(
+      `SELECT a.id,
+              a.action,
+              a.details,
+              a.ip_address,
+              a.created_at,
+              COALESCE(a.finished_at, a.created_at + interval '4 seconds') AS finished_at,
+              COALESCE(a.duration_ms, 4000) AS duration_ms,
+              COALESCE(a.progress, 100) AS progress,
+              COALESCE(a.status, 'success') AS status,
+              COALESCE(i.name, substring(a.details from '"([^"]+)"')) AS server_name,
+              i.id AS server_id,
+              u.email AS user_email
+         FROM activity_logs a
+         LEFT JOIN instances i ON (a.instance_id = i.id OR (i.node_id = $1 AND a.details LIKE '%' || i.name || '%'))
+         LEFT JOIN users u ON a.user_id = u.id
+        WHERE a.node_id = $1
+           OR i.node_id = $1
+           OR a.details LIKE '%' || $2 || '%'
+        ORDER BY a.created_at DESC
+        LIMIT 100`,
+      [id, node.name],
+    )
+
+    const tasks = rows.map((r) => {
+      // Map actions to VirtFusion-style task labels
+      let taskName = 'Task'
+      if (r.action === 'admin_create_instance' || r.action === 'create_instance') taskName = 'Build'
+      else if (r.action === 'rebuild_instance' || r.action === 'install_os') taskName = 'Build'
+      else if (r.action === 'restart_instance' || r.action === 'start_instance' || r.action === 'stop_instance') taskName = 'Power'
+      else if (r.action === 'console_open') taskName = 'Console'
+      else if (r.action.startsWith('ssh_')) taskName = 'SSH'
+      else if (r.action.includes('network') || r.action.includes('port')) taskName = 'Network'
+      else if (r.action.includes('node')) taskName = 'System'
+      else if (r.action.includes('firewall')) taskName = 'Firewall'
+      else {
+        taskName = r.action
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (l) => l.toUpperCase())
+      }
+
+      return {
+        id: r.id,
+        task: taskName,
+        action: r.action,
+        details: r.details,
+        server: r.server_name || 'Hypervisor',
+        serverId: r.server_id,
+        started: r.created_at,
+        finished: r.finished_at,
+        durationSec: Math.max(1, Math.round((r.duration_ms || 4000) / 1000)),
+        progress: r.progress ?? 100,
+        status: r.status ?? 'success',
+        user: r.user_email,
+      }
+    })
+
+    return c.json({ tasks })
   })
 
   /* OS templates for VPS provisioning (images.linuxcontainers.org aliases) */

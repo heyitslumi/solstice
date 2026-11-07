@@ -397,6 +397,14 @@ const SCHEMA = `
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS cpu_model text NOT NULL DEFAULT '';
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS server_limit integer NOT NULL DEFAULT 0;
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS storage_enabled boolean NOT NULL DEFAULT true;
+  /* Task audit fields on activity_logs */
+  ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS node_id uuid REFERENCES nodes(id) ON DELETE SET NULL;
+  ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS instance_id uuid REFERENCES instances(id) ON DELETE SET NULL;
+  ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS finished_at timestamptz;
+  ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS duration_ms integer;
+  ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS progress integer DEFAULT 100;
+  ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS status text DEFAULT 'success';
+  CREATE INDEX IF NOT EXISTS activity_logs_node_idx ON activity_logs (node_id, created_at DESC);
   /* Instances live on a node; older rows predate the column and stay unassigned. */
   ALTER TABLE instances ADD COLUMN IF NOT EXISTS node_id uuid REFERENCES nodes(id) ON DELETE SET NULL;
   /* Admin suspension carries a reason shown to the owner; NULL means not suspended. */

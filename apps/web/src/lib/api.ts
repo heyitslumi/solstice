@@ -1569,6 +1569,25 @@ export const api = {
     })
   },
 
+  adminGetNodeTasks(id: string) {
+    return request<{
+      tasks: Array<{
+        id: string
+        task: string
+        action: string
+        details: string
+        server: string
+        serverId: string | null
+        started: string
+        finished: string | null
+        durationSec: number
+        progress: number
+        status: string
+        user: string | null
+      }>
+    }>(`/api/admin/nodes/${encodeURIComponent(id)}/tasks`)
+  },
+
   adminDeleteNode(id: string) {
     return request<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}`, {
       method: 'DELETE',
