@@ -6376,9 +6376,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     let networks: any[] = []
     try {
       const res = await incusRequest<any[]>('GET', '/1.0/networks?recursion=1')
-      networks = (res || []).filter((n) => n.managed || ['bridge', 'physical'].includes(n.type))
-    } catch {
-      // Node may be offline or non-local
+      const raw = res?.metadata ?? res
+      if (Array.isArray(raw)) {
+        networks = raw.filter((n) => n.managed || ['bridge', 'physical'].includes(n.type))
+      }
+    } catch (err) {
+      console.warn('Failed to query Incus networks for node:', err)
     }
 
     const config = await getSystemSettings()
