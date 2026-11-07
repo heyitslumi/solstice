@@ -255,7 +255,7 @@ export function ServersPage() {
                               {srv.name}
                             </Link>
                             <span className="truncate text-[11px] text-fg-subtle">
-                              {srv.type.toUpperCase()} · {srv.os} · {srv.region}
+                              {[srv.type.toUpperCase(), srv.os, srv.region].filter(Boolean).join(' · ')}
                             </span>
                           </div>
                         </div>

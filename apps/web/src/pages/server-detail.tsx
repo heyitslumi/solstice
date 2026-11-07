@@ -671,7 +671,7 @@ export function ServerDetailPage() {
   return (
     <AppShell
       title={instance.name}
-      description={`${instance.os} · ${instance.region}`}
+      description={[instance.os, instance.region].filter(Boolean).join(' · ')}
     >
       <div className="flex w-full flex-col gap-6">
         {/* Header */}
@@ -938,7 +938,7 @@ export function ServerDetailPage() {
               </InfoRow>
               <InfoRow label="Node">
                 {instance.nodeName ?? 'Unassigned'}
-                {instance.nodeName && (
+                {instance.nodeName && instance.region && (
                   <span className="ml-2 rounded-control border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-subtle">
                     {instance.region}
                   </span>

@@ -2714,7 +2714,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
       const region = row.location_code
         ? `${row.location_city || row.location_name || row.location_code} (${row.location_code})`
-        : 'Frankfurt (fra-01)'
+        : ''
 
       return {
         id: row.id,
@@ -4793,7 +4793,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         uptime: isRunning ? 'Active' : 'Stopped',
         region: row.location_code
           ? `${row.location_city || row.location_name || row.location_code} (${row.location_code})`
-          : 'Frankfurt (fra-01)',
+          : '',
         nodeName: row.node_name,
         suspendReason: row.suspend_reason ?? null,
         owner: { id: row.owner_id, email: row.owner_email, name: row.owner_name },
