@@ -242,16 +242,7 @@ export function ServerSetupPage({
     }
   }, [])
 
-  // Pre-select the newest Debian template so users can skip OS picking.
-  useEffect(() => {
-    if (selectedOs || osOptions.length === 0) return
-    const debian = osOptions.find((o) => o.group.toLowerCase().includes('debian')) || osOptions[0]
-    if (debian) {
-      setSelectedOs(debian)
-      setOpenGroup(debian.group)
-    }
-  }, [osOptions, selectedOs])
-
+  // No pre-selected OS; require user to pick one.
   const groups = useMemo(() => {
     const map = new Map<string, OsOption[]>()
     for (const o of osOptions) {
