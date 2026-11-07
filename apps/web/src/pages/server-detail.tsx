@@ -286,10 +286,20 @@ export function ServerDetailPage() {
   const [resetPwModalOpen, setResetPwModalOpen] = useState(false)
 
   async function handleEnableSshForward() {
-    if (!id) return
+    if (!id || !instance) return
+    setSshDialogOpen(false)
+    setActiveTab('tasks')
+
+    const taskId = `enable-ssh-${Date.now()}`
+    const desc = `Enabling direct SSH port forward for "${instance.name}"`
+    setPendingTasks((prev) => [{ id: taskId, description: desc, startedAt: Date.now() }, ...prev])
+
     setSshForwardWorking(true)
     setError(null)
     const res = await api.enableSshForward(id)
+    setPendingTasks((prev) => prev.filter((t) => t.id !== taskId))
+    setSshForwardWorking(false)
+
     if (res.ok) {
       setSshForward({
         host: res.data.host,
@@ -297,23 +307,33 @@ export function ServerDetailPage() {
         username: res.data.username,
       })
       flashNotice(`Direct SSH enabled on port ${res.data.hostPort} — login details emailed.`)
+      loadTasks()
     } else {
       setError(res.error.message || 'Failed to enable direct SSH.')
     }
-    setSshForwardWorking(false)
   }
 
   async function handleDisableSshForward() {
-    if (!id) return
+    if (!id || !instance) return
+    setSshDialogOpen(false)
+    setActiveTab('tasks')
+
+    const taskId = `disable-ssh-${Date.now()}`
+    const desc = `Disabling direct SSH port forward for "${instance.name}"`
+    setPendingTasks((prev) => [{ id: taskId, description: desc, startedAt: Date.now() }, ...prev])
+
     setSshForwardWorking(true)
     const res = await api.disableSshForward(id)
+    setPendingTasks((prev) => prev.filter((t) => t.id !== taskId))
+    setSshForwardWorking(false)
+
     if (res.ok) {
       setSshForward(null)
       flashNotice('Direct SSH disabled and the port was freed.')
+      loadTasks()
     } else {
       setError(res.error.message || 'Failed to disable direct SSH.')
     }
-    setSshForwardWorking(false)
   }
 
   async function handleResetPassword() {
