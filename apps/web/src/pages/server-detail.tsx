@@ -2,6 +2,7 @@ import {
   ArrowClockwise,
   ArrowLeft,
   Camera,
+  CircleNotch,
   Copy,
   Globe,
   Key,
@@ -156,15 +157,22 @@ export function ServerDetailPage() {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
   const [tasks, setTasks] = useState<Array<{ id: string; action: string; details: string; ip_address: string | null; created_at: string }>>([])
   const [tasksLoading, setTasksLoading] = useState(false)
+  const [pendingTasks, setPendingTasks] = useState<Array<{ id: string; description: string; startedAt: number }>>([])
 
-  useEffect(() => {
-    if (activeTab !== 'tasks' || !id) return
+  const loadTasks = useCallback(() => {
+    if (!id) return
     setTasksLoading(true)
     void api.getInstanceActivity(id).then((res) => {
       if (res.ok) setTasks(res.data.tasks)
       setTasksLoading(false)
     })
-  }, [activeTab, id])
+  }, [id])
+
+  useEffect(() => {
+    if (activeTab === 'tasks') {
+      loadTasks()
+    }
+  }, [activeTab, loadTasks])
 
   const detailTabs: Array<{ id: DetailTab; label: string; icon: ReactNode }> = [
     { id: 'overview', label: 'Overview', icon: <SquaresFour size={15} aria-hidden /> },
@@ -275,6 +283,7 @@ export function ServerDetailPage() {
   const [cloneOpen, setCloneOpen] = useState(false)
   const [cloneName, setCloneName] = useState('')
   const [cloning, setCloning] = useState(false)
+  const [resetPwModalOpen, setResetPwModalOpen] = useState(false)
 
   async function handleEnableSshForward() {
     if (!id) return
@@ -308,16 +317,26 @@ export function ServerDetailPage() {
   }
 
   async function handleResetPassword() {
-    if (!id) return
+    if (!id || !instance) return
+    setResetPwModalOpen(false)
+    setActiveTab('tasks')
+
+    const taskId = `reset-pw-${Date.now()}`
+    const desc = `Resetting root password for "${instance.name}"`
+    setPendingTasks((prev) => [{ id: taskId, description: desc, startedAt: Date.now() }, ...prev])
+
     setPwWorking(true)
     setError(null)
     const res = await api.generateSshPassword(id)
+    setPendingTasks((prev) => prev.filter((t) => t.id !== taskId))
+    setPwWorking(false)
+
     if (res.ok) {
       flashNotice('New root password issued — sent to your email.')
+      loadTasks()
     } else {
       setError(res.error.message || 'Failed to reset the password.')
     }
-    setPwWorking(false)
   }
 
   async function handleClone(e: React.FormEvent) {
@@ -591,7 +610,7 @@ export function ServerDetailPage() {
       tint: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
       title: 'Reset Password',
       desc: 'New one-time root password',
-      onClick: () => void handleResetPassword(),
+      onClick: () => setResetPwModalOpen(true),
     },
     ...(isAdmin
       ? [
@@ -1385,9 +1404,9 @@ export function ServerDetailPage() {
             <p className="mt-1 text-[12px] text-fg-subtle">
               Every action on this server — power, rebuilds, SSH, forwards, snapshots.
             </p>
-            {tasksLoading ? (
+            {tasksLoading && pendingTasks.length === 0 && tasks.length === 0 ? (
               <p className="mt-4 text-[12px] text-fg-subtle">Loading tasks...</p>
-            ) : tasks.length === 0 ? (
+            ) : tasks.length === 0 && pendingTasks.length === 0 ? (
               <p className="mt-4 text-[12px] text-fg-subtle">No tasks recorded yet.</p>
             ) : (
               <div className="mt-4 overflow-x-auto">
@@ -1400,6 +1419,18 @@ export function ServerDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
+                    {pendingTasks.map((pt) => (
+                      <tr key={pt.id} className="border-b border-border/50 bg-amber-500/5 last:border-0">
+                        <td className="py-2 pr-4 font-medium text-fg">{pt.description}</td>
+                        <td className="py-2 pr-4">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-500">
+                            <CircleNotch size={12} weight="bold" className="animate-spin" />
+                            Running
+                          </span>
+                        </td>
+                        <td className="py-2 text-fg-subtle">{new Date(pt.startedAt).toLocaleTimeString()}</td>
+                      </tr>
+                    ))}
                     {tasks.map((t) => (
                       <tr key={t.id} className="border-b border-border/50 last:border-0">
                         <td className="py-2 pr-4 font-medium text-fg">{t.details}</td>
@@ -1573,6 +1604,44 @@ export function ServerDetailPage() {
               Close
             </Button>
           </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset root password confirmation dialog */}
+      <Dialog open={resetPwModalOpen} onOpenChange={setResetPwModalOpen}>
+        <DialogContent className="max-w-md p-6 text-center" style={{ width: 'min(28rem, calc(100vw - 2rem))' }}>
+          <DialogTitle className="text-center text-[15px] font-semibold">
+            Reset Root Password?
+          </DialogTitle>
+          <DialogDescription className="mt-2 text-center text-[13px]">
+            Are you sure you want to reset the root password for <strong className="text-fg">{instance.name}</strong>?
+          </DialogDescription>
+          <div className="mx-auto mt-5 flex size-12 items-center justify-center rounded-full bg-rose-500/15 text-rose-500">
+            <Key size={24} weight="bold" />
+          </div>
+          <p className="mt-4 rounded-control border border-border bg-surface-2/40 p-3 text-left text-[11px] text-fg-subtle">
+            A new secure random password will be generated and set on the server immediately. For security, the password will never be displayed in the browser and will be sent directly to your registered email address.
+          </p>
+          <div className="mt-6 flex gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex-1"
+              disabled={pwWorking}
+              onClick={() => setResetPwModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              className="flex-1"
+              disabled={pwWorking}
+              onClick={() => void handleResetPassword()}
+            >
+              {pwWorking ? 'Starting...' : 'Reset Password'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
