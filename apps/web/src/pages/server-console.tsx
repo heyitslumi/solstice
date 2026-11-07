@@ -59,6 +59,10 @@ export function ServerConsolePage() {
     setState('connecting')
     setReason(null)
 
+    // Remove any leftover elements from SPICE or past sessions before opening terminal
+    if (containerRef.current) {
+      containerRef.current.replaceChildren()
+    }
     const term = new XTerm({
       cursorBlink: true,
       cursorStyle: 'bar',
@@ -226,15 +230,14 @@ export function ServerConsolePage() {
       cancelled = true
       try { spiceRef.current?.stop() } catch { /* ignore */ }
       spiceRef.current = null
-      // spice-html5 moves its canvas out of #spice-screen into a plain div
-      // that outlives the React unmount — remove any stray canvases.
+      // Clean up spice-screen and any leftover canvases
       const screen = document.getElementById('spice-screen')
       if (screen) screen.replaceChildren()
       const msg = document.getElementById('spice-message')
       if (msg) msg.replaceChildren()
-      document.querySelectorAll('canvas').forEach((c) => {
-        if (!containerRef.current?.contains(c)) c.remove()
-      })
+      // Remove any canvases attached anywhere in wrapRef or body
+      wrapRef.current?.querySelectorAll('canvas').forEach((c) => c.remove())
+      document.querySelectorAll('#spice-screen canvas').forEach((c) => c.remove())
     }
   }, [mode, id, takeover, attempt])
 
@@ -274,16 +277,16 @@ export function ServerConsolePage() {
               </h1>
             </div>
             <div className="flex items-center gap-1 rounded-control border border-border bg-surface p-0.5">
-              {([
-                { id: 'shell', label: 'Shell' },
-                { id: 'console', label: 'Console' },
-                { id: 'graphical', label: 'Graphical' },
-              ] as const).map((m) => (
+              {(
+                [
+                  { id: 'shell' as const, label: 'Shell' },
+                  { id: 'console' as const, label: 'Console' },
+                  ...(instanceType === 'kvm' || !instanceType ? [{ id: 'graphical' as const, label: 'Graphical' }] : []),
+                ] as const
+              ).map((m) => (
                 <button
                   key={m.id}
                   type="button"
-                  disabled={m.id === 'graphical' && !!instanceType && instanceType !== 'kvm'}
-                  title={m.id === 'graphical' && instanceType && instanceType !== 'kvm' ? 'Graphical console is only available for VMs' : undefined}
                   onClick={() => {
                     setMode(m.id)
                     setState('connecting')

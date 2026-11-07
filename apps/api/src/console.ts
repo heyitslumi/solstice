@@ -162,14 +162,13 @@ async function openExecSession(
   instanceName: string,
   cols: number,
   rows: number,
-  shell: string,
+  command: string[],
 ): Promise<ExecSession> {
   const res = await incusRequest<any>(
     'POST',
     `/1.0/instances/${encodeURIComponent(instanceName)}/exec`,
     {
-      // Run directly (no sh -c wrapper): wrappers break interactive startup.
-      command: [shell, '-l'],
+      command,
       environment: { TERM: 'xterm-256color' },
       'wait-for-websocket': true,
       interactive: true,
@@ -395,17 +394,23 @@ async function serveConsole(
   let exec: ExecSession | null = null
   try {
     if (mode === 'console') {
-      // Retry across the forkconsole teardown window of a previous session.
-      for (let attempt = 0; ; attempt++) {
-        try {
-          exec = await openConsoleSession(instance.name, cols, rows, takeover)
-          break
-        } catch (err: any) {
-          if (err?.message === 'CONSOLE_BUSY' && attempt < 3) {
-            await new Promise((r) => setTimeout(r, 2000))
-            continue
+      if (instance.type === 'lxc' || instance.type === 'container') {
+        // Incus forkconsole for unprivileged containers frequently fails with "attaching to container failed"
+        // if /dev/console is held or unrouted. Spawning /bin/login provides the real system login console prompt.
+        exec = await openExecSession(instance.name, cols, rows, ['/bin/login'])
+      } else {
+        // Retry across the forkconsole teardown window of a previous session for VMs.
+        for (let attempt = 0; ; attempt++) {
+          try {
+            exec = await openConsoleSession(instance.name, cols, rows, takeover)
+            break
+          } catch (err: any) {
+            if (err?.message === 'CONSOLE_BUSY' && attempt < 3) {
+              await new Promise((r) => setTimeout(r, 2000))
+              continue
+            }
+            throw err
           }
-          throw err
         }
       }
     } else {
@@ -417,7 +422,7 @@ async function serveConsole(
       } catch {
         shell = '/bin/bash'
       }
-      exec = await openExecSession(instance.name, cols, rows, shell)
+      exec = await openExecSession(instance.name, cols, rows, [shell, '-l'])
     }
   } catch (err: any) {
     if (err?.message === 'CONSOLE_TAKEN') {
