@@ -262,18 +262,19 @@ export function ServerConsolePage() {
 
   return (
     <AppShell title={serverName || 'Console'} description="Built-in terminal.">
-      <div className="flex w-full flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+      <div className="flex w-full min-w-0 flex-col gap-4 overflow-hidden">
+        {/* Top Controls Bar */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Button variant="secondary" size="sm" asChild className="gap-1.5 text-[12px]">
               <Link to={id ? `/servers/${id}` : '/servers'}>
                 <ArrowLeft size={14} />
                 Back to server
               </Link>
             </Button>
-            <div className="flex items-center gap-2">
-              <Terminal size={16} className="text-fg-subtle" aria-hidden />
-              <h1 className="truncate font-mono text-[16px] font-bold text-fg">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Terminal size={16} className="text-fg-subtle shrink-0" aria-hidden />
+              <h1 className="truncate font-mono text-[14px] sm:text-[16px] font-bold text-fg max-w-[140px] sm:max-w-[200px]">
                 {serverName || 'Console'}
               </h1>
             </div>
@@ -295,7 +296,7 @@ export function ServerConsolePage() {
                     setTakenCode(null)
                   }}
                   className={cn(
-                    'rounded-control px-2.5 py-1 text-[12px] font-medium transition-colors',
+                    'rounded-control px-2 sm:px-2.5 py-1 text-[11px] sm:text-[12px] font-medium transition-colors',
                     mode === m.id ? 'bg-surface-2 text-fg shadow-xs' : 'text-fg-subtle hover:text-fg',
                   )}
                 >
@@ -305,7 +306,7 @@ export function ServerConsolePage() {
             </div>
             <span
               className={cn(
-                'rounded-full border px-2.5 py-0.5 text-[11px] font-medium flex items-center gap-1.5',
+                'rounded-full border px-2 py-0.5 text-[10px] sm:text-[11px] font-medium flex items-center gap-1.5 shrink-0',
                 state === 'open'
                   ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                   : state === 'connecting'
@@ -313,17 +314,17 @@ export function ServerConsolePage() {
                     : 'border-border bg-surface-2/60 text-fg-subtle',
               )}
             >
-              {state === 'connecting' ? <CliSpinner name="dots" className="text-[12px]" /> : null}
+              {state === 'connecting' ? <CliSpinner name="dots" className="text-[11px]" /> : null}
               {state === 'open' ? 'Connected' : state === 'connecting' ? 'Connecting...' : 'Closed'}
             </span>
-
           </div>
+
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
               size="sm"
               onClick={() => void toggleFullscreen()}
-              className="gap-1.5 text-[12px]"
+              className="flex-1 sm:flex-none gap-1.5 text-[12px]"
             >
               {isFullscreen ? <ArrowsIn size={14} /> : <ArrowsOut size={14} />}
               {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
@@ -333,7 +334,7 @@ export function ServerConsolePage() {
               size="sm"
               onClick={() => setAttempt((n) => n + 1)}
               disabled={state === 'connecting'}
-              className="gap-1.5 text-[12px]"
+              className="flex-1 sm:flex-none gap-1.5 text-[12px]"
             >
               <ArrowClockwise size={14} className={state === 'connecting' ? 'animate-spin' : ''} />
               Reconnect
@@ -367,24 +368,24 @@ export function ServerConsolePage() {
         </Dialog>
 
         {mode === 'graphical' ? (
-          <div className="overflow-hidden rounded-panel border border-border bg-black">
-            <div id="spice-screen" ref={spiceScreenRef} className="h-[60vh] min-h-[420px] w-full" />
+          <div className="w-full max-w-full overflow-hidden rounded-panel border border-border bg-black">
+            <div id="spice-screen" ref={spiceScreenRef} className="h-[60vh] min-h-[420px] w-full overflow-hidden" />
             <div id="spice-message" ref={spiceMsgRef} className="px-3 py-2 text-[12px] text-fg-subtle" />
           </div>
         ) : (
-        <div
-          ref={wrapRef}
-          className="overflow-hidden rounded-panel border border-border bg-[#0d1117] [&:fullscreen]:rounded-none [&:fullscreen]:border-0"
-        >
           <div
-            ref={containerRef}
-            className={
-              isFullscreen
-                ? 'h-screen w-full p-3 [&_.xterm]:h-full'
-                : 'h-[60vh] min-h-[420px] w-full p-3 [&_.xterm]:h-full'
-            }
-          />
-        </div>
+            ref={wrapRef}
+            className="w-full max-w-full overflow-hidden rounded-panel border border-border bg-[#0d1117] [&:fullscreen]:rounded-none [&:fullscreen]:border-0"
+          >
+            <div
+              ref={containerRef}
+              className={
+                isFullscreen
+                  ? 'h-screen w-full overflow-hidden p-3 [&_.xterm]:h-full [&_.xterm-viewport]:overflow-x-hidden'
+                  : 'h-[60vh] min-h-[420px] w-full overflow-hidden p-2 sm:p-3 [&_.xterm]:h-full [&_.xterm-viewport]:overflow-x-hidden'
+              }
+            />
+          </div>
         )}
 
         <p className="text-[12px] text-fg-subtle">
