@@ -395,6 +395,7 @@ const SCHEMA = `
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS primary_network text NOT NULL DEFAULT 'incusbr0';
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS display_name text NOT NULL DEFAULT '';
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS cpu_model text NOT NULL DEFAULT '';
+  ALTER TABLE nodes ADD COLUMN IF NOT EXISTS cpu_display text NOT NULL DEFAULT '';
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS server_limit integer NOT NULL DEFAULT 0;
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS storage_enabled boolean NOT NULL DEFAULT true;
   /* Task audit fields on activity_logs */

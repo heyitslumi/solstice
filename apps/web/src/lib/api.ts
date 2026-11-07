@@ -335,6 +335,7 @@ export interface ApiNode {
   name: string
   displayName?: string
   cpuModel?: string
+  cpuDisplay?: string
   fqdn: string
   ipAddress: string
   publicIp?: string
@@ -463,6 +464,7 @@ export interface ApiInstanceDetail extends ApiInstance {
   diskGb: number
   imageAlias: string
   nodeName?: string | null
+  cpuModel?: string | null
   suspendReason?: string | null
   networkInterfaces: ApiNetworkInterface[]
 }

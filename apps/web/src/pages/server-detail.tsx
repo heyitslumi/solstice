@@ -930,6 +930,11 @@ export function ServerDetailPage() {
                   {instance.os} <span className="text-fg-subtle">({instance.imageAlias})</span>
                 </span>
               </InfoRow>
+              {instance.cpuModel && (
+                <InfoRow label="CPU Model">
+                  <span className="text-[12px] font-medium text-fg">{instance.cpuModel}</span>
+                </InfoRow>
+              )}
               <InfoRow label="Status">
                 <span className="inline-flex items-center gap-1.5">
                   <StatusDot status={instance.status} />

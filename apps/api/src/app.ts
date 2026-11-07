@@ -4770,10 +4770,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const instanceId = c.req.param('id')
     const me = await queryOne<UserRow>('SELECT is_admin FROM users WHERE id = $1', [session.user_id])
     const row = await queryOne<
-      InstanceRow & { node_name: string | null; location_name: string | null; location_code: string | null; location_city: string | null; owner_id: string; owner_email: string; owner_name: string }
+      InstanceRow & { node_name: string | null; node_cpu_display: string | null; location_name: string | null; location_code: string | null; location_city: string | null; owner_id: string; owner_email: string; owner_name: string }
     >(
       `SELECT i.*,
               COALESCE(NULLIF(n.display_name, ''), n.name) AS node_name,
+              n.cpu_display AS node_cpu_display,
               l.name AS location_name,
               l.short_code AS location_code,
               l.city AS location_city,
@@ -4863,6 +4864,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           ? `${row.location_city || row.location_name || row.location_code} (${row.location_code})`
           : '',
         nodeName: row.node_name,
+        cpuModel: row.node_cpu_display || null,
         suspendReason: row.suspend_reason ?? null,
         owner: { id: row.owner_id, email: row.owner_email, name: row.owner_name },
         cpuUsage: isRunning ? 5 : 0,
@@ -6274,6 +6276,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
               n.name,
               n.display_name AS "displayName",
               n.cpu_model AS "cpuModel",
+              n.cpu_display AS "cpuDisplay",
               n.fqdn,
               n.ip_address AS "ipAddress",
               n.public_ip AS "publicIp",
@@ -6322,13 +6325,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<{ id: string }>(
-        `INSERT INTO nodes (name, display_name, cpu_model, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores, server_limit)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        `INSERT INTO nodes (name, display_name, cpu_model, cpu_display, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores, server_limit)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING id`,
         [
           String(body.name).trim(),
           String(body.displayName || '').trim(),
           String(body.cpuModel || '').trim(),
+          String(body.cpuDisplay || '').trim(),
           String(body.fqdn).trim(),
           String(body.ipAddress || body.fqdn).trim(),
           String(body.publicIp || '').trim(),
@@ -6387,6 +6391,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.cpuModel !== undefined) {
       fields.push(`cpu_model = $${idx++}`)
       values.push(String(body.cpuModel).trim())
+    }
+    if (body.cpuDisplay !== undefined) {
+      fields.push(`cpu_display = $${idx++}`)
+      values.push(String(body.cpuDisplay).trim())
     }
     if (body.fqdn !== undefined && !isDefaultLocal) {
       fields.push(`fqdn = $${idx++}`)

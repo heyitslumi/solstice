@@ -38,6 +38,7 @@ export function AdminNodeFormPage() {
   const [name, setName] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [cpuModel, setCpuModel] = useState('')
+  const [cpuDisplay, setCpuDisplay] = useState('')
   const [fqdn, setFqdn] = useState('')
   const [ipAddress, setIpAddress] = useState('')
   const [publicIp, setPublicIp] = useState('')
@@ -370,6 +371,7 @@ export function AdminNodeFormPage() {
             setName(found.name)
             setDisplayName(found.displayName || '')
             setCpuModel(found.cpuModel || '')
+            setCpuDisplay(found.cpuDisplay || '')
             setFqdn(found.fqdn)
             setIpAddress(found.ipAddress || '')
             setPublicIp(found.publicIp || '')
@@ -412,6 +414,7 @@ export function AdminNodeFormPage() {
       name: name.trim(),
       displayName: displayName.trim(),
       cpuModel: cpuModel.trim(),
+      cpuDisplay: cpuDisplay.trim(),
       fqdn: fqdn.trim(),
       ipAddress: ipAddress.trim() || fqdn.trim(),
       publicIp: publicIp.trim(),
@@ -809,6 +812,20 @@ export function AdminNodeFormPage() {
                       />
                       <span className="mt-0.5 block text-[11px] text-fg-subtle">
                         Name shown to end users. Leave blank to default to Node Name.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-[12px] font-semibold text-fg">CPU Model (Marketing / End User)</label>
+                      <input
+                        type="text"
+                        value={cpuDisplay}
+                        onChange={(e) => setCpuDisplay(e.target.value)}
+                        placeholder="e.g. Intel(R) Xeon(R) E5-2680 v4"
+                        className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 text-[12px] text-fg focus:border-accent focus:outline-none"
+                      />
+                      <span className="mt-0.5 block text-[11px] text-fg-subtle">
+                        This will be shown to the end user. Leave blank if you don't want to show a CPU model.
                       </span>
                     </div>
 
