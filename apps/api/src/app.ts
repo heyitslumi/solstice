@@ -856,7 +856,7 @@ function deletionEmail(code: string, appName = 'VPS Panel') {
   return {
     subject: `Confirm deletion of your ${appName} account`,
     text: [
-      'You requested to permanently delete your ${appName} account.',
+      `You requested to permanently delete your ${appName} account.`,
       '',
       'Enter this code to confirm deletion:',
       '',
@@ -866,7 +866,7 @@ function deletionEmail(code: string, appName = 'VPS Panel') {
       'If you did not make this request, you can ignore this email and your account remains safe.',
     ].join('\n'),
     html: [
-      '<p>You requested to permanently delete your ${appName} account.</p>',
+      `<p>You requested to permanently delete your ${appName} account.</p>`,
       '<p>Enter this code to confirm deletion:</p>',
       `<p style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:26px;letter-spacing:0.18em"><strong>${code}</strong></p>`,
       '<p>This code expires in 15 minutes. Once confirmed, all your instances, SSH keys, sessions, and data will be destroyed immediately.</p>',
