@@ -3219,6 +3219,19 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       })
     } catch (err: any) {
       console.error('OS install failed:', err)
+      await logActivity(
+        session.user_id,
+        'install_os',
+        `Failed to install OS on "${instance.name}": ${err?.message || 'unknown error'}`,
+        clientKey(c),
+        {
+          instanceId: instance.id,
+          nodeId: instance.node_id,
+          status: 'failure',
+          progress: 100,
+          durationMs: 5000,
+        },
+      ).catch(() => {})
       return c.json({ message: err?.message || 'Failed to install OS.' }, 500)
     }
   })
@@ -3424,6 +3437,19 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       })
     } catch (err: any) {
       console.error('Rebuild failed:', err)
+      await logActivity(
+        session.user_id,
+        'rebuild_instance',
+        `Failed to rebuild "${instance.name}": ${err?.message || 'unknown error'}`,
+        clientKey(c),
+        {
+          instanceId: instance.id,
+          nodeId: instance.node_id,
+          status: 'failure',
+          progress: 100,
+          durationMs: 5000,
+        },
+      ).catch(() => {})
       return c.json({ message: err?.message || 'Failed to rebuild. The previous system may be gone.' }, 500)
     }
   })
@@ -3465,6 +3491,19 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       return c.json({ ok: true, action })
     } catch (err: any) {
       console.error(`Failed to ${action} instance:`, err)
+      await logActivity(
+        session.user_id,
+        `${action}_instance`,
+        `Failed ${action.toUpperCase()} action on instance "${instance.name}": ${err?.message || 'unknown error'}`,
+        clientKey(c),
+        {
+          instanceId: instance.id,
+          nodeId: instance.node_id,
+          status: 'failure',
+          progress: 100,
+          durationMs: 2000,
+        },
+      ).catch(() => {})
       return c.json({ message: err?.message || `Failed to ${action} instance.` }, 500)
     }
   })
@@ -4781,19 +4820,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!session) return c.json({ message: 'Not signed in.' }, 401)
     const instance = await resolveInstance(c, session.user_id)
     if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+    const me = await queryOne<UserRow>('SELECT is_admin FROM users WHERE id = $1', [session.user_id])
     const rows = await query<{
       id: string
       action: string
       details: string
       ip_address: string | null
       created_at: string
+      status: string | null
     }>(
-      `SELECT id, action, details, ip_address, created_at
+      `SELECT id, action, details, ip_address, created_at, COALESCE(status, 'success') AS status
          FROM activity_logs
-        WHERE user_id = $1 AND details LIKE $2
+        WHERE (instance_id = $1 OR details LIKE $2)
+          AND ($3::boolean = true OR user_id = $4)
         ORDER BY created_at DESC
         LIMIT 50`,
-      [session.user_id, `%"${instance.name}"%`],
+      [instance.id, `%"${instance.name}"%`, !!me?.is_admin, session.user_id],
     )
     return c.json({ tasks: rows })
   })

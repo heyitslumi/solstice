@@ -945,7 +945,7 @@ export const api = {
   },
 
   getInstanceActivity(id: string) {
-    return request<{ tasks: Array<{ id: string; action: string; details: string; ip_address: string | null; created_at: string }> }>(`/api/instances/${encodeURIComponent(id)}/activity`)
+    return request<{ tasks: Array<{ id: string; action: string; details: string; ip_address: string | null; created_at: string; status?: string }> }>(`/api/instances/${encodeURIComponent(id)}/activity`)
   },
 
   getSshForward(id: string) {

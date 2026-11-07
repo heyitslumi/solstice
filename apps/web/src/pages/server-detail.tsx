@@ -156,7 +156,7 @@ export function ServerDetailPage() {
 
   type DetailTab = 'overview' | 'snapshots' | 'network' | 'firewall' | 'tasks'
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
-  const [tasks, setTasks] = useState<Array<{ id: string; action: string; details: string; ip_address: string | null; created_at: string }>>([])
+  const [tasks, setTasks] = useState<Array<{ id: string; action: string; details: string; ip_address: string | null; created_at: string; status?: string }>>([])
   const [tasksLoading, setTasksLoading] = useState(false)
   const [pendingTasks, setPendingTasks] = useState<Array<{ id: string; description: string; startedAt: number }>>([])
 
@@ -1483,15 +1483,26 @@ export function ServerDetailPage() {
                         <td className="py-2 text-fg-subtle">{new Date(pt.startedAt).toLocaleTimeString()}</td>
                       </tr>
                     ))}
-                    {tasks.map((t) => (
-                      <tr key={t.id} className="border-b border-border/50 last:border-0">
-                        <td className="py-2 pr-4 font-medium text-fg">{t.details}</td>
-                        <td className="py-2 pr-4">
-                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400">Completed</span>
-                        </td>
-                        <td className="py-2 text-fg-subtle">{new Date(t.created_at).toLocaleString()}</td>
-                      </tr>
-                    ))}
+                    {tasks.map((t) => {
+                      const isFailed = t.status === 'failure' || t.status === 'failed'
+                      return (
+                        <tr key={t.id} className="border-b border-border/50 last:border-0">
+                          <td className="py-2 pr-4 font-medium text-fg">{t.details}</td>
+                          <td className="py-2 pr-4">
+                            {isFailed ? (
+                              <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-medium text-rose-400">
+                                Failed
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
+                                Completed
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 text-fg-subtle">{new Date(t.created_at).toLocaleString()}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
