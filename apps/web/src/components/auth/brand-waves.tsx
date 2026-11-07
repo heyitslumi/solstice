@@ -21,7 +21,7 @@ export function BrandWavesBackground() {
 
       try {
         bgInstance = new WavyWavesBg({
-          dom: 'brand-waves-container',
+          dom: el,
           // Solstice Ember palette: deep ink, dark ember, vibrant sun orange, gold, and dark navy
           colors: [
             '#0a1018', // deep background slate
@@ -56,10 +56,9 @@ export function BrandWavesBackground() {
 
   return (
     <div
-      id="brand-waves-container"
       ref={containerRef}
       className="pointer-events-none absolute inset-0 size-full overflow-hidden"
-      style={{ opacity: 0.85 }}
+      style={{ opacity: 0.65 }}
     />
   )
 }
