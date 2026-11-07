@@ -855,7 +855,7 @@ export function ServerDetailPage() {
 
 
         {/* Server tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 rounded-panel border border-border bg-surface p-1.5">
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-panel border border-border bg-surface p-1.5">
           {detailTabs.map((tab) => (
             <button
               key={tab.id}
