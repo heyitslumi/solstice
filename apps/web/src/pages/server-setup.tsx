@@ -309,6 +309,7 @@ export function ServerSetupPage({
 
     const res = isRebuild && instanceId
       ? await api.rebuildInstance(instanceId, {
+          name: name.trim().toLowerCase() || undefined,
           templateId: selectedOs.id,
           hostname: hostname.trim() || undefined,
           timezone: tz,
@@ -510,8 +511,20 @@ export function ServerSetupPage({
           <h2 className="text-[15px] font-semibold">Name</h2>
           <p className="mt-0.5 text-[12px] leading-relaxed text-fg-subtle">The server name allows you to easily identify the server under your account.</p>
           <div className="mt-3 flex gap-2.5">
-            <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="my-server" disabled={!!instanceId} />
-            <Button variant="secondary" onClick={() => setName(`server-${Math.floor(Math.random() * 900 + 100)}`)}>Random</Button>
+            <input
+              className={inputClass}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="my-server"
+              disabled={!!instanceId && !isRebuild}
+            />
+            <Button
+              variant="secondary"
+              onClick={() => setName(`server-${Math.floor(Math.random() * 900 + 100)}`)}
+              disabled={!!instanceId && !isRebuild}
+            >
+              Random
+            </Button>
           </div>
         </section>
 

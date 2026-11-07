@@ -3237,6 +3237,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     const body = await c.req
       .json<{
+        name?: string
         templateId?: string
         hostname?: string
         timezone?: string
@@ -3247,6 +3248,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       }>()
       .catch(() => null)
     if (!body?.templateId) return c.json({ message: 'An OS template is required.' }, 400)
+
+    let newName = instance.name
+    if (body.name) {
+      const cleanName = String(body.name).trim().toLowerCase()
+      if (!/^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/.test(cleanName)) {
+        return c.json(
+          { message: 'Server name must be 3-32 characters, lowercase alphanumeric and hyphens only.' },
+          400,
+        )
+      }
+      if (cleanName !== instance.name) {
+        const taken = await queryOne('SELECT id FROM instances WHERE name = $1 AND id <> $2', [cleanName, instance.id])
+        if (taken) return c.json({ message: 'A server with this name already exists.' }, 409)
+        newName = cleanName
+      }
+    }
 
     let osConfig
     try {
@@ -3289,7 +3306,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       await incus.createInstance({
-        name: instance.name,
+        name: newName,
         type: instance.type === 'kvm' ? 'virtual-machine' : 'container',
         imageAlias: osConfig.alias,
         cpu: instance.cores,
@@ -3302,7 +3319,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         swapMb,
         dnsServers,
       })
-      await incus.setInstanceState(instance.name, 'start').catch((e) => {
+      await incus.setInstanceState(newName, 'start').catch((e) => {
         console.warn('Failed to start newly installed instance:', e)
       })
 
@@ -3312,7 +3329,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         try {
           let containerIp: string | null = null
           for (let attempt = 0; attempt < 15 && !containerIp; attempt++) {
-            const state = await incus.getInstanceState(instance.name).catch(() => null)
+            const state = await incus.getInstanceState(newName).catch(() => null)
             containerIp = containerGlobalIpv4(state)
             if (!containerIp) await new Promise((r) => setTimeout(r, 3000))
           }
@@ -3330,7 +3347,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
             if (free.length > 0) {
               sshHostPort = free[Math.floor(Math.random() * free.length)]
               await attachForward(
-                instance.name,
+                newName,
                 { kind: 'ssh', host_port: sshHostPort, container_port: 22, protocol: 'tcp' },
                 containerIp,
               )
@@ -3348,22 +3365,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       }
       if (sshPublicKeys.length === 0) {
         try {
-          rootPassword = await issueRootPassword(instance.name)
+          rootPassword = await issueRootPassword(newName)
         } catch (err: any) {
           console.warn('Root password setup warning:', err?.message)
         }
       }
 
       await query(
-        `UPDATE instances SET os = $1, image_alias = $2, hostname = $3, timezone = $4, swap_mb = $5, dns_servers = $6::jsonb
-         WHERE id = $7`,
-        [osConfig.name, osConfig.alias, hostname, timezone, swapMb, JSON.stringify(dnsServers), instance.id],
+        `UPDATE instances SET name = $1, os = $2, image_alias = $3, hostname = $4, timezone = $5, swap_mb = $6, dns_servers = $7::jsonb
+         WHERE id = $8`,
+        [newName, osConfig.name, osConfig.alias, hostname, timezone, swapMb, JSON.stringify(dnsServers), instance.id],
       )
 
       await logActivity(
         session.user_id,
         'rebuild_instance',
-        `Rebuilt "${instance.name}" with ${osConfig.name}`,
+        `Rebuilt "${newName}" with ${osConfig.name}`,
         clientKey(c),
       )
 
@@ -3374,7 +3391,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         if (owner2) {
           passwordEmailed = await sendSshAccessEmail({
             user: owner2,
-            instanceName: instance.name,
+            instanceName: newName,
             os: osConfig.name,
             sshCmd: sshHostPort ? `ssh -p ${sshHostPort} root@${host}` : null,
             username: 'root',
@@ -3389,7 +3406,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
       return c.json({
         id: instance.id,
-        name: instance.name,
+        name: newName,
         os: osConfig.name,
         sshHostPort,
         passwordEmailed,

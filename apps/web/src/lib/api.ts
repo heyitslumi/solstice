@@ -766,6 +766,7 @@ export const api = {
   },
 
   rebuildInstance(id: string, input: {
+    name?: string
     templateId: string
     hostname?: string
     timezone?: string
