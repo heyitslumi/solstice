@@ -443,16 +443,6 @@ export async function migrate() {
     )
   }
 
-  // Seed default locations if none exist
-  const locCount = await queryOne<{ count: string }>('SELECT count(*) FROM locations')
-  if (locCount && Number(locCount.count) === 0) {
-    await query(
-      `INSERT INTO locations (short_code, name, description, country_code, city)
-       VALUES
-         ('us-east-1', 'US East (N. Virginia)', 'Primary North American datacenter cluster', 'US', 'Ashburn'),
-         ('eu-central-1', 'EU Central (Frankfurt)', 'European flagship edge zone', 'DE', 'Frankfurt')`,
-    )
-  }
 
   // Seed default local incus socket node if none exist using actual host hardware
   const nodeCount = await queryOne<{ count: string }>('SELECT count(*) FROM nodes')
