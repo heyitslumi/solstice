@@ -275,7 +275,12 @@ export function ServerConsolePage() {
                   type="button"
                   disabled={m.id === 'graphical' && !!instanceType && instanceType !== 'kvm'}
                   title={m.id === 'graphical' && instanceType && instanceType !== 'kvm' ? 'Graphical console is only available for VMs' : undefined}
-                  onClick={() => setMode(m.id)}
+                  onClick={() => {
+                    setMode(m.id)
+                    setState('connecting')
+                    setReason(null)
+                    setTakenCode(null)
+                  }}
                   className={cn(
                     'rounded-control px-2.5 py-1 text-[12px] font-medium transition-colors',
                     mode === m.id ? 'bg-surface-2 text-fg shadow-xs' : 'text-fg-subtle hover:text-fg',
