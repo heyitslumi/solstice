@@ -634,7 +634,7 @@ export function ServerDetailPage() {
       title={instance.name}
       description={`${instance.os} · ${instance.region}`}
     >
-      <div className="flex w-full flex-col gap-5">
+      <div className="flex w-full flex-col gap-6">
         {/* Header */}
         <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
