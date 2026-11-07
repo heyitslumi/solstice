@@ -601,34 +601,26 @@ export function AdminNodeFormPage() {
         ) : activeTab === 'general' ? (
           <form
             onSubmit={handleSubmit}
-            className="rounded-panel border border-border bg-surface p-6 shadow-2xs"
+            className="flex flex-col gap-6"
           >
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-              {/* Left Column: Identification & Network Connection */}
-              <div className="space-y-5">
-                {/* Arch badge row */}
-                <div className="flex items-center justify-between border-b border-border/60 pb-3">
-                  <span className="text-[13px] font-medium text-fg">Arch</span>
-                  <span className="rounded bg-accent/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-accent-text">
-                    x86_64
-                  </span>
+            {/* Card 1: Node Connection & Regional Endpoint */}
+            <div className="rounded-panel border border-border bg-surface p-6 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-fg">Hypervisor Host Connection</h2>
+                  <p className="text-[11px] text-fg-subtle">
+                    Endpoints, addresses, and internal Incus comms configuration.
+                  </p>
                 </div>
+                <span className="rounded bg-accent/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-accent-text">
+                  x86_64 • Incus Native
+                </span>
+              </div>
 
-                {/* Hypervisor License/Type */}
-                <div className="flex flex-col gap-1 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">License / Virtualization Type</label>
-                  <select
-                    disabled
-                    className="mt-1 h-9 w-full rounded-control border border-field-border bg-surface-2 px-3 text-[13px] text-fg-subtle opacity-80"
-                  >
-                    <option>Incus (LXD / KVM Engine) - Unlimited</option>
-                  </select>
-                </div>
-
-                {/* Internal Node Name */}
-                <div className="flex flex-col gap-1 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">
-                    Name <span className="text-danger">*</span>
+              <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">
+                    Node Name <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
@@ -636,14 +628,15 @@ export function AdminNodeFormPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="node-01"
-                    className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                    className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
                   />
-                  <span className="text-[11px] text-fg-subtle">Unique internal hypervisor identifier.</span>
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Internal identifier for this virtualization compute node.
+                  </span>
                 </div>
 
-                {/* Display Name / FQDN */}
-                <div className="flex flex-col gap-1 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">
                     Hostname / FQDN <span className="text-danger">*</span>
                   </label>
                   <input
@@ -654,18 +647,17 @@ export function AdminNodeFormPage() {
                     placeholder="node01.example.com"
                     disabled={isDefaultLocalNode}
                     className={cn(
-                      'mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none',
+                      'mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none',
                       isDefaultLocalNode && 'cursor-not-allowed opacity-60 bg-surface-2',
                     )}
                   />
-                  <span className="text-[11px] text-fg-subtle">
-                    Domain or host endpoint used for client connectivity and API access.
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Host endpoint used for connectivity and service routing.
                   </span>
                 </div>
 
-                {/* Daemon IP */}
-                <div className="flex flex-col gap-1 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">IP (Daemon / Internal)</label>
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">Daemon IP Address (Internal)</label>
                   <input
                     type="text"
                     value={ipAddress}
@@ -673,53 +665,54 @@ export function AdminNodeFormPage() {
                     placeholder="10.0.1.10"
                     disabled={isDefaultLocalNode}
                     className={cn(
-                      'mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none',
+                      'mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none',
                       isDefaultLocalNode && 'cursor-not-allowed opacity-60 bg-surface-2',
                     )}
                   />
-                  <span className="text-[11px] text-fg-subtle">
-                    Internal IP address used by the panel to communicate with Incus daemon.
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    {isDefaultLocalNode
+                      ? 'Local loopback daemon connection.'
+                      : 'Internal communication address used by panel backend.'}
                   </span>
                 </div>
 
-                {/* Comms Port */}
-                <div className="flex flex-col gap-1 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">Comms Port (Daemon)</label>
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">Comms Port (Daemon)</label>
                   <input
                     type="number"
                     value={port}
                     onChange={(e) => setPort(Number(e.target.value))}
                     disabled={isDefaultLocalNode}
                     className={cn(
-                      'mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none',
+                      'mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none',
                       isDefaultLocalNode && 'cursor-not-allowed opacity-60 bg-surface-2',
                     )}
                   />
-                  <span className="text-[11px] text-fg-subtle">Standard Incus daemon port is 8443.</span>
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Standard Incus REST API port is 8443.
+                  </span>
                 </div>
 
-                {/* Public IPv4 (Ingress) */}
-                <div className="flex flex-col gap-1 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">Public IPv4 (Ingress)</label>
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">Public IPv4 (Ingress)</label>
                   <input
                     type="text"
                     value={publicIp}
                     onChange={(e) => setPublicIp(e.target.value)}
                     placeholder="5.231.32.77"
-                    className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                    className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
                   />
-                  <span className="text-[11px] text-fg-subtle">
-                    Public IP address users connect to (e.g. for SSH and forwarded ports).
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Public address used for SSH port forwards and external ingress.
                   </span>
                 </div>
 
-                {/* Regional Location */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[13px] font-medium text-fg">Location / Region</label>
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">Datacenter / Region Location</label>
                   <select
                     value={locationId}
                     onChange={(e) => setLocationId(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
+                    className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
                   >
                     <option value="">-- No Location Assigned --</option>
                     {locations.map((loc) => (
@@ -728,114 +721,75 @@ export function AdminNodeFormPage() {
                       </option>
                     ))}
                   </select>
-                  <span className="text-[11px] text-fg-subtle">Datacenter cluster assignment.</span>
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Geographic placement shown to users during instance creation.
+                  </span>
                 </div>
               </div>
+            </div>
 
-              {/* Right Column: Limits & Virtualization Settings */}
-              <div className="space-y-5">
-                {/* Limits Section Header */}
-                <div className="border-b border-border/60 pb-2">
-                  <span className="text-[13px] font-semibold text-fg">Hardware Limits</span>
-                  <p className="text-[11px] text-fg-subtle">0 or blank = unlimited.</p>
-                </div>
+            {/* Card 2: Hardware Capacity Limits */}
+            <div className="rounded-panel border border-border bg-surface p-6 shadow-2xs">
+              <div className="border-b border-border pb-4">
+                <h2 className="text-[15px] font-semibold text-fg">Hardware Capacity Limits</h2>
+                <p className="text-[11px] text-fg-subtle">
+                  Maximum assignable compute and storage allocation pools on this hypervisor.
+                </p>
+              </div>
 
-                {/* Cores Limit */}
-                <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-3">
-                  <span className="w-28 text-[13px] font-medium text-fg">CPU Cores</span>
+              <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-3">
+                <div className="rounded-control border border-border bg-surface-2/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[12px] font-semibold text-fg">CPU Limit</label>
+                    <span className="text-[11px] font-mono text-fg-subtle">Cores</span>
+                  </div>
                   <input
                     type="number"
                     value={cpuCores}
                     onChange={(e) => setCpuCores(Number(e.target.value))}
-                    className="h-9 flex-1 rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                    className="mt-2 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[14px] font-semibold text-fg focus:border-accent focus:outline-none"
                   />
-                  <span className="w-20 text-right text-[11px] text-fg-subtle">Total Cores</span>
+                  <span className="mt-1.5 block text-[11px] text-fg-subtle">
+                    Max logical vCPUs for instances.
+                  </span>
                 </div>
 
-                {/* Memory Limit */}
-                <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-3">
-                  <span className="w-28 text-[13px] font-medium text-fg">Memory</span>
+                <div className="rounded-control border border-border bg-surface-2/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[12px] font-semibold text-fg">Memory Limit</label>
+                    <span className="text-[11px] font-mono text-fg-subtle">MB</span>
+                  </div>
                   <input
                     type="number"
                     value={memoryLimitMb}
                     onChange={(e) => setMemoryLimitMb(Number(e.target.value))}
-                    className="h-9 flex-1 rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                    className="mt-2 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[14px] font-semibold text-fg focus:border-accent focus:outline-none"
                   />
-                  <span className="w-20 text-right text-[11px] text-fg-subtle">Total (MB)</span>
+                  <span className="mt-1.5 block text-[11px] text-fg-subtle">
+                    ≈ {(memoryLimitMb / 1024).toFixed(1).replace(/\.0$/, '')} GB total RAM limit.
+                  </span>
                 </div>
 
-                {/* Disk Limit */}
-                <div className="flex items-center justify-between gap-4 border-b border-border/60 pb-4">
-                  <span className="w-28 text-[13px] font-medium text-fg">Disk Storage</span>
+                <div className="rounded-control border border-border bg-surface-2/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[12px] font-semibold text-fg">Disk Storage Limit</label>
+                    <span className="text-[11px] font-mono text-fg-subtle">GB</span>
+                  </div>
                   <input
                     type="number"
                     value={diskLimitGb}
                     onChange={(e) => setDiskLimitGb(Number(e.target.value))}
-                    className="h-9 flex-1 rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                    className="mt-2 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[14px] font-semibold text-fg focus:border-accent focus:outline-none"
                   />
-                  <span className="w-20 text-right text-[11px] text-fg-subtle">Total (GB)</span>
-                </div>
-
-                {/* Virtualization Storage & Drivers */}
-                <div className="flex flex-col gap-1 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">CPU Mode / Model</label>
-                  <select
-                    disabled
-                    className="mt-1 h-9 w-full rounded-control border border-field-border bg-surface-2 px-3 text-[13px] text-fg-subtle opacity-80"
-                  >
-                    <option>Host Passthrough (Incus Native)</option>
-                  </select>
-                  <span className="text-[11px] text-fg-subtle">Direct host instruction set passthrough.</span>
-                </div>
-
-                {/* Disk Storage Type */}
-                <div className="flex flex-col gap-2 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">Disk Storage Pool Type</label>
-                  <div className="flex items-center gap-6 text-[12px] text-fg">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input type="radio" checked readOnly className="accent-accent" />
-                      <span>ZFS / Btrfs Pool (Default)</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-fg-subtle opacity-60 cursor-not-allowed">
-                      <input type="radio" disabled />
-                      <span>RAW / LVM</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Disk Cache Type */}
-                <div className="flex flex-col gap-2 border-b border-border/60 pb-4">
-                  <label className="text-[13px] font-medium text-fg">Disk Cache / Sync Type</label>
-                  <div className="flex items-center gap-6 text-[12px] text-fg">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input type="radio" checked readOnly className="accent-accent" />
-                      <span>Writeback / Inherit</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-fg-subtle opacity-60 cursor-not-allowed">
-                      <input type="radio" disabled />
-                      <span>Directsync</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Network Attached Mode */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[13px] font-medium text-fg">Primary Network Attachment</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={primaryNetwork || 'incusbr0'}
-                    className="mt-1 h-9 w-full rounded-control border border-field-border bg-surface-2 px-3 font-mono text-[13px] text-fg-subtle opacity-80"
-                  />
-                  <span className="text-[11px] text-fg-subtle">
-                    Configured under the Network tab.
+                  <span className="mt-1.5 block text-[11px] text-fg-subtle">
+                    Total assignable storage pool size.
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Submission controls */}
-            <div className="mt-8 flex items-center justify-end gap-3 border-t border-border pt-5">
+            <div className="flex items-center justify-end gap-3 pt-2">
               <Button
                 type="button"
                 variant="secondary"
