@@ -2,7 +2,9 @@ import {
   ArrowLeft,
   Cpu,
   FloppyDisk,
+  Globe,
   HardDrives,
+  ShareNetwork,
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -38,6 +40,37 @@ export function AdminNodeFormPage() {
   const [diskLimitGb, setDiskLimitGb] = useState(88)
 
   const isDefaultLocalNode = isEdit && (name === 'local-incus' || fqdn === 'localhost')
+
+  type NodeTab = 'general' | 'network'
+  const [activeTab, setActiveTab] = useState<NodeTab>('general')
+  const [nodeNetwork, setNodeNetwork] = useState<{
+    portForwardRange: { start: number; end: number }
+    networks: Array<{
+      name: string
+      type: string
+      managed: boolean
+      status: string
+      description?: string
+      config?: Record<string, string>
+      used_by?: string[]
+    }>
+  } | null>(null)
+  const [loadingNetwork, setLoadingNetwork] = useState(false)
+
+  useEffect(() => {
+    if (activeTab === 'network' && id && !nodeNetwork) {
+      setLoadingNetwork(true)
+      void api.adminGetNodeNetwork(id).then((res) => {
+        if (res.ok) {
+          setNodeNetwork({
+            portForwardRange: res.data.portForwardRange,
+            networks: res.data.networks,
+          })
+        }
+        setLoadingNetwork(false)
+      })
+    }
+  }, [activeTab, id, nodeNetwork])
 
   useEffect(() => {
     let active = true
@@ -170,11 +203,42 @@ export function AdminNodeFormPage() {
 
         {error && <Alert tone="danger">{error}</Alert>}
 
+        {isEdit && (
+          <div className="flex flex-wrap items-center gap-1.5 rounded-panel border border-border bg-surface p-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('general')}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                activeTab === 'general'
+                  ? 'bg-surface-2 text-fg shadow-xs'
+                  : 'text-fg-subtle hover:text-fg',
+              )}
+            >
+              <HardDrives size={15} aria-hidden />
+              General
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('network')}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                activeTab === 'network'
+                  ? 'bg-surface-2 text-fg shadow-xs'
+                  : 'text-fg-subtle hover:text-fg',
+              )}
+            >
+              <Globe size={15} aria-hidden />
+              Network
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="rounded-panel border border-border bg-surface p-12 text-center text-[13px] text-fg-subtle">
             Loading node details...
           </div>
-        ) : (
+        ) : activeTab === 'general' ? (
           <form
             onSubmit={handleSubmit}
             className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs"
@@ -418,6 +482,113 @@ export function AdminNodeFormPage() {
               </Button>
             </div>
           </form>
+        ) : (
+          <div className="flex flex-col gap-6">
+            {/* Host Routing & Port Range Overview */}
+            <section className="rounded-panel border border-border bg-surface p-6 shadow-2xs">
+              <div className="flex items-center gap-3 border-b border-border pb-4">
+                <div className="flex size-9 items-center justify-center rounded-control bg-accent/10 text-accent-text">
+                  <ShareNetwork size={18} weight="bold" />
+                </div>
+                <div>
+                  <h2 className="text-[15px] font-semibold text-fg">Host IP & Routing</h2>
+                  <p className="text-[11px] text-fg-subtle">
+                    Public connectivity endpoints and NAT port allocation range for this compute node.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-control border border-border bg-surface-2/40 p-3.5">
+                  <span className="text-[11px] font-medium text-fg-subtle">FQDN / Endpoint</span>
+                  <p className="mt-1 font-mono text-[13px] font-semibold text-fg">{fqdn || 'localhost'}</p>
+                </div>
+                <div className="rounded-control border border-border bg-surface-2/40 p-3.5">
+                  <span className="text-[11px] font-medium text-fg-subtle">Daemon IP (Internal)</span>
+                  <p className="mt-1 font-mono text-[13px] font-semibold text-fg">{ipAddress || '127.0.0.1'}:{port}</p>
+                </div>
+                <div className="rounded-control border border-border bg-surface-2/40 p-3.5">
+                  <span className="text-[11px] font-medium text-fg-subtle">Public IPv4 (Ingress)</span>
+                  <p className="mt-1 font-mono text-[13px] font-semibold text-fg">{publicIp || 'None specified'}</p>
+                </div>
+                <div className="rounded-control border border-border bg-surface-2/40 p-3.5">
+                  <span className="text-[11px] font-medium text-fg-subtle">Port Forward Range</span>
+                  <p className="mt-1 font-mono text-[13px] font-semibold text-fg">
+                    {nodeNetwork?.portForwardRange.start ?? 22000} - {nodeNetwork?.portForwardRange.end ?? 22999}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Incus Managed Networks & Bridges */}
+            <section className="rounded-panel border border-border bg-surface p-6 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-fg">Hypervisor Network Interfaces</h2>
+                  <p className="text-[11px] text-fg-subtle">
+                    Bridges, physical adapters, and subnet ranges managed by Incus on this host.
+                  </p>
+                </div>
+                {loadingNetwork && (
+                  <span className="text-[12px] text-fg-subtle">Loading networks...</span>
+                )}
+              </div>
+
+              {loadingNetwork && !nodeNetwork ? (
+                <p className="mt-4 text-[13px] text-fg-subtle">Querying node network interfaces...</p>
+              ) : !nodeNetwork || nodeNetwork.networks.length === 0 ? (
+                <p className="mt-4 text-[13px] text-fg-subtle">No network adapters reported by daemon.</p>
+              ) : (
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full text-left text-[12px]">
+                    <thead>
+                      <tr className="border-b border-border text-fg-subtle">
+                        <th className="py-2.5 pr-4 font-medium">Interface</th>
+                        <th className="py-2.5 pr-4 font-medium">Type</th>
+                        <th className="py-2.5 pr-4 font-medium">IPv4 Subnet / Gateway</th>
+                        <th className="py-2.5 pr-4 font-medium">IPv6 Subnet</th>
+                        <th className="py-2.5 pr-4 font-medium">NAT</th>
+                        <th className="py-2.5 font-medium">MTU</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nodeNetwork.networks.map((net) => (
+                        <tr key={net.name} className="border-b border-border/50 last:border-0">
+                          <td className="py-2.5 pr-4">
+                            <span className="font-mono font-semibold text-fg">{net.name}</span>
+                            {net.managed && (
+                              <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] text-accent-text">
+                                managed
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 pr-4 font-mono uppercase text-fg-subtle">{net.type}</td>
+                          <td className="py-2.5 pr-4 font-mono text-fg">
+                            {net.config?.['ipv4.address'] || '—'}
+                          </td>
+                          <td className="py-2.5 pr-4 font-mono text-fg-subtle">
+                            {net.config?.['ipv6.address'] || '—'}
+                          </td>
+                          <td className="py-2.5 pr-4">
+                            {net.config?.['ipv4.nat'] === 'true' ? (
+                              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
+                                Enabled
+                              </span>
+                            ) : (
+                              <span className="text-fg-subtle">—</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 font-mono text-fg-subtle">
+                            {net.config?.['bridge.mtu'] || '1500'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </div>
         )}
       </div>
     </AppShell>

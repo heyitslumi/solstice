@@ -6362,6 +6362,42 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     return c.json({ ok: true })
   })
 
+  app.get('/api/admin/nodes/:id/network', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const node = await queryOne<{ id: string; name: string; fqdn: string; ip_address: string; public_ip: string }>(
+      'SELECT id, name, fqdn, ip_address, public_ip FROM nodes WHERE id = $1',
+      [id],
+    )
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    let networks: any[] = []
+    try {
+      const res = await incusRequest<any[]>('GET', '/1.0/networks?recursion=1')
+      networks = (res || []).filter((n) => n.managed || ['bridge', 'physical'].includes(n.type))
+    } catch {
+      // Node may be offline or non-local
+    }
+
+    const config = await getSystemSettings()
+    return c.json({
+      node: {
+        id: node.id,
+        name: node.name,
+        fqdn: node.fqdn,
+        ipAddress: node.ip_address,
+        publicIp: node.public_ip,
+      },
+      portForwardRange: {
+        start: Number(config['port_forward_start']) || 22000,
+        end: Number(config['port_forward_end']) || 22999,
+      },
+      networks,
+    })
+  })
+
   /* OS templates for VPS provisioning (images.linuxcontainers.org aliases) */
 
   function publicOsTemplate(row: OsTemplateRow) {

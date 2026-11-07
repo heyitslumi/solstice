@@ -1503,6 +1503,22 @@ export const api = {
     return patch<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}`, input)
   },
 
+  adminGetNodeNetwork(id: string) {
+    return request<{
+      node: { id: string; name: string; fqdn: string; ipAddress: string; publicIp: string }
+      portForwardRange: { start: number; end: number }
+      networks: Array<{
+        name: string
+        type: string
+        managed: boolean
+        status: string
+        description?: string
+        config?: Record<string, string>
+        used_by?: string[]
+      }>
+    }>(`/api/admin/nodes/${encodeURIComponent(id)}/network`)
+  },
+
   adminDeleteNode(id: string) {
     return request<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}`, {
       method: 'DELETE',
