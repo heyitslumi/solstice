@@ -203,11 +203,8 @@ export function ServerSetupPage({
   const [directSsh, setDirectSsh] = useState(true)
   const [advOpen, setAdvOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [phase, setPhase] = useState<'form' | 'progress' | 'panel'>('form')
+  const [phase, setPhase] = useState<'form' | 'progress'>('form')
   const [step, setStep] = useState(0)
-  const [passwordEmailed, setPasswordEmailed] = useState(false)
-  const [sshHostPort, setSshHostPort] = useState<number | null>(null)
-  const [createdId, setCreatedId] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const [logLines, setLogLines] = useState<string[]>([])
 
@@ -352,8 +349,7 @@ export function ServerSetupPage({
           push('✓ Server setup completed successfully in background')
           push('✓ Provisioning complete')
           setStep(6)
-          setCreatedId(instanceId)
-          setTimeout(() => setPhase('panel'), 1200)
+          setTimeout(() => navigate(`/servers/${instanceId}`), 1000)
           return
         }
       }
@@ -373,50 +369,10 @@ export function ServerSetupPage({
     push(created.sshHostPort ? `\u2713 Direct SSH enabled (port ${created.sshHostPort})` : '\u2713 Server started')
     push('\u2713 Provisioning complete')
     setStep(6)
-    setPasswordEmailed(!!created.passwordEmailed)
-    setSshHostPort(created.sshHostPort ?? null)
-    setCreatedId(created.id)
-    setTimeout(() => setPhase('panel'), 1200)
-  }
-
-  if (phase === 'panel') {
-    return (
-      <AppShell title="Server Setup" description="Choose an operating system and configure your server.">
-        <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold">{name || 'my-server'}</h1>
-            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-400">
-              ● Running
-            </span>
-            <span className="ml-auto flex gap-2">
-              <Button variant="secondary" size="sm">Reboot</Button>
-              <Button variant="secondary" size="sm">Shutdown</Button>
-              <Button variant="secondary" size="sm">Console</Button>{createdId && <a href={`/servers/${createdId}`}><Button size="sm">Open Server</Button></a>}
-            </span>
-          </div>
-          <div className="mt-6 rounded-panel border border-border bg-surface p-5">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><p className="text-fg-subtle">IPv4</p><p className="font-medium">5.231.32.70</p></div>
-              <div><p className="text-fg-subtle">Operating System</p><p className="font-medium">{osLabel}</p></div>
-              <div><p className="text-fg-subtle">SSH</p><p className="font-mono text-[13px]">{sshHostPort ? `ssh -p ${sshHostPort} root@5.231.32.70` : "—"}</p></div>
-              <div><p className="text-fg-subtle">Timezone</p><p className="font-medium">{tz}</p></div>
-            </div>
-            {passwordEmailed && (
-              <div className="mt-4 rounded-control bg-field px-3 py-2 text-[13px] text-fg-muted">
-                Your server has been deployed — we've emailed you the SSH command and root password.
-                Check your inbox (and spam folder) to sign in.
-              </div>
-            )}
-            {!passwordEmailed && sshHostPort && (
-              <div className="mt-4 rounded-control bg-field px-3 py-2 text-[13px] text-fg-muted">
-                Your server has been deployed — sign in with your SSH key using the command above.
-              </div>
-            )}
-            <p className="mt-4 text-center text-xs text-fg-subtle">Your server is ready.</p>
-          </div>
-        </div>
-      </AppShell>
-    )
+    const targetId = created.id || instanceId
+    if (targetId) {
+      setTimeout(() => navigate(`/servers/${targetId}`), 1000)
+    }
   }
 
   if (phase === 'progress') {
