@@ -1523,8 +1523,14 @@ export const api = {
     return post<{ ok: true; name: string }>(`/api/admin/nodes/${encodeURIComponent(id)}/networks`, input)
   },
 
-  adminUpdateNodeNetwork(id: string, netName: string, input: { mtu?: number; nat?: boolean }) {
+  adminUpdateNodeNetwork(id: string, netName: string, input: { mtu?: number; nat?: boolean; ipv4?: string }) {
     return patch<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}/networks/${encodeURIComponent(netName)}`, input)
+  },
+
+  adminDeleteNodeNetwork(id: string, netName: string) {
+    return request<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}/networks/${encodeURIComponent(netName)}`, {
+      method: 'DELETE',
+    })
   },
 
   adminDeleteNode(id: string) {

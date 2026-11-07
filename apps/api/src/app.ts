@@ -6473,13 +6473,53 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         newConfig['ipv4.nat'] = body.nat ? 'true' : 'false'
         newConfig['ipv6.nat'] = body.nat ? 'true' : 'false'
       }
+      if (body.ipv4 !== undefined) {
+        newConfig['ipv4.address'] = String(body.ipv4).trim() || 'auto'
+      }
 
       await incusRequest<any>('PATCH', `/1.0/networks/${encodeURIComponent(netName)}`, {
         config: newConfig,
       })
+      await logActivity(
+        admin.user.id,
+        'update_network',
+        `Updated network bridge "${netName}" on node "${node.name}"`,
+        clientKey(c),
+      )
       return c.json({ ok: true })
     } catch (err: any) {
       return c.json({ message: err?.message || 'Failed to update network.' }, 500)
+    }
+  })
+
+  /* Delete Incus network bridge */
+  app.delete('/api/admin/nodes/:id/networks/:netName', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const netName = c.req.param('netName')
+    const node = await queryOne<{ name: string; primary_network: string }>(
+      'SELECT name, primary_network FROM nodes WHERE id = $1',
+      [id],
+    )
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    if (node.primary_network === netName) {
+      return c.json({ message: 'Cannot delete primary network bridge. Change primary network first.' }, 400)
+    }
+
+    try {
+      await incusRequest<any>('DELETE', `/1.0/networks/${encodeURIComponent(netName)}`)
+      await logActivity(
+        admin.user.id,
+        'delete_network',
+        `Deleted network bridge "${netName}" from node "${node.name}"`,
+        clientKey(c),
+      )
+      return c.json({ ok: true })
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Failed to delete network.' }, 500)
     }
   })
 

@@ -4,8 +4,10 @@ import {
   FloppyDisk,
   Globe,
   HardDrives,
+  PencilSimple,
   Plus,
   ShareNetwork,
+  Trash,
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -71,6 +73,18 @@ export function AdminNodeFormPage() {
   const [addingNet, setAddingNet] = useState(false)
   const [netError, setNetError] = useState<string | null>(null)
 
+  // Edit network modal state
+  const [editNetOpen, setEditNetOpen] = useState(false)
+  const [editingNetName, setEditingNetName] = useState('')
+  const [editNetMtu, setEditNetMtu] = useState(1372)
+  const [editNetNat, setEditNetNat] = useState(true)
+  const [editNetIpv4, setEditNetIpv4] = useState('')
+  const [updatingNet, setUpdatingNet] = useState(false)
+
+  // Delete network confirm state
+  const [deleteNetName, setDeleteNetName] = useState<string | null>(null)
+  const [deletingNet, setDeletingNet] = useState(false)
+
   function loadNetworkData() {
     if (!id) return
     setLoadingNetwork(true)
@@ -128,6 +142,47 @@ export function AdminNodeFormPage() {
       setNetError(res.error.message || 'Failed to create network bridge.')
     }
     setAddingNet(false)
+  }
+
+  function openEditModal(net: { name: string; config?: Record<string, string> }) {
+    setEditingNetName(net.name)
+    setEditNetMtu(Number(net.config?.['bridge.mtu']) || 1372)
+    setEditNetNat(net.config?.['ipv4.nat'] !== 'false')
+    setEditNetIpv4(net.config?.['ipv4.address'] || '')
+    setEditNetOpen(true)
+  }
+
+  async function handleUpdateNetwork(e: React.FormEvent) {
+    e.preventDefault()
+    if (!id || !editingNetName) return
+    setUpdatingNet(true)
+    setNetError(null)
+    const res = await api.adminUpdateNodeNetwork(id, editingNetName, {
+      mtu: Number(editNetMtu) || 1372,
+      nat: editNetNat,
+      ipv4: editNetIpv4.trim() || 'auto',
+    })
+    if (res.ok) {
+      setEditNetOpen(false)
+      loadNetworkData()
+    } else {
+      setNetError(res.error.message || 'Failed to update network.')
+    }
+    setUpdatingNet(false)
+  }
+
+  async function handleDeleteNetwork() {
+    if (!id || !deleteNetName) return
+    setDeletingNet(true)
+    setNetError(null)
+    const res = await api.adminDeleteNodeNetwork(id, deleteNetName)
+    if (res.ok) {
+      setDeleteNetName(null)
+      loadNetworkData()
+    } else {
+      setNetError(res.error.message || 'Failed to delete network.')
+    }
+    setDeletingNet(false)
   }
 
   useEffect(() => {
@@ -669,10 +724,10 @@ export function AdminNodeFormPage() {
               </div>
             </div>
 
-            {/* Grid of Square Cards for ALL Bridges (Primary & Secondary) */}
+            {/* Grid of Square Cards for ALL Managed Incus Bridges */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
               {nodeNetwork?.networks
-                .filter((net) => net.managed || ['bridge', 'physical'].includes(net.type))
+                .filter((net) => net.managed)
                 .map((net) => {
                   const isPrimary = net.name === primaryNetwork
                   return (
@@ -698,7 +753,7 @@ export function AdminNodeFormPage() {
                               )}
                             </div>
                             <p className="mt-0.5 text-[11px] text-fg-subtle">
-                              {net.description || `${net.type.toUpperCase()} adapter on hypervisor.`}
+                              {net.description || `${net.type.toUpperCase()} bridge on hypervisor.`}
                             </p>
                           </div>
                           <span
@@ -744,28 +799,55 @@ export function AdminNodeFormPage() {
                         <span className="text-[11px] text-fg-subtle">
                           {net.used_by?.length ?? 0} instances attached
                         </span>
-                        {!isPrimary ? (
+                        <div className="flex items-center gap-2">
                           <Button
                             type="button"
                             variant="secondary"
                             size="sm"
-                            onClick={async () => {
-                              setPrimaryNetwork(net.name)
-                              if (id) {
-                                setSavingPrimary(true)
-                                const res = await api.adminUpdateNode(id, { primaryNetwork: net.name } as any)
-                                if (res.ok) {
-                                  loadNetworkData()
-                                }
-                                setSavingPrimary(false)
-                              }
-                            }}
+                            onClick={() => openEditModal(net)}
+                            className="gap-1 px-2.5 text-[12px]"
+                            title="Edit Network Bridge"
                           >
-                            Set as Primary
+                            <PencilSimple size={13} />
+                            Edit
                           </Button>
-                        ) : (
-                          <span className="text-[12px] font-medium text-emerald-400">Default Gateway</span>
-                        )}
+
+                          {!isPrimary ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={async () => {
+                                  setPrimaryNetwork(net.name)
+                                  if (id) {
+                                    setSavingPrimary(true)
+                                    const res = await api.adminUpdateNode(id, { primaryNetwork: net.name } as any)
+                                    if (res.ok) {
+                                      loadNetworkData()
+                                    }
+                                    setSavingPrimary(false)
+                                  }
+                                }}
+                                className="text-[12px]"
+                              >
+                                Set as Primary
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="danger"
+                                size="sm"
+                                onClick={() => setDeleteNetName(net.name)}
+                                className="px-2"
+                                title="Delete Bridge"
+                              >
+                                <Trash size={13} />
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="text-[12px] font-medium text-emerald-400">Default Gateway</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )
@@ -853,6 +935,101 @@ export function AdminNodeFormPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Network Bridge Dialog */}
+      <Dialog open={editNetOpen} onOpenChange={setEditNetOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Edit Network Bridge: {editingNetName}</DialogTitle>
+          <DialogDescription>
+            Update MTU, IPv4 address subnet, or NAT settings for this Incus bridge.
+          </DialogDescription>
+
+          <form onSubmit={handleUpdateNetwork} className="mt-4 flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[12px] font-semibold text-fg">MTU</label>
+                <input
+                  type="number"
+                  value={editNetMtu}
+                  onChange={(e) => setEditNetMtu(Number(e.target.value))}
+                  placeholder="1372"
+                  className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[12px] font-semibold text-fg">IPv4 Gateway / Subnet</label>
+                <input
+                  type="text"
+                  value={editNetIpv4}
+                  onChange={(e) => setEditNetIpv4(e.target.value)}
+                  placeholder="auto or 10.200.0.1/24"
+                  className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">
+              <Checkbox
+                checked={editNetNat}
+                onCheckedChange={(checked) => setEditNetNat(checked === true)}
+              />
+              <span className="text-[12px] font-medium text-fg">Enable Outbound NAT Masquerade</span>
+            </label>
+
+            <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setEditNetOpen(false)}
+                disabled={updatingNet}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={updatingNet}
+              >
+                {updatingNet ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Network Confirmation Dialog */}
+      <Dialog open={Boolean(deleteNetName)} onOpenChange={(open) => !open && setDeleteNetName(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>Delete Network Bridge</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete bridge <span className="font-mono font-semibold text-fg">{deleteNetName}</span>? This action cannot be undone.
+          </DialogDescription>
+
+          <div className="mt-5 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setDeleteNetName(null)}
+              disabled={deletingNet}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={handleDeleteNetwork}
+              disabled={deletingNet}
+            >
+              {deletingNet ? 'Deleting...' : 'Delete Bridge'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </AppShell>
