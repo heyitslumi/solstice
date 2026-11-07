@@ -107,30 +107,31 @@ export function DitherCanvas({ className = '' }: { className?: string }) {
           snoise(st * 2.2 + 2.0 * q + vec2(8.3, 2.8) + 0.14 * t)
         );
 
-        float n = snoise(st + 3.0 * r) + mouseRipple;
-        float intensity = clamp(n * 0.5 + 0.5, 0.0, 1.0);
+        float n = snoise(st * 0.8 + 2.0 * r) + mouseRipple;
+        float intensity = clamp(n * 0.45 + 0.35, 0.0, 1.0);
 
         // Pixel grid size for dither cells
-        float pixelScale = 3.0;
+        float pixelScale = 4.0;
         float dither = bayer8(gl_FragCoord.xy / pixelScale);
 
-        // Solstice Brand Palette: Deep Ink -> Dark Ember -> Sun Glow Gold
-        vec3 c0 = vec3(0.039, 0.062, 0.094); // #0a1018 brand surface
-        vec3 c1 = vec3(0.12, 0.08, 0.16);   // deep violet-slate
-        vec3 c2 = vec3(0.85, 0.35, 0.12);   // solstice amber
-        vec3 c3 = vec3(1.0, 0.75, 0.22);    // sun gold
+        // Subtle Solstice Brand Palette: Deep Ink Base -> Dark Indigo -> Muted Amber Accent
+        vec3 c0 = vec3(0.04, 0.06, 0.09); // #0a1018 background
+        vec3 c1 = vec3(0.07, 0.09, 0.14); // subtle slate
+        vec3 c2 = vec3(0.55, 0.22, 0.08); // deep subdued ember
+        vec3 c3 = vec3(0.92, 0.55, 0.15); // soft sun gold highlights
 
-        // Apply dither thresholding
-        float dithered = step(dither, intensity);
-        float highPass = step(dither, intensity * 0.75);
+        // Threshold dithered noise softly
+        float dithered = step(dither, intensity * 0.85);
+        float highlight = step(dither, pow(intensity, 2.2) * 0.7);
 
         vec3 col = mix(c0, c1, intensity);
-        col = mix(col, c2, dithered * 0.55);
-        col = mix(col, c3, highPass * 0.65);
+        col = mix(col, c2, dithered * 0.32);
+        col = mix(col, c3, highlight * 0.38);
 
-        // Subtle vignette at edges
-        float vignette = 1.0 - smoothstep(0.4, 1.4, length(uv - 0.5));
-        col *= vignette * 0.9 + 0.1;
+        // Heavy dark vignette keeping text areas clean and legible
+        // Text is in top-left and bottom-left, so vignette them darker
+        float vignette = 1.0 - smoothstep(0.3, 1.3, length(uv - vec2(0.65, 0.5)));
+        col = mix(c0, col, clamp(vignette, 0.15, 0.75));
 
         gl_FragColor = vec4(col, 1.0);
       }
@@ -232,7 +233,7 @@ export function DitherCanvas({ className = '' }: { className?: string }) {
     <canvas
       ref={canvasRef}
       className={`pointer-events-none absolute inset-0 size-full ${className}`}
-      style={{ opacity: 0.82 }}
+      style={{ opacity: 0.65 }}
     />
   )
 }

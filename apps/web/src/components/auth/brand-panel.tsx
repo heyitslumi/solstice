@@ -26,6 +26,10 @@ export function BrandPanel() {
         <div className="absolute -right-16 -bottom-40 size-[26rem] rounded-full sun-glow opacity-40 blur-[50px]" />
       </PointerParallax>
 
+      {/* Soft gradient masks behind logo and copy for razor-sharp legibility */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-brand-surface via-transparent to-brand-surface/70" />
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-brand-surface/80 via-brand-surface/40 to-transparent" />
+
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-sun-400/50 to-transparent"
