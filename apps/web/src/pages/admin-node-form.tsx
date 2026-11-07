@@ -787,41 +787,6 @@ export function AdminNodeFormPage() {
               </div>
             </div>
 
-            {/* Flags */}
-            <div className="border-t border-border pt-6">
-              <div className="flex flex-col gap-4 rounded-control border border-border bg-surface-2/30 p-4">
-                <label className="flex items-start gap-3 cursor-pointer select-none">
-                  <div className="pt-0.5">
-                    <Checkbox
-                      checked={isPublic}
-                      onCheckedChange={(checked) => setIsPublic(checked === true)}
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-medium text-fg">Public Deployments</span>
-                    <span className="text-[11px] text-fg-subtle">
-                      Allow users to select this node when provisioning new servers.
-                    </span>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 cursor-pointer select-none">
-                  <div className="pt-0.5">
-                    <Checkbox
-                      checked={maintenance}
-                      onCheckedChange={(checked) => setMaintenance(checked === true)}
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-medium text-fg">Maintenance Mode</span>
-                    <span className="text-[11px] text-fg-subtle">
-                      Prevents new container creation while allowing existing instances to continue running.
-                    </span>
-                  </div>
-                </label>
-              </div>
-            </div>
-
             {/* Submission controls */}
             <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
               <Button
