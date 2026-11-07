@@ -256,7 +256,6 @@ export function ServerDetailPage() {
   const [sshForwardWorking, setSshForwardWorking] = useState(false)
   // One-time password lives apart from the polled forward state so the
   // 10s refresh can never wipe it mid-read. Cleared only when dismissed.
-  const [sshPasswordModal, setSshPasswordModal] = useState<string | null>(null)
   const [pwWorking, setPwWorking] = useState(false)
 
   const [cloneOpen, setCloneOpen] = useState(false)
@@ -274,8 +273,7 @@ export function ServerDetailPage() {
         hostPort: res.data.hostPort,
         username: res.data.username,
       })
-      setSshPasswordModal(res.data.password)
-      flashNotice(`Direct SSH enabled on port ${res.data.hostPort}.`)
+      flashNotice(`Direct SSH enabled on port ${res.data.hostPort} — login details emailed.`)
     } else {
       setError(res.error.message || 'Failed to enable direct SSH.')
     }
@@ -301,8 +299,7 @@ export function ServerDetailPage() {
     setError(null)
     const res = await api.generateSshPassword(id)
     if (res.ok) {
-      setSshPasswordModal(res.data.password)
-      flashNotice('New root password issued — shown once.')
+      flashNotice('New root password issued — sent to your email.')
     } else {
       setError(res.error.message || 'Failed to reset the password.')
     }
@@ -1408,7 +1405,7 @@ export function ServerDetailPage() {
               <div className="mt-2 flex flex-col gap-3">
                 <p className="text-[12px] text-fg-subtle">
                   Picks a random free host port and proxies it to this server's SSH port
-                  over NAT. A one-time root password is issued with it.
+                  over NAT. Login details are emailed to you.
                 </p>
                 <div className="flex justify-end">
                   <Button
@@ -1526,40 +1523,6 @@ export function ServerDetailPage() {
               Close
             </Button>
           </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* One-time password modal (separate so polling never wipes it) */}
-      <Dialog open={sshPasswordModal !== null} onOpenChange={(open) => !open && setSshPasswordModal(null)}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>Root Password</DialogTitle>
-          <DialogDescription>
-            One-time password for this server. It is shown once and never stored — save
-            it now.
-          </DialogDescription>
-
-          <div className="mt-4 flex flex-col gap-3">
-            <div className="rounded-control border border-amber-500/30 bg-amber-500/10 p-3 text-[12px] text-amber-600 dark:text-amber-400">
-              Anyone with this password has full root access.
-            </div>
-            <div className="flex items-center justify-between gap-2 rounded-control border border-border bg-surface-2/50 px-3 py-2.5 font-mono text-[13px]">
-              <span className="select-all text-fg">{sshPasswordModal}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 shrink-0 gap-1.5 text-[12px]"
-                onClick={() => sshPasswordModal && copyToClipboard(sshPasswordModal, 'ssh-once')}
-              >
-                <Copy size={13} />
-                {copiedField === 'ssh-once' ? 'Copied' : 'Copy'}
-              </Button>
-            </div>
-            <div className="flex justify-end">
-              <Button variant="primary" onClick={() => setSshPasswordModal(null)}>
-                I Saved It
-              </Button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>

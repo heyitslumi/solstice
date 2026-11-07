@@ -759,7 +759,7 @@ export const api = {
     sshKeyIds?: string[]
     directSsh?: boolean
   }) {
-    return post<ApiInstance & { sshHostPort?: number | null; rootPassword?: string | null }>('/api/instances', input)
+    return post<ApiInstance & { sshHostPort?: number | null; passwordEmailed?: boolean }>('/api/instances', input)
   },
 
   rebuildInstance(id: string, input: {
@@ -771,7 +771,7 @@ export const api = {
     sshKeyIds?: string[]
     directSsh?: boolean
   }) {
-    return post<{ id: string; name: string; os: string; sshHostPort?: number | null; rootPassword?: string | null }>(`/api/instances/${encodeURIComponent(id)}/rebuild`, input)
+    return post<{ id: string; name: string; os: string; sshHostPort?: number | null; passwordEmailed?: boolean }>(`/api/instances/${encodeURIComponent(id)}/rebuild`, input)
   },
 
   installOs(id: string, input: {
@@ -783,7 +783,7 @@ export const api = {
     sshKeyIds?: string[]
     directSsh?: boolean
   }) {
-    return post<{ id: string; name: string; os: string; sshHostPort?: number | null; rootPassword?: string | null }>(`/api/instances/${encodeURIComponent(id)}/install-os`, input)
+    return post<{ id: string; name: string; os: string; sshHostPort?: number | null; passwordEmailed?: boolean }>(`/api/instances/${encodeURIComponent(id)}/install-os`, input)
   },
 
   instanceAction(id: string, action: 'start' | 'stop' | 'restart' | 'freeze' | 'unfreeze', force = false) {
@@ -935,7 +935,7 @@ export const api = {
   },
 
   generateSshPassword(id: string) {
-    return post<{ ok: true; username: string; password: string }>(`/api/instances/${encodeURIComponent(id)}/ssh-password`)
+    return post<{ ok: true; username: string; emailed: boolean }>(`/api/instances/${encodeURIComponent(id)}/ssh-password`)
   },
 
   getSshForward(id: string) {
@@ -943,7 +943,7 @@ export const api = {
   },
 
   enableSshForward(id: string) {
-    return post<{ ok: true; host: string; hostPort: number; username: string; password: string }>(`/api/instances/${encodeURIComponent(id)}/ssh-forward`)
+    return post<{ ok: true; host: string; hostPort: number; username: string; emailed: boolean }>(`/api/instances/${encodeURIComponent(id)}/ssh-forward`)
   },
 
   disableSshForward(id: string) {

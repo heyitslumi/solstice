@@ -205,7 +205,7 @@ export function ServerSetupPage({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [phase, setPhase] = useState<'form' | 'progress' | 'panel'>('form')
   const [step, setStep] = useState(0)
-  const [password, setPassword] = useState<string | null>(null)
+  const [passwordEmailed, setPasswordEmailed] = useState(false)
   const [sshHostPort, setSshHostPort] = useState<number | null>(null)
   const [createdId, setCreatedId] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -363,13 +363,13 @@ export function ServerSetupPage({
     push('\u2192 Pulling OS image')
     push('\u2713 Image ready')
     push('\u2192 Configuring cloud-init')
-    push(created.rootPassword ? '\u2192 Generating root password' : `\u2192 Injecting ${selectedKeys.size} SSH key(s)`)
-    push(created.rootPassword ? '\u2713 Root password generated' : '\u2713 SSH keys injected')
+    push(created.passwordEmailed ? '\u2192 Generating root password' : `\u2192 Injecting ${selectedKeys.size} SSH key(s)`)
+    push(created.passwordEmailed ? '\u2713 Root password generated (emailed)' : '\u2713 SSH keys injected')
     push('\u2192 Starting server')
     push(created.sshHostPort ? `\u2713 Direct SSH enabled (port ${created.sshHostPort})` : '\u2713 Server started')
     push('\u2713 Provisioning complete')
     setStep(6)
-    if (created.rootPassword) setPassword(created.rootPassword)
+    setPasswordEmailed(!!created.passwordEmailed)
     setSshHostPort(created.sshHostPort ?? null)
     setCreatedId(created.id)
     setTimeout(() => setPhase('panel'), 1200)
@@ -397,10 +397,15 @@ export function ServerSetupPage({
               <div><p className="text-fg-subtle">SSH</p><p className="font-mono text-[13px]">{sshHostPort ? `ssh -p ${sshHostPort} root@5.231.32.70` : "—"}</p></div>
               <div><p className="text-fg-subtle">Timezone</p><p className="font-medium">{tz}</p></div>
             </div>
-            {password && (
-              <div className="mt-4 flex items-center justify-between rounded-control bg-field px-3 py-2 text-[13px]">
-                <span>Root password (copy it now, it won't be shown again): <code className="font-mono">{password}</code></span>
-                <Button variant="secondary" size="sm" onClick={() => navigator.clipboard?.writeText(password)}>Copy</Button>
+            {passwordEmailed && (
+              <div className="mt-4 rounded-control bg-field px-3 py-2 text-[13px] text-fg-muted">
+                Your server has been deployed — we've emailed you the SSH command and root password.
+                Check your inbox (and spam folder) to sign in.
+              </div>
+            )}
+            {!passwordEmailed && sshHostPort && (
+              <div className="mt-4 rounded-control bg-field px-3 py-2 text-[13px] text-fg-muted">
+                Your server has been deployed — sign in with your SSH key using the command above.
               </div>
             )}
             <p className="mt-4 text-center text-xs text-fg-subtle">Your server is ready.</p>

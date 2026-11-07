@@ -664,6 +664,79 @@ function loginEmail(link: string, code: string, appName = 'VPS Panel') {
   }
 }
 
+function sshAccessEmail(opts: {
+  appName: string
+  instanceName: string
+  os: string
+  sshCmd: string | null
+  username: string
+  password: string | null
+  deployed: boolean
+  keysInjected: boolean
+}) {
+  const lines: string[] = []
+  if (opts.deployed) {
+    lines.push(`Your server ${opts.instanceName} (${opts.os}) has been deployed.`, '')
+  } else {
+    lines.push(`SSH access for ${opts.instanceName} is ready.`, '')
+  }
+  if (opts.sshCmd) {
+    lines.push('Connect with:', '', opts.sshCmd, '')
+  }
+  if (opts.password) {
+    lines.push('Your one-time root password is:', '', opts.password, '')
+    lines.push('Change it after signing in, and keep it somewhere safe — it will not be shown again.')
+  } else if (opts.keysInjected) {
+    lines.push('Your SSH key(s) were installed — sign in with your key, no password needed.')
+  }
+  return {
+    subject: opts.deployed
+      ? `Your server ${opts.instanceName} has been deployed`
+      : `SSH access for ${opts.instanceName}`,
+    text: lines.join('\n'),
+    html: lines
+      .map((l) =>
+        l === ''
+          ? '<br/>'
+          : l === opts.sshCmd || l === opts.password
+            ? `<p style="font-family:ui-monospace,SFMono-Regular,monospace;background:#f4f4f5;padding:8px 10px;border-radius:6px">${l}</p>`
+            : `<p>${l}</p>`,
+      )
+      .join('\n'),
+  }
+}
+
+async function sendSshAccessEmail(opts: {
+  user: UserRow
+  instanceName: string
+  os: string
+  sshCmd: string | null
+  username: string
+  password: string | null
+  deployed: boolean
+  keysInjected: boolean
+}) {
+  const config = await getSystemSettings()
+  const appName = config['app_name'] || 'VPS Panel'
+  const mailMsg = {
+    to: opts.user.email,
+    ...sshAccessEmail({ appName, ...opts }),
+  }
+  try {
+    const sent = await sendMail(mailMsg, config)
+    await logEmail(opts.user.email, mailMsg.subject, mailMsg.text, opts.user.id)
+    console.log(
+      sent.filePath
+        ? `Mail stored for ${opts.user.email}: ${sent.filePath}`
+        : `Mail sent to ${opts.user.email}`,
+    )
+    return true
+  } catch (err) {
+    console.warn('Failed to send SSH access email:', err)
+    return false
+  }
+}
+
 async function sendLoginEmail(user: UserRow, link: string, code: string, appName = 'VPS Panel', config?: Record<string, string>) {
   const mailMsg = { to: user.email, ...loginEmail(link, code, appName) }
   const sent = await sendMail(mailMsg, config)
@@ -2860,6 +2933,23 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         clientKey(c),
       )
 
+      let passwordEmailed = false
+      try {
+        const host = await sshHostFor({ name: cleanName } as InstanceRow)
+        passwordEmailed = await sendSshAccessEmail({
+          user,
+          instanceName: cleanName,
+          os: osConfig.name,
+          sshCmd: sshHostPort ? `ssh -p ${sshHostPort} root@${host}` : null,
+          username: 'root',
+          password: rootPassword,
+          deployed: true,
+          keysInjected: sshPublicKeys.length > 0,
+        })
+      } catch (err: any) {
+        console.warn('Access email warning:', err?.message)
+      }
+
       return c.json(
         {
           id: instanceId,
@@ -2875,7 +2965,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           swapMb,
           dnsServers,
           sshHostPort,
-          rootPassword,
+          passwordEmailed,
         },
         201,
       )
@@ -3028,12 +3118,32 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         clientKey(c),
       )
 
+      let passwordEmailed = false
+      try {
+        const owner2 = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+        const host = await sshHostFor(instance)
+        if (owner2) {
+          passwordEmailed = await sendSshAccessEmail({
+            user: owner2,
+            instanceName: instance.name,
+            os: osConfig.name,
+            sshCmd: sshHostPort ? `ssh -p ${sshHostPort} root@${host}` : null,
+            username: 'root',
+            password: rootPassword,
+            deployed: true,
+            keysInjected: sshPublicKeys.length > 0,
+          })
+        }
+      } catch (err: any) {
+        console.warn('Access email warning:', err?.message)
+      }
+
       return c.json({
         id: instance.id,
         name: instance.name,
         os: osConfig.name,
         sshHostPort,
-        rootPassword,
+        passwordEmailed,
       })
     } catch (err: any) {
       console.error('OS install failed:', err)
@@ -3191,12 +3301,32 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         clientKey(c),
       )
 
+      let passwordEmailed = false
+      try {
+        const owner2 = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+        const host = await sshHostFor(instance)
+        if (owner2) {
+          passwordEmailed = await sendSshAccessEmail({
+            user: owner2,
+            instanceName: instance.name,
+            os: osConfig.name,
+            sshCmd: sshHostPort ? `ssh -p ${sshHostPort} root@${host}` : null,
+            username: 'root',
+            password: rootPassword,
+            deployed: true,
+            keysInjected: sshPublicKeys.length > 0,
+          })
+        }
+      } catch (err: any) {
+        console.warn('Access email warning:', err?.message)
+      }
+
       return c.json({
         id: instance.id,
         name: instance.name,
         os: osConfig.name,
         sshHostPort,
-        rootPassword,
+        passwordEmailed,
       })
     } catch (err: any) {
       console.error('Rebuild failed:', err)
@@ -3417,7 +3547,27 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       `Generated an SSH password for "${instance.name}"`,
       clientKey(c),
     )
-    return c.json({ ok: true, username: 'root', password })
+    const pwUser = await queryOne<UserRow>('SELECT * FROM users WHERE id = $1', [session.user_id])
+    const forward = await queryOne<{ host_port: number }>(
+      'SELECT host_port FROM port_forwards WHERE instance_id = $1',
+      [instance.id],
+    )
+    const host = await sshHostFor(instance)
+    const sshCmd = forward ? `ssh -p ${forward.host_port} root@${host}` : null
+    let emailed = false
+    if (pwUser) {
+      emailed = await sendSshAccessEmail({
+        user: pwUser,
+        instanceName: instance.name,
+        os: instance.os,
+        sshCmd,
+        username: 'root',
+        password,
+        deployed: false,
+        keysInjected: false,
+      })
+    }
+    return c.json({ ok: true, username: 'root', emailed })
   })
 
   /* NAT port forward for direct SSH: random host port from the admin range
@@ -3697,13 +3847,27 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       `Enabled direct SSH on port ${hostPort} for "${instance.name}"`,
       clientKey(c),
     )
+    const host = await sshHostFor(instance)
+    let emailed = false
+    if (owner) {
+      emailed = await sendSshAccessEmail({
+        user: owner,
+        instanceName: instance.name,
+        os: instance.os,
+        sshCmd: `ssh -p ${hostPort} root@${host}`,
+        username: 'root',
+        password,
+        deployed: false,
+        keysInjected: false,
+      })
+    }
     return c.json(
       {
         ok: true,
-        host: await sshHostFor(instance),
+        host,
         hostPort,
         username: 'root',
-        password,
+        emailed,
       },
       201,
     )
