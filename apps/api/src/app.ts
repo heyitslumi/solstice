@@ -689,20 +689,35 @@ function sshAccessEmail(opts: {
   } else if (opts.keysInjected) {
     lines.push('Your SSH key(s) were installed — sign in with your key, no password needed.')
   }
+
+  const htmlParts: string[] = []
+  if (opts.deployed) {
+    htmlParts.push(`<p style="margin:0 0 12px">Your server <strong>${opts.instanceName}</strong> (${opts.os}) has been deployed.</p>`)
+  } else {
+    htmlParts.push(`<p style="margin:0 0 12px">SSH access for <strong>${opts.instanceName}</strong> is ready.</p>`)
+  }
+  if (opts.sshCmd) {
+    htmlParts.push(
+      '<p style="margin:0 0 6px">Connect with:</p>',
+      `<p style="margin:0 0 14px;font-family:ui-monospace,SFMono-Regular,monospace;background:#18181b;color:#f4f4f5;padding:8px 12px;border-radius:6px;word-break:break-all">${opts.sshCmd}</p>`,
+    )
+  }
+  if (opts.password) {
+    htmlParts.push(
+      '<p style="margin:0 0 6px">Your one-time root password is:</p>',
+      `<p style="margin:0 0 14px;font-family:ui-monospace,SFMono-Regular,monospace;background:#18181b;color:#f4f4f5;padding:8px 12px;border-radius:6px;word-break:break-all"><strong>${opts.password}</strong></p>`,
+      '<p style="margin:0;font-size:12px;color:#71717a">Change it after signing in, and keep it somewhere safe — it will not be shown again.</p>',
+    )
+  } else if (opts.keysInjected) {
+    htmlParts.push('<p style="margin:0;color:#71717a">Your SSH key(s) were installed — sign in with your key, no password needed.</p>')
+  }
+
   return {
     subject: opts.deployed
       ? `Your server ${opts.instanceName} has been deployed`
       : `SSH access for ${opts.instanceName}`,
     text: lines.join('\n'),
-    html: lines
-      .map((l) =>
-        l === ''
-          ? '<br/>'
-          : l === opts.sshCmd || l === opts.password
-            ? `<p style="font-family:ui-monospace,SFMono-Regular,monospace;background:#f4f4f5;padding:8px 10px;border-radius:6px">${l}</p>`
-            : `<p>${l}</p>`,
-      )
-      .join('\n'),
+    html: htmlParts.join('\n'),
   }
 }
 
