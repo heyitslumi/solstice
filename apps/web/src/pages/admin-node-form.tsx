@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  CaretDown,
   CheckCircle,
   ClockCounterClockwise,
   Database,
@@ -486,60 +487,88 @@ export function AdminNodeFormPage() {
         {error && <Alert tone="danger">{error}</Alert>}
 
         {isEdit && (
-          <div className="flex flex-wrap items-center gap-1.5 rounded-panel border border-border bg-surface p-1.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab('general')}
-              className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
-                activeTab === 'general'
-                  ? 'bg-surface-2 text-fg shadow-xs'
-                  : 'text-fg-subtle hover:text-fg',
-              )}
-            >
-              <HardDrives size={15} aria-hidden />
-              General
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('network')}
-              className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
-                activeTab === 'network'
-                  ? 'bg-surface-2 text-fg shadow-xs'
-                  : 'text-fg-subtle hover:text-fg',
-              )}
-            >
-              <Globe size={15} aria-hidden />
-              Network
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('storage')}
-              className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
-                activeTab === 'storage'
-                  ? 'bg-surface-2 text-fg shadow-xs'
-                  : 'text-fg-subtle hover:text-fg',
-              )}
-            >
-              <Database size={15} aria-hidden />
-              Storage
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('tasks')}
-              className={cn(
-                'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
-                activeTab === 'tasks'
-                  ? 'bg-surface-2 text-fg shadow-xs'
-                  : 'text-fg-subtle hover:text-fg',
-              )}
-            >
-              <ClockCounterClockwise size={15} aria-hidden />
-              Tasks
-            </button>
-          </div>
+          <>
+            {/* Mobile Tab Dropdown */}
+            <div className="sm:hidden">
+              <label htmlFor="node-tab-select" className="sr-only">
+                Select section
+              </label>
+              <div className="relative">
+                <select
+                  id="node-tab-select"
+                  value={activeTab}
+                  onChange={(e) => setActiveTab(e.target.value as NodeTab)}
+                  className="w-full appearance-none rounded-control border border-border bg-surface px-4 py-2.5 pr-10 text-sm font-medium text-fg shadow-sm transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="general" className="bg-surface text-fg py-1.5">General</option>
+                  <option value="network" className="bg-surface text-fg py-1.5">Network</option>
+                  <option value="storage" className="bg-surface text-fg py-1.5">Storage</option>
+                  <option value="tasks" className="bg-surface text-fg py-1.5">Tasks</option>
+                </select>
+                <CaretDown
+                  size={15}
+                  className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-fg-subtle"
+                  aria-hidden
+                />
+              </div>
+            </div>
+
+            {/* Desktop Tabs */}
+            <div className="hidden sm:flex flex-wrap items-center gap-1.5 rounded-panel border border-border bg-surface p-1.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('general')}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                  activeTab === 'general'
+                    ? 'bg-surface-2 text-fg shadow-xs'
+                    : 'text-fg-subtle hover:text-fg',
+                )}
+              >
+                <HardDrives size={15} aria-hidden />
+                General
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('network')}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                  activeTab === 'network'
+                    ? 'bg-surface-2 text-fg shadow-xs'
+                    : 'text-fg-subtle hover:text-fg',
+                )}
+              >
+                <Globe size={15} aria-hidden />
+                Network
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('storage')}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                  activeTab === 'storage'
+                    ? 'bg-surface-2 text-fg shadow-xs'
+                    : 'text-fg-subtle hover:text-fg',
+                )}
+              >
+                <Database size={15} aria-hidden />
+                Storage
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('tasks')}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                  activeTab === 'tasks'
+                    ? 'bg-surface-2 text-fg shadow-xs'
+                    : 'text-fg-subtle hover:text-fg',
+                )}
+              >
+                <ClockCounterClockwise size={15} aria-hidden />
+                Tasks
+              </button>
+            </div>
+          </>
         )}
 
         {/* VirtFusion-style Overview Status Widgets (Servers, System, Port Allocation) */}

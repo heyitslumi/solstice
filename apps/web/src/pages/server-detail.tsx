@@ -2,6 +2,7 @@ import {
   ArrowClockwise,
   ArrowLeft,
   Camera,
+  CaretDown,
   CircleNotch,
   Copy,
   Globe,
@@ -893,8 +894,34 @@ export function ServerDetailPage() {
         </section>
 
 
-        {/* Server tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 rounded-panel border border-border bg-surface p-1.5">
+        {/* Mobile Tab Dropdown */}
+        <div className="sm:hidden">
+          <label htmlFor="server-tab-select" className="sr-only">
+            Select section
+          </label>
+          <div className="relative">
+            <select
+              id="server-tab-select"
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value as DetailTab)}
+              className="w-full appearance-none rounded-control border border-border bg-surface px-4 py-2.5 pr-10 text-sm font-medium text-fg shadow-sm transition-colors focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+              {detailTabs.map((tab) => (
+                <option key={tab.id} value={tab.id} className="bg-surface text-fg py-1.5">
+                  {tab.label}
+                </option>
+              ))}
+            </select>
+            <CaretDown
+              size={15}
+              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-fg-subtle"
+              aria-hidden
+            />
+          </div>
+        </div>
+
+        {/* Server tabs (Desktop) */}
+        <div className="hidden sm:flex flex-wrap items-center gap-1.5 rounded-panel border border-border bg-surface p-1.5">
           {detailTabs.map((tab) => (
             <button
               key={tab.id}
