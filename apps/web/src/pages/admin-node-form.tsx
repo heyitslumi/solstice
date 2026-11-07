@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Database,
   FloppyDisk,
   Globe,
   HardDrives,
@@ -46,7 +47,7 @@ export function AdminNodeFormPage() {
 
   const isDefaultLocalNode = isEdit && (name === 'local-incus' || fqdn === 'localhost')
 
-  type NodeTab = 'general' | 'network'
+  type NodeTab = 'general' | 'network' | 'storage'
   const [activeTab, setActiveTab] = useState<NodeTab>('general')
   const [nodeNetwork, setNodeNetwork] = useState<{
     primaryNetwork: string
@@ -93,6 +94,55 @@ export function AdminNodeFormPage() {
   const [deleteNetName, setDeleteNetName] = useState<string | null>(null)
   const [deletingNet, setDeletingNet] = useState(false)
 
+  // Storage tab state
+  const [nodeStorage, setNodeStorage] = useState<{
+    storageEnabled: boolean
+    diskLimitGb: number
+    pools: Array<{
+      name: string
+      driver: string
+      status: string
+      description?: string
+      config?: Record<string, string>
+      used_by?: string[]
+    }>
+  } | null>(null)
+  const [, setLoadingStorage] = useState(false)
+  const [storageEnabled, setStorageEnabled] = useState(true)
+  const [storageMaxDisk, setStorageMaxDisk] = useState(1000)
+  const [storageProfile, setStorageProfile] = useState('any')
+  const [updatingStorage, setUpdatingStorage] = useState(false)
+  const [storageSavedMsg, setStorageSavedMsg] = useState(false)
+
+  function loadStorageData() {
+    if (!id) return
+    setLoadingStorage(true)
+    void api.adminGetNodeStorage(id).then((res) => {
+      if (res.ok) {
+        setNodeStorage(res.data)
+        setStorageEnabled(res.data.storageEnabled !== false)
+        setStorageMaxDisk(res.data.diskLimitGb || 1000)
+      }
+      setLoadingStorage(false)
+    })
+  }
+
+  async function handleSaveStorage() {
+    if (!id) return
+    setUpdatingStorage(true)
+    setStorageSavedMsg(false)
+    const res = await api.adminUpdateNodeStorage(id, {
+      storageEnabled,
+      diskLimitGb: Number(storageMaxDisk) || 0,
+    })
+    if (res.ok) {
+      setStorageSavedMsg(true)
+      setTimeout(() => setStorageSavedMsg(false), 3000)
+      loadStorageData()
+    }
+    setUpdatingStorage(false)
+  }
+
   function loadNetworkData() {
     if (!id) return
     setLoadingNetwork(true)
@@ -114,7 +164,10 @@ export function AdminNodeFormPage() {
     if (id && !nodeNetwork) {
       loadNetworkData()
     }
-  }, [id, nodeNetwork])
+    if (id && !nodeStorage) {
+      loadStorageData()
+    }
+  }, [id, nodeNetwork, nodeStorage])
 
   async function handleToggleSystem(key: 'maintenance' | 'isPublic', nextVal: boolean) {
     if (!id) return
@@ -368,6 +421,19 @@ export function AdminNodeFormPage() {
             >
               <Globe size={15} aria-hidden />
               Network
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('storage')}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                activeTab === 'storage'
+                  ? 'bg-surface-2 text-fg shadow-xs'
+                  : 'text-fg-subtle hover:text-fg',
+              )}
+            >
+              <Database size={15} aria-hidden />
+              Storage
             </button>
           </div>
         )}
@@ -948,7 +1014,7 @@ export function AdminNodeFormPage() {
               </Button>
             </div>
           </form>
-        ) : (
+        ) : activeTab === 'network' ? (
           <div className="flex flex-col gap-6">
             {netError && <Alert tone="danger">{netError}</Alert>}
 
@@ -1205,6 +1271,121 @@ export function AdminNodeFormPage() {
                     </div>
                   )
                 })}
+            </div>
+          </div>
+        ) : (
+          /* Storage Tab (VirtFusion style) */
+          <div className="flex flex-col gap-6">
+            {storageSavedMsg && (
+              <Alert tone="success">Storage settings updated successfully.</Alert>
+            )}
+
+            {/* Storage mountpoint card */}
+            <div className="rounded-panel border border-border bg-surface shadow-2xs">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-border p-6">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[14px] font-semibold text-fg">
+                    {nodeStorage?.pools[0]?.name
+                      ? `Local (${nodeStorage.pools[0].name})`
+                      : 'Local (Default mountpoint)'}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    'rounded px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider',
+                    storageEnabled
+                      ? 'bg-emerald-500/15 text-emerald-400'
+                      : 'bg-surface-2 text-fg-subtle',
+                  )}
+                >
+                  {storageEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+
+              {/* Rows */}
+              <div className="flex flex-col divide-y divide-border/60 p-6">
+                {/* Row: Enabled */}
+                <div className="flex items-center justify-between py-4 first:pt-0">
+                  <span className="text-[13px] font-medium text-fg">Enabled</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={storageEnabled}
+                    onClick={() => setStorageEnabled(!storageEnabled)}
+                    className={cn(
+                      'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                      storageEnabled ? 'bg-emerald-500' : 'bg-surface-2',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
+                        storageEnabled ? 'translate-x-5' : 'translate-x-0',
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {/* Row: Type */}
+                <div className="flex items-center justify-between py-4">
+                  <span className="text-[13px] font-medium text-fg">Type</span>
+                  <span className="font-mono text-[13px] text-fg">
+                    {nodeStorage?.pools[0]?.driver
+                      ? `${nodeStorage.pools[0].driver.toUpperCase()} Storage Pool`
+                      : 'Local Mountpoint'}
+                  </span>
+                </div>
+
+                {/* Row: Path */}
+                <div className="flex items-center justify-between py-4">
+                  <span className="text-[13px] font-medium text-fg">Path</span>
+                  <span className="font-mono text-[13px] text-fg">
+                    {nodeStorage?.pools[0]?.config?.source || '/var/lib/incus/disks/default.img'}
+                  </span>
+                </div>
+
+                {/* Row: Maximum Disk */}
+                <div className="flex items-center justify-between py-4">
+                  <span className="text-[13px] font-medium text-fg">Maximum Disk</span>
+                  <div className="flex items-center">
+                    <input
+                      type="number"
+                      value={storageMaxDisk}
+                      onChange={(e) => setStorageMaxDisk(Number(e.target.value))}
+                      className="h-9 w-44 rounded-l-control border border-r-0 border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                    />
+                    <div className="flex h-9 items-center justify-center rounded-r-control border border-field-border bg-surface-2 px-3 font-mono text-[12px] font-semibold text-fg-subtle">
+                      GB
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row: Profile */}
+                <div className="flex items-center justify-between py-4">
+                  <span className="text-[13px] font-medium text-fg">Profile</span>
+                  <select
+                    value={storageProfile}
+                    onChange={(e) => setStorageProfile(e.target.value)}
+                    className="h-9 w-60 rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
+                  >
+                    <option value="any">Any</option>
+                    <option value="default">Default Profile</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Card Footer: Update Button */}
+              <div className="flex items-center justify-end border-t border-border bg-surface-2/20 p-4">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleSaveStorage}
+                  disabled={updatingStorage}
+                >
+                  {updatingStorage ? 'Updating...' : 'Update'}
+                </Button>
+              </div>
             </div>
           </div>
         )}

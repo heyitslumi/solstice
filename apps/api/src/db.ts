@@ -396,6 +396,7 @@ const SCHEMA = `
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS display_name text NOT NULL DEFAULT '';
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS cpu_model text NOT NULL DEFAULT '';
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS server_limit integer NOT NULL DEFAULT 0;
+  ALTER TABLE nodes ADD COLUMN IF NOT EXISTS storage_enabled boolean NOT NULL DEFAULT true;
   /* Instances live on a node; older rows predate the column and stay unassigned. */
   ALTER TABLE instances ADD COLUMN IF NOT EXISTS node_id uuid REFERENCES nodes(id) ON DELETE SET NULL;
   /* Admin suspension carries a reason shown to the owner; NULL means not suspended. */

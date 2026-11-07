@@ -1540,6 +1540,25 @@ export const api = {
     })
   },
 
+  adminGetNodeStorage(id: string) {
+    return request<{
+      storageEnabled: boolean
+      diskLimitGb: number
+      pools: Array<{
+        name: string
+        driver: string
+        status: string
+        description?: string
+        config?: Record<string, string>
+        used_by?: string[]
+      }>
+    }>(`/api/admin/nodes/${encodeURIComponent(id)}/storage`)
+  },
+
+  adminUpdateNodeStorage(id: string, input: { storageEnabled?: boolean; diskLimitGb?: number }) {
+    return patch<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}/storage`, input)
+  },
+
   adminDeleteNode(id: string) {
     return request<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}`, {
       method: 'DELETE',

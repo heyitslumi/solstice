@@ -6237,6 +6237,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
               n.memory_limit_mb AS "memoryLimitMb",
               n.disk_limit_gb AS "diskLimitGb",
               n.server_limit AS "serverLimit",
+              n.storage_enabled AS "storageEnabled",
               n.cpu_cores AS "cpuCores",
               n.created_at AS "createdAt",
               l.short_code AS "locationShortCode",
@@ -6379,6 +6380,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.serverLimit !== undefined) {
       fields.push(`server_limit = $${idx++}`)
       values.push(Number(body.serverLimit) || 0)
+    }
+    if (body.storageEnabled !== undefined) {
+      fields.push(`storage_enabled = $${idx++}`)
+      values.push(Boolean(body.storageEnabled))
     }
     if (body.cpuCores !== undefined) {
       fields.push(`cpu_cores = $${idx++}`)
@@ -6610,6 +6615,67 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     } catch (err: any) {
       return c.json({ message: err?.message || 'Failed to delete network.' }, 500)
     }
+  })
+
+  /* Fetch storage pools on node */
+  app.get('/api/admin/nodes/:id/storage', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const node = await queryOne<{ id: string; disk_limit_gb: number; storage_enabled: boolean }>(
+      'SELECT id, disk_limit_gb, storage_enabled FROM nodes WHERE id = $1',
+      [id],
+    )
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    let pools: any[] = []
+    try {
+      const res = await incusRequest<any[]>('GET', '/1.0/storage-pools?recursion=1')
+      const raw = res?.metadata ?? res
+      if (Array.isArray(raw)) {
+        pools = raw
+      }
+    } catch (err) {
+      console.warn('Failed to query Incus storage pools:', err)
+    }
+
+    return c.json({
+      storageEnabled: node.storage_enabled,
+      diskLimitGb: node.disk_limit_gb,
+      pools,
+    })
+  })
+
+  /* Update node storage configuration */
+  app.patch('/api/admin/nodes/:id/storage', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const body = await c.req.json<any>().catch(() => null)
+    if (!body) return c.json({ message: 'Invalid payload.' }, 400)
+
+    const updates: string[] = []
+    const values: any[] = []
+    let idx = 1
+
+    if (body.diskLimitGb !== undefined) {
+      updates.push(`disk_limit_gb = $${idx++}`)
+      values.push(Math.max(0, Number(body.diskLimitGb) || 0))
+    }
+    if (body.storageEnabled !== undefined) {
+      updates.push(`storage_enabled = $${idx++}`)
+      values.push(Boolean(body.storageEnabled))
+    }
+
+    if (updates.length > 0) {
+      updates.push('updated_at = now()')
+      values.push(id)
+      await query(`UPDATE nodes SET ${updates.join(', ')} WHERE id = $${idx}`, values)
+    }
+
+    return c.json({ ok: true })
   })
 
   /* OS templates for VPS provisioning (images.linuxcontainers.org aliases) */
