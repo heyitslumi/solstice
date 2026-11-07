@@ -488,7 +488,7 @@ export function ServerSetupPage({
 
   return (
     <AppShell title="Server Setup" description="Choose an operating system and configure your server.">
-      <div className="mx-auto -mt-8 w-full max-w-4xl lg:-mt-10">
+      <div className="mx-auto w-full max-w-4xl pt-4">
         {isRebuild && (
           <div className="mb-6 flex items-center gap-4 rounded-panel border border-warning/60 bg-warning/10 p-4">
             <span className="flex size-8 flex-none items-center justify-center rounded-lg bg-warning font-bold text-warning">i</span>
