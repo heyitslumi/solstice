@@ -140,6 +140,7 @@ export default defineConfig(({ mode }) => {
           // The embedded console speaks WebSocket under /api — without this
           // Vite never forwards the Upgrade and the terminal hangs connecting.
           ws: true,
+          timeout: 600000,
         },
         '/agentation': {
           target: process.env.AGENTATION_URL ?? 'http://127.0.0.1:4747',

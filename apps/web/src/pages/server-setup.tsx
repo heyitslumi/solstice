@@ -344,7 +344,20 @@ export function ServerSetupPage({
     clearInterval(progressTimer)
 
     if (!res.ok) {
-      push('\u2717 ' + (res.error.message || 'Provisioning failed.'))
+      // In case of a gateway timeout (504), check if the server was actually installed
+      if (instanceId && (res.error.message?.includes('504') || res.error.message?.includes('timed out'))) {
+        push('ℹ Checking server installation state...')
+        const check = await api.getInstance(instanceId).catch(() => null)
+        if (check?.ok && check.data.instance?.os) {
+          push('✓ Server setup completed successfully in background')
+          push('✓ Provisioning complete')
+          setStep(6)
+          setCreatedId(instanceId)
+          setTimeout(() => setPhase('panel'), 1200)
+          return
+        }
+      }
+      push('✗ ' + (res.error.message || 'Provisioning failed.'))
       setCreateError(res.error.message || 'Provisioning failed.')
       return
     }
@@ -415,36 +428,100 @@ export function ServerSetupPage({
       'Starting server',
       'Waiting for network',
     ]
+    const percent = Math.min(100, Math.round((step / steps.length) * 100))
+
     return (
       <AppShell title="Server Setup" description="Provisioning your server...">
-        <div className="flex min-h-[calc(100dvh-14rem)] flex-col">
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-panel border border-border bg-surface px-10 pb-14 pt-10 text-center">
-            <div className="size-24 animate-spin rounded-full border-[6px] border-fg-subtle/25 border-t-accent" />
-            <h2 className="mt-8 text-2xl font-semibold">Installing {osLabel}...</h2>
-            <p className="mt-2 text-base text-fg-subtle">{steps[Math.min(step, steps.length - 1)]}</p>
-            <div className="mt-8 w-full max-w-xl">
-              <div className="relative h-4 overflow-hidden rounded-full bg-field">
-                <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${(step / steps.length) * 100}%` }} />
-                <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white mix-blend-difference">{Math.round((step / steps.length) * 100)}%</span>
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 py-4">
+          {/* Main Progress Card */}
+          <div className="flex flex-col items-center justify-center rounded-panel border border-border bg-surface p-8 text-center shadow-xs">
+            {/* Smooth SVG Donut / Spinner */}
+            <div className="relative flex size-28 items-center justify-center">
+              <svg className="size-full -rotate-90" viewBox="0 0 36 36">
+                <path
+                  className="text-surface-2"
+                  strokeWidth="3.2"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path
+                  className="text-accent transition-all duration-700 ease-out"
+                  strokeDasharray={`${percent}, 100`}
+                  strokeWidth="3.2"
+                  strokeLinecap="round"
+                  stroke="currentColor"
+                  fill="none"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center">
+                <span className="font-mono text-[20px] font-bold text-fg leading-none">
+                  {percent}%
+                </span>
+              </div>
+            </div>
+
+            <h2 className="mt-5 text-[18px] font-semibold text-fg">
+              Installing {osLabel}...
+            </h2>
+            <p className="mt-1 text-[13px] text-fg-subtle">
+              {steps[Math.min(step, steps.length - 1)]}
+            </p>
+
+            {/* Clean Progress Bar */}
+            <div className="mt-6 w-full max-w-md">
+              <div className="relative h-2 overflow-hidden rounded-full bg-field">
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-700 ease-out"
+                  style={{ width: `${percent}%` }}
+                />
               </div>
             </div>
           </div>
+
           {createError && (
-            <div className="mt-4 rounded-panel border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300">
-              {createError}
+            <div className="flex items-center justify-between rounded-panel border border-rose-500/30 bg-rose-500/10 p-4 text-[13px] text-rose-300">
+              <span>{createError}</span>
+              {instanceId && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => navigate(`/servers/${instanceId}`)}
+                >
+                  Go to Server
+                </Button>
+              )}
             </div>
           )}
-          <div className="mt-4 overflow-hidden rounded-panel border border-border bg-black">
-            <div className="border-b border-border bg-surface px-4 py-2.5">
-              <span className="text-[12px] text-fg-subtle">provisioning log</span>
+
+          {/* Minimalist Provisioning Terminal Log */}
+          <div className="overflow-hidden rounded-panel border border-border bg-[#0d0e12] shadow-2xs">
+            <div className="flex items-center justify-between border-b border-border/80 bg-surface/40 px-4 py-2.5">
+              <span className="font-mono text-[11px] uppercase tracking-wider text-fg-subtle">
+                provisioning log
+              </span>
+              <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
             </div>
-            <div className="min-h-[40vh] flex-1 overflow-y-auto p-5 font-mono text-[13px] leading-loose">
+            <div className="max-h-60 overflow-y-auto p-4 font-mono text-[12px] leading-relaxed">
               {logLines.map((line, i) => (
-                <p key={i} className={line.includes('✓') || line.includes('OK') ? 'text-emerald-400' : line.includes('→') ? 'text-accent' : 'text-fg-muted'}>
-                  <span className="mr-4 text-fg-subtle">{lineTime(i)}</span>{line}
+                <p
+                  key={i}
+                  className={
+                    line.includes('✓') || line.includes('OK')
+                      ? 'text-emerald-400'
+                      : line.includes('→')
+                        ? 'text-accent'
+                        : 'text-fg-subtle'
+                  }
+                >
+                  <span className="mr-3 text-fg-subtle/50">{lineTime(i)}</span>
+                  {line}
                 </p>
               ))}
-              {step < steps.length && <p className="animate-pulse text-fg-subtle">▌</p>}
+              {step < steps.length && (
+                <p className="animate-pulse text-fg-subtle mt-1">▌</p>
+              )}
             </div>
           </div>
         </div>
