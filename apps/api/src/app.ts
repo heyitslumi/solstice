@@ -3786,17 +3786,30 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     row: { kind: string; host_port: number; container_port: number; protocol: string },
     containerIp: string,
   ) {
-    // Look up the instance's node primary network or active device network
+    // Determine which network bridge matches the container's IP (e.g. 10.208.0.x vs 10.142.95.x)
     let netName = 'incusbr0'
     try {
-      const instRow = await queryOne<{ primary_network: string | null }>(
-        `SELECT n.primary_network
-           FROM instances i
-           LEFT JOIN nodes n ON n.id = i.node_id
-          WHERE i.name = $1`,
-        [instanceName],
-      )
-      if (instRow?.primary_network) netName = instRow.primary_network
+      const live = await incus.getInstance(instanceName)
+      // Check existing eth0 device on instance
+      if (live.devices?.eth0?.network) {
+        netName = live.devices.eth0.network
+      } else {
+        // Query networks to find matching subnet for containerIp
+        const netsRes = await incusRequest<any[]>('GET', '/1.0/networks?recursion=1')
+        const nets = netsRes?.metadata ?? netsRes
+        if (Array.isArray(nets)) {
+          for (const n of nets) {
+            const addr = n.config?.['ipv4.address'] // e.g. "10.208.0.1/24"
+            if (addr) {
+              const prefix = addr.split('/')[0].split('.').slice(0, 3).join('.')
+              if (containerIp.startsWith(prefix + '.')) {
+                netName = n.name
+                break
+              }
+            }
+          }
+        }
+      }
     } catch {
       // fallback
     }
