@@ -1,4 +1,5 @@
 import { useAppConfig } from '@/lib/config'
+import { DitherCanvas } from './dither-canvas'
 import { PointerParallax } from './pointer-parallax'
 
 const SUPPORTING_COPY =
@@ -9,6 +10,9 @@ export function BrandPanel() {
 
   return (
     <aside className="relative hidden overflow-hidden bg-brand-surface lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
+      {/* Interactive WebGL 8x8 Bayer-Dithered Fluid Background */}
+      <DitherCanvas />
+
       {config.banner ? (
         <img
           src={config.banner}
@@ -17,7 +21,7 @@ export function BrandPanel() {
         />
       ) : null}
 
-      <PointerParallax className="absolute inset-0 mix-blend-screen">
+      <PointerParallax className="absolute inset-0 mix-blend-screen pointer-events-none">
         <div className="absolute -right-40 -bottom-56 size-[40rem] rounded-full sun-glow opacity-25 blur-[90px]" />
         <div className="absolute -right-16 -bottom-40 size-[26rem] rounded-full sun-glow opacity-40 blur-[50px]" />
       </PointerParallax>
@@ -27,7 +31,7 @@ export function BrandPanel() {
         className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-sun-400/50 to-transparent"
       />
 
-      <div aria-hidden className="pointer-events-none absolute inset-0 hairline-grid text-brand-ink/[0.035]" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 hairline-grid text-brand-ink/[0.04]" />
 
       <div className="relative flex items-center gap-3.5">
         <img
