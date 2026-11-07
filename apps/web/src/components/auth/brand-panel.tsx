@@ -1,5 +1,4 @@
 import { useAppConfig } from '@/lib/config'
-import { BrandWavesBackground } from './brand-waves'
 import { PointerParallax } from './pointer-parallax'
 
 const SUPPORTING_COPY =
@@ -10,13 +9,6 @@ export function BrandPanel() {
 
   return (
     <aside className="relative hidden overflow-hidden bg-brand-surface lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
-      {/* Animated Wavy Waves Background (color4bg) */}
-      <BrandWavesBackground />
-
-      {/* Legibility gradient masks */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-brand-surface via-transparent to-brand-surface/75" />
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-3/4 bg-gradient-to-r from-brand-surface/85 via-brand-surface/40 to-transparent" />
-
       {config.banner ? (
         <img
           src={config.banner}
