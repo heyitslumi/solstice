@@ -12,7 +12,7 @@ import type {
 } from '@simplewebauthn/server'
 
 import { query, queryOne, toIso, type InstanceRow, type OAuthProviderRow, type OsTemplateRow, type SshKeyRow, type UserRow } from './db.ts'
-import { incus, type IncusInstance, type IncusInstanceState } from './incus/client.ts'
+import { incus, incusRequest, type IncusInstance, type IncusInstanceState } from './incus/client.ts'
 import {
   CHANGE_CODE_LENGTH,
   CHANGE_CODE_TTL_MS,
