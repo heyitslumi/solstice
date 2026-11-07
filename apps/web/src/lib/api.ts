@@ -333,6 +333,7 @@ export interface ApiAssetItem {
 export interface ApiNode {
   id: string
   name: string
+  displayName?: string
   fqdn: string
   ipAddress: string
   publicIp?: string

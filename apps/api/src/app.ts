@@ -2648,7 +2648,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
               l.name AS location_name,
               l.short_code AS location_code,
               l.city AS location_city,
-              n.name AS node_name,
+              COALESCE(NULLIF(n.display_name, ''), n.name) AS node_name,
               u.id AS owner_id,
               u.email AS owner_email,
               u.name AS owner_name
@@ -4705,7 +4705,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       InstanceRow & { node_name: string | null; location_name: string | null; location_code: string | null; location_city: string | null; owner_id: string; owner_email: string; owner_name: string }
     >(
       `SELECT i.*,
-              n.name AS node_name,
+              COALESCE(NULLIF(n.display_name, ''), n.name) AS node_name,
               l.name AS location_name,
               l.short_code AS location_code,
               l.city AS location_city,
@@ -6204,6 +6204,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const nodes = await query<any>(
       `SELECT n.id,
               n.name,
+              n.display_name AS "displayName",
               n.fqdn,
               n.ip_address AS "ipAddress",
               n.public_ip AS "publicIp",
@@ -6250,11 +6251,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<{ id: string }>(
-        `INSERT INTO nodes (name, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `INSERT INTO nodes (name, display_name, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING id`,
         [
           String(body.name).trim(),
+          String(body.displayName || '').trim(),
           String(body.fqdn).trim(),
           String(body.ipAddress || body.fqdn).trim(),
           String(body.publicIp || '').trim(),
@@ -6304,6 +6306,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.name !== undefined) {
       fields.push(`name = $${idx++}`)
       values.push(String(body.name).trim())
+    }
+    if (body.displayName !== undefined) {
+      fields.push(`display_name = $${idx++}`)
+      values.push(String(body.displayName).trim())
     }
     if (body.fqdn !== undefined && !isDefaultLocal) {
       fields.push(`fqdn = $${idx++}`)
@@ -7019,7 +7025,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const rows = await query<
       InstanceRow & { owner_email: string; owner_name: string; node_name: string | null }
     >(
-      `SELECT i.*, u.email AS owner_email, u.name AS owner_name, n.name AS node_name
+      `SELECT i.*, u.email AS owner_email, u.name AS owner_name, COALESCE(NULLIF(n.display_name, ''), n.name) AS node_name
          FROM instances i
          JOIN users u ON u.id = i.user_id
          LEFT JOIN nodes n ON n.id = i.node_id
@@ -7313,7 +7319,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       `SELECT i.*,
               u.email AS owner_email,
               u.name AS owner_name,
-              n.name AS node_name,
+              COALESCE(NULLIF(n.display_name, ''), n.name) AS node_name,
               n.fqdn AS node_fqdn,
               l.short_code AS location_code
          FROM instances i

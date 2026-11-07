@@ -31,6 +31,7 @@ export function AdminNodeFormPage() {
 
   // Form fields
   const [name, setName] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const [fqdn, setFqdn] = useState('')
   const [ipAddress, setIpAddress] = useState('')
   const [publicIp, setPublicIp] = useState('')
@@ -225,6 +226,7 @@ export function AdminNodeFormPage() {
           const found = nodesRes.data.nodes?.find((n) => n.id === id)
           if (found) {
             setName(found.name)
+            setDisplayName(found.displayName || '')
             setFqdn(found.fqdn)
             setIpAddress(found.ipAddress || '')
             setPublicIp(found.publicIp || '')
@@ -265,6 +267,7 @@ export function AdminNodeFormPage() {
 
     const payload = {
       name: name.trim(),
+      displayName: displayName.trim(),
       fqdn: fqdn.trim(),
       ipAddress: ipAddress.trim() || fqdn.trim(),
       publicIp: publicIp.trim(),
@@ -630,7 +633,21 @@ export function AdminNodeFormPage() {
                         className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
                       />
                       <span className="mt-0.5 block text-[11px] text-fg-subtle">
-                        Unique internal hypervisor identifier.
+                        Unique internal hypervisor identifier (admin view only).
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="text-[12px] font-semibold text-fg">Display Name</label>
+                      <input
+                        type="text"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        placeholder="e.g. Solstice US-East (Virginia)"
+                        className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 text-[12px] text-fg focus:border-accent focus:outline-none"
+                      />
+                      <span className="mt-0.5 block text-[11px] text-fg-subtle">
+                        Name shown to end users. Leave blank to default to Node Name.
                       </span>
                     </div>
 
