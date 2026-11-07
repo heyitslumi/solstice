@@ -10,6 +10,7 @@ import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { CliSpinner } from '@/components/ui/cli-spinner'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -304,7 +305,7 @@ export function ServerConsolePage() {
             </div>
             <span
               className={cn(
-                'rounded-full border px-2.5 py-0.5 text-[11px] font-medium',
+                'rounded-full border px-2.5 py-0.5 text-[11px] font-medium flex items-center gap-1.5',
                 state === 'open'
                   ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                   : state === 'connecting'
@@ -312,6 +313,7 @@ export function ServerConsolePage() {
                     : 'border-border bg-surface-2/60 text-fg-subtle',
               )}
             >
+              {state === 'connecting' ? <CliSpinner name="dots" className="text-[12px]" /> : null}
               {state === 'open' ? 'Connected' : state === 'connecting' ? 'Connecting...' : 'Closed'}
             </span>
 

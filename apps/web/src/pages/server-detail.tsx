@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Camera,
   CaretDown,
-  CircleNotch,
   Copy,
   Globe,
   Key,
@@ -28,6 +27,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { CliSpinner } from '@/components/ui/cli-spinner'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { AnimatedNumber, StatusDot } from '@/components/ui/live'
 import { PowerConfirmDialog, type ConfirmablePowerAction } from '@/components/power-confirm-dialog'
@@ -1476,7 +1476,7 @@ export function ServerDetailPage() {
                         <td className="py-2 pr-4 font-medium text-fg">{pt.description}</td>
                         <td className="py-2 pr-4">
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-500">
-                            <CircleNotch size={12} weight="bold" className="animate-spin" />
+                            <CliSpinner name="dots" className="text-[12px]" />
                             Running
                           </span>
                         </td>

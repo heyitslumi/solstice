@@ -21,6 +21,7 @@ import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { CliSpinner } from '@/components/ui/cli-spinner'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { api, type ApiLocation } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -1722,7 +1723,7 @@ export function AdminNodeFormPage() {
                                   </span>
                                 ) : (
                                   <span title="Running">
-                                    <ClockCounterClockwise size={14} className="shrink-0 animate-spin text-amber-500" />
+                                    <CliSpinner name="dots" className="text-amber-500 text-[13px]" />
                                   </span>
                                 )}
                               </div>
