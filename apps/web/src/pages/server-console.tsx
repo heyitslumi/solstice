@@ -192,7 +192,13 @@ export function ServerConsolePage() {
         onerror: (e: Error) => {
           if (!cancelled) {
             setState('closed')
-            setReason(e?.message || 'Graphical console failed.')
+            const msg = e?.message || 'Graphical console failed.'
+            if (/already using/i.test(msg)) {
+              setTakenCode(4409)
+              setReason('Someone is already using this console.')
+            } else {
+              setReason(msg)
+            }
           }
         },
         onagent: () => SpiceHtml5.resize_helper(sc),
