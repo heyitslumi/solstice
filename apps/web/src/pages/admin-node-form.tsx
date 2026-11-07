@@ -4,6 +4,7 @@ import {
   FloppyDisk,
   Globe,
   HardDrives,
+  Plus,
   ShareNetwork,
 } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
@@ -13,6 +14,7 @@ import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { api, type ApiLocation } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -44,6 +46,7 @@ export function AdminNodeFormPage() {
   type NodeTab = 'general' | 'network'
   const [activeTab, setActiveTab] = useState<NodeTab>('general')
   const [nodeNetwork, setNodeNetwork] = useState<{
+    primaryNetwork: string
     portForwardRange: { start: number; end: number }
     networks: Array<{
       name: string
@@ -56,21 +59,76 @@ export function AdminNodeFormPage() {
     }>
   } | null>(null)
   const [loadingNetwork, setLoadingNetwork] = useState(false)
+  const [primaryNetwork, setPrimaryNetwork] = useState('incusbr0')
+  const [savingPrimary, setSavingPrimary] = useState(false)
+
+  // Add network modal state
+  const [addNetOpen, setAddNetOpen] = useState(false)
+  const [newNetName, setNewNetName] = useState('')
+  const [newNetMtu, setNewNetMtu] = useState(1372)
+  const [newNetNat, setNewNetNat] = useState(true)
+  const [newNetIpv4, setNewNetIpv4] = useState('auto')
+  const [addingNet, setAddingNet] = useState(false)
+  const [netError, setNetError] = useState<string | null>(null)
+
+  function loadNetworkData() {
+    if (!id) return
+    setLoadingNetwork(true)
+    void api.adminGetNodeNetwork(id).then((res) => {
+      if (res.ok) {
+        setNodeNetwork({
+          primaryNetwork: res.data.node.primaryNetwork,
+          portForwardRange: res.data.portForwardRange,
+          networks: res.data.networks,
+        })
+        setPrimaryNetwork(res.data.node.primaryNetwork || 'incusbr0')
+      }
+      setLoadingNetwork(false)
+    })
+  }
 
   useEffect(() => {
     if (activeTab === 'network' && id && !nodeNetwork) {
-      setLoadingNetwork(true)
-      void api.adminGetNodeNetwork(id).then((res) => {
-        if (res.ok) {
-          setNodeNetwork({
-            portForwardRange: res.data.portForwardRange,
-            networks: res.data.networks,
-          })
-        }
-        setLoadingNetwork(false)
-      })
+      loadNetworkData()
     }
   }, [activeTab, id, nodeNetwork])
+
+  async function handleUpdatePrimaryNetwork(e: React.FormEvent) {
+    e.preventDefault()
+    if (!id) return
+    setSavingPrimary(true)
+    setNetError(null)
+    const res = await api.adminUpdateNode(id, { primaryNetwork } as any)
+    if (res.ok) {
+      loadNetworkData()
+    } else {
+      setNetError(res.error.message || 'Failed to update primary network.')
+    }
+    setSavingPrimary(false)
+  }
+
+  async function handleCreateNetwork(e: React.FormEvent) {
+    e.preventDefault()
+    if (!id || !newNetName.trim()) return
+    setAddingNet(true)
+    setNetError(null)
+    const res = await api.adminCreateNodeNetwork(id, {
+      name: newNetName.trim().toLowerCase(),
+      mtu: Number(newNetMtu) || 1372,
+      nat: newNetNat,
+      ipv4: newNetIpv4.trim() || 'auto',
+    })
+    if (res.ok) {
+      setAddNetOpen(false)
+      setNewNetName('')
+      setNewNetMtu(1372)
+      setNewNetIpv4('auto')
+      loadNetworkData()
+    } else {
+      setNetError(res.error.message || 'Failed to create network bridge.')
+    }
+    setAddingNet(false)
+  }
 
   useEffect(() => {
     let active = true
@@ -484,6 +542,73 @@ export function AdminNodeFormPage() {
           </form>
         ) : (
           <div className="flex flex-col gap-6">
+            {netError && <Alert tone="danger">{netError}</Alert>}
+
+            {/* VirtFusion-style Primary Network Configuration Card */}
+            <form
+              onSubmit={handleUpdatePrimaryNetwork}
+              className="rounded-panel border border-border bg-surface p-6 shadow-2xs"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-fg">Primary Network</h2>
+                  <p className="text-[11px] text-fg-subtle">
+                    Default bridge interface and MTU used for provisioning new servers on this node.
+                  </p>
+                </div>
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-emerald-400">
+                  ENABLED
+                </span>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">Interface Name</label>
+                  <select
+                    value={primaryNetwork}
+                    onChange={(e) => setPrimaryNetwork(e.target.value)}
+                    className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                  >
+                    {nodeNetwork?.networks.map((net) => (
+                      <option key={net.name} value={net.name}>
+                        {net.name} ({net.type}{net.managed ? ', managed' : ''})
+                      </option>
+                    ))}
+                    {!nodeNetwork?.networks.some((n) => n.name === primaryNetwork) && (
+                      <option value={primaryNetwork}>{primaryNetwork}</option>
+                    )}
+                  </select>
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Primary Incus network device attached to guest instances.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">Network Mode</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="NAT / Bridged (Incus)"
+                    className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-surface-2 px-3 text-[13px] text-fg-subtle opacity-70 cursor-not-allowed"
+                  />
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Direct layer-2 attachment or masqueraded NAT bridge.
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={savingPrimary}
+                >
+                  {savingPrimary ? 'Updating...' : 'Update Primary Network'}
+                </Button>
+              </div>
+            </form>
+
             {/* Host Routing & Port Range Overview */}
             <section className="rounded-panel border border-border bg-surface p-6 shadow-2xs">
               <div className="flex items-center gap-3 border-b border-border pb-4">
@@ -529,9 +654,16 @@ export function AdminNodeFormPage() {
                     Bridges, physical adapters, and subnet ranges managed by Incus on this host.
                   </p>
                 </div>
-                {loadingNetwork && (
-                  <span className="text-[12px] text-fg-subtle">Loading networks...</span>
-                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setAddNetOpen(true)}
+                  className="gap-1.5 text-[12px]"
+                >
+                  <Plus size={14} />
+                  Add Network
+                </Button>
               </div>
 
               {loadingNetwork && !nodeNetwork ? (
@@ -556,8 +688,13 @@ export function AdminNodeFormPage() {
                         <tr key={net.name} className="border-b border-border/50 last:border-0">
                           <td className="py-2.5 pr-4">
                             <span className="font-mono font-semibold text-fg">{net.name}</span>
+                            {net.name === primaryNetwork && (
+                              <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400">
+                                primary
+                              </span>
+                            )}
                             {net.managed && (
-                              <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] text-accent-text">
+                              <span className="ml-1.5 rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] text-accent-text">
                                 managed
                               </span>
                             )}
@@ -591,6 +728,87 @@ export function AdminNodeFormPage() {
           </div>
         )}
       </div>
+
+      {/* Add Network Bridge Dialog */}
+      <Dialog open={addNetOpen} onOpenChange={setAddNetOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Add Network Bridge</DialogTitle>
+          <DialogDescription>
+            Creates a new managed Incus network bridge on this hypervisor host.
+          </DialogDescription>
+
+          <form onSubmit={handleCreateNetwork} className="mt-4 flex flex-col gap-4">
+            <div>
+              <label className="text-[12px] font-semibold text-fg">
+                Bridge Name <span className="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={newNetName}
+                onChange={(e) => setNewNetName(e.target.value)}
+                placeholder="natbr0"
+                className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+              />
+              <span className="mt-0.5 block text-[11px] text-fg-subtle">
+                Alphanumeric identifier (e.g. natbr0, privbr0).
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[12px] font-semibold text-fg">MTU</label>
+                <input
+                  type="number"
+                  value={newNetMtu}
+                  onChange={(e) => setNewNetMtu(Number(e.target.value))}
+                  placeholder="1372"
+                  className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[12px] font-semibold text-fg">IPv4 Gateway / Subnet</label>
+                <input
+                  type="text"
+                  value={newNetIpv4}
+                  onChange={(e) => setNewNetIpv4(e.target.value)}
+                  placeholder="auto or 10.200.0.1/24"
+                  className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">
+              <Checkbox
+                checked={newNetNat}
+                onCheckedChange={(checked) => setNewNetNat(checked === true)}
+              />
+              <span className="text-[12px] font-medium text-fg">Enable Outbound NAT Masquerade</span>
+            </label>
+
+            <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setAddNetOpen(false)}
+                disabled={addingNet}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={addingNet || !newNetName.trim()}
+              >
+                {addingNet ? 'Creating...' : 'Create Network'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   )
 }

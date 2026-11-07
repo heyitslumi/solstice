@@ -392,6 +392,7 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS nodes_location_idx ON nodes (location_id);
   /* Public address users connect to (SSH forwards); panel metadata, not daemon config. */
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS public_ip text NOT NULL DEFAULT '';
+  ALTER TABLE nodes ADD COLUMN IF NOT EXISTS primary_network text NOT NULL DEFAULT 'incusbr0';
   /* Instances live on a node; older rows predate the column and stay unassigned. */
   ALTER TABLE instances ADD COLUMN IF NOT EXISTS node_id uuid REFERENCES nodes(id) ON DELETE SET NULL;
   /* Admin suspension carries a reason shown to the owner; NULL means not suspended. */

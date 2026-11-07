@@ -1505,7 +1505,7 @@ export const api = {
 
   adminGetNodeNetwork(id: string) {
     return request<{
-      node: { id: string; name: string; fqdn: string; ipAddress: string; publicIp: string }
+      node: { id: string; name: string; fqdn: string; ipAddress: string; publicIp: string; primaryNetwork: string }
       portForwardRange: { start: number; end: number }
       networks: Array<{
         name: string
@@ -1517,6 +1517,14 @@ export const api = {
         used_by?: string[]
       }>
     }>(`/api/admin/nodes/${encodeURIComponent(id)}/network`)
+  },
+
+  adminCreateNodeNetwork(id: string, input: { name: string; mtu?: number; nat?: boolean; ipv4?: string; ipv6?: string }) {
+    return post<{ ok: true; name: string }>(`/api/admin/nodes/${encodeURIComponent(id)}/networks`, input)
+  },
+
+  adminUpdateNodeNetwork(id: string, netName: string, input: { mtu?: number; nat?: boolean }) {
+    return patch<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}/networks/${encodeURIComponent(netName)}`, input)
   },
 
   adminDeleteNode(id: string) {

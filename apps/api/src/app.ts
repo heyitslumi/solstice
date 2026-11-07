@@ -6345,6 +6345,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       fields.push(`cpu_cores = $${idx++}`)
       values.push(Number(body.cpuCores) || 8)
     }
+    if (body.primaryNetwork !== undefined) {
+      fields.push(`primary_network = $${idx++}`)
+      values.push(String(body.primaryNetwork).trim() || 'incusbr0')
+    }
 
     if (fields.length > 0) {
       fields.push(`updated_at = now()`)
@@ -6367,8 +6371,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
     const id = c.req.param('id')
-    const node = await queryOne<{ id: string; name: string; fqdn: string; ip_address: string; public_ip: string }>(
-      'SELECT id, name, fqdn, ip_address, public_ip FROM nodes WHERE id = $1',
+    const node = await queryOne<{ id: string; name: string; fqdn: string; ip_address: string; public_ip: string; primary_network: string }>(
+      'SELECT id, name, fqdn, ip_address, public_ip, primary_network FROM nodes WHERE id = $1',
       [id],
     )
     if (!node) return c.json({ message: 'Node not found.' }, 404)
@@ -6392,6 +6396,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         fqdn: node.fqdn,
         ipAddress: node.ip_address,
         publicIp: node.public_ip,
+        primaryNetwork: node.primary_network || 'incusbr0',
       },
       portForwardRange: {
         start: Number(config['port_forward_start']) || 22000,
@@ -6399,6 +6404,83 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       },
       networks,
     })
+  })
+
+  /* Create new Incus network bridge on the node */
+  app.post('/api/admin/nodes/:id/networks', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const node = await queryOne<{ name: string }>('SELECT name FROM nodes WHERE id = $1', [id])
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    const body = await c.req.json<any>().catch(() => null)
+    const name = String(body?.name ?? '').trim().toLowerCase()
+    if (!name || !/^[a-z0-9_-]{2,32}$/.test(name)) {
+      return c.json({ message: 'Network name must be 2-32 lowercase alphanumeric characters.' }, 400)
+    }
+
+    const mtu = Math.floor(Number(body?.mtu)) || 1372
+    const nat = body?.nat !== false
+    const ipv4 = String(body?.ipv4 ?? '').trim() || 'auto'
+    const ipv6 = String(body?.ipv6 ?? '').trim() || 'auto'
+
+    const config: Record<string, string> = {
+      'bridge.mtu': String(mtu),
+      'ipv4.address': ipv4,
+      'ipv4.nat': nat ? 'true' : 'false',
+      'ipv6.address': ipv6,
+      'ipv6.nat': nat ? 'true' : 'false',
+    }
+
+    try {
+      await incusRequest<any>('POST', '/1.0/networks', {
+        name,
+        type: 'bridge',
+        config,
+      })
+      await logActivity(
+        admin.user.id,
+        'create_network',
+        `Created network bridge "${name}" on node "${node.name}"`,
+        clientKey(c),
+      )
+      return c.json({ ok: true, name })
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Failed to create network.' }, 500)
+    }
+  })
+
+  /* Update Incus network bridge config (e.g. MTU or NAT) */
+  app.patch('/api/admin/nodes/:id/networks/:netName', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const netName = c.req.param('netName')
+    const body = await c.req.json<any>().catch(() => null)
+    if (!body) return c.json({ message: 'Invalid payload.' }, 400)
+
+    try {
+      const cur = await incusRequest<any>('GET', `/1.0/networks/${encodeURIComponent(netName)}`)
+      const currentConfig = (cur?.metadata ?? cur)?.config || {}
+
+      const newConfig: Record<string, string> = { ...currentConfig }
+      if (body.mtu !== undefined) {
+        newConfig['bridge.mtu'] = String(Math.floor(Number(body.mtu)) || 1372)
+      }
+      if (body.nat !== undefined) {
+        newConfig['ipv4.nat'] = body.nat ? 'true' : 'false'
+        newConfig['ipv6.nat'] = body.nat ? 'true' : 'false'
+      }
+
+      await incusRequest<any>('PATCH', `/1.0/networks/${encodeURIComponent(netName)}`, {
+        config: newConfig,
+      })
+      return c.json({ ok: true })
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Failed to update network.' }, 500)
+    }
   })
 
   /* OS templates for VPS provisioning (images.linuxcontainers.org aliases) */
