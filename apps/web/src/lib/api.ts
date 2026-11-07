@@ -334,6 +334,7 @@ export interface ApiNode {
   id: string
   name: string
   displayName?: string
+  cpuModel?: string
   fqdn: string
   ipAddress: string
   publicIp?: string

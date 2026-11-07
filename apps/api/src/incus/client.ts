@@ -190,6 +190,7 @@ export const incus = {
     timezone?: string
     swapMb?: number
     dnsServers?: string[]
+    rawQemu?: string
   }) {
     // Always ensure an SSH daemon exists so generated credentials and key
     // auth work out of the box; owner keys are appended when present.
@@ -257,6 +258,9 @@ ${runcmd.map((r) => `  - ${r}`).join('\n')}
           : {}),
         ...(params.type === 'virtual-machine' && params.uefi === false
           ? { 'security.csm': 'true', 'security.secureboot': 'false' }
+          : {}),
+        ...(params.type === 'virtual-machine' && params.rawQemu
+          ? { 'raw.qemu': params.rawQemu }
           : {}),
         ...(params.cpu ? { 'limits.cpu': String(params.cpu) } : {}),
         ...(params.memory ? { 'limits.memory': params.memory } : {}),

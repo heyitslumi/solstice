@@ -32,6 +32,7 @@ export function AdminNodeFormPage() {
   // Form fields
   const [name, setName] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [cpuModel, setCpuModel] = useState('')
   const [fqdn, setFqdn] = useState('')
   const [ipAddress, setIpAddress] = useState('')
   const [publicIp, setPublicIp] = useState('')
@@ -227,6 +228,7 @@ export function AdminNodeFormPage() {
           if (found) {
             setName(found.name)
             setDisplayName(found.displayName || '')
+            setCpuModel(found.cpuModel || '')
             setFqdn(found.fqdn)
             setIpAddress(found.ipAddress || '')
             setPublicIp(found.publicIp || '')
@@ -268,6 +270,7 @@ export function AdminNodeFormPage() {
     const payload = {
       name: name.trim(),
       displayName: displayName.trim(),
+      cpuModel: cpuModel.trim(),
       fqdn: fqdn.trim(),
       ipAddress: ipAddress.trim() || fqdn.trim(),
       publicIp: publicIp.trim(),
@@ -799,12 +802,109 @@ export function AdminNodeFormPage() {
                   <div className="mt-4 flex flex-col gap-4">
                     <div>
                       <label className="text-[12px] font-semibold text-fg">CPU Mode / Instruction Model</label>
-                      <input
-                        type="text"
-                        disabled
-                        value="Host Passthrough (Incus Native)"
-                        className="mt-1 h-9 w-full rounded-control border border-field-border bg-surface-2 px-3 text-[12px] text-fg-subtle opacity-80 cursor-not-allowed"
-                      />
+                      <select
+                        value={cpuModel}
+                        onChange={(e) => setCpuModel(e.target.value)}
+                        className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 text-[12px] text-fg focus:border-accent focus:outline-none"
+                      >
+                        <option value="">⚙️ Inherit from virtualization settings (Host Passthrough)</option>
+                        <option value="host">Host Passthrough</option>
+                        <option value="host-model">Host Model</option>
+                        <option value="max">Max (All Host Features)</option>
+                        <option value="qemu64">QEMU 64-bit</option>
+                        <option value="kvm64">KVM 64-bit</option>
+                        
+                        <optgroup label="AMD EPYC & Zen Series">
+                          <option value="EPYC-Genoa">AMD EPYC Genoa (Zen 4)</option>
+                          <option value="EPYC-Milan">AMD EPYC Milan (Zen 3)</option>
+                          <option value="EPYC-Milan-v2">AMD EPYC Milan v2</option>
+                          <option value="EPYC-Rome">AMD EPYC Rome (Zen 2)</option>
+                          <option value="EPYC-Rome-v2">AMD EPYC Rome v2</option>
+                          <option value="EPYC-Rome-v3">AMD EPYC Rome v3</option>
+                          <option value="EPYC-Rome-v4">AMD EPYC Rome v4</option>
+                          <option value="EPYC">AMD EPYC (Naples)</option>
+                          <option value="EPYC-IBPB">AMD EPYC (Naples IBPB)</option>
+                          <option value="EPYC-v2">AMD EPYC v2</option>
+                          <option value="EPYC-v3">AMD EPYC v3</option>
+                          <option value="EPYC-v4">AMD EPYC v4</option>
+                          <option value="Phenom">AMD Phenom</option>
+                          <option value="Athlon">AMD Athlon</option>
+                          <option value="Opteron_G5">AMD Opteron G5</option>
+                          <option value="Opteron_G4">AMD Opteron G4</option>
+                          <option value="Opteron_G3">AMD Opteron G3</option>
+                          <option value="Opteron_G2">AMD Opteron G2</option>
+                          <option value="Opteron_G1">AMD Opteron G1</option>
+                        </optgroup>
+
+                        <optgroup label="Intel Xeon Scalable & Enterprise">
+                          <option value="GraniteRapids">Intel Granite Rapids</option>
+                          <option value="GraniteRapids-v2">Intel Granite Rapids v2</option>
+                          <option value="SierraForest">Intel Sierra Forest</option>
+                          <option value="SapphireRapids">Intel Sapphire Rapids</option>
+                          <option value="SapphireRapids-v2">Intel Sapphire Rapids v2</option>
+                          <option value="SapphireRapids-v3">Intel Sapphire Rapids v3</option>
+                          <option value="Cooperlake">Intel Cooper Lake</option>
+                          <option value="Icelake-Server">Intel Ice Lake Server</option>
+                          <option value="Icelake-Server-noTSX">Intel Ice Lake Server (no TSX)</option>
+                          <option value="Icelake-Server-v2">Intel Ice Lake Server v2</option>
+                          <option value="Icelake-Server-v3">Intel Ice Lake Server v3</option>
+                          <option value="Icelake-Server-v4">Intel Ice Lake Server v4</option>
+                          <option value="Icelake-Server-v5">Intel Ice Lake Server v5</option>
+                          <option value="Icelake-Server-v6">Intel Ice Lake Server v6</option>
+                          <option value="Cascadelake-Server">Intel Cascade Lake Server</option>
+                          <option value="Cascadelake-Server-noTSX">Intel Cascade Lake Server (no TSX)</option>
+                          <option value="Skylake-Server">Intel Skylake Server</option>
+                          <option value="Skylake-Server-IBRS">Intel Skylake Server IBRS</option>
+                          <option value="Skylake-Server-noTSX-IBRS">Intel Skylake Server no TSX IBRS</option>
+                          <option value="Broadwell">Intel Broadwell</option>
+                          <option value="Broadwell-IBRS">Intel Broadwell IBRS</option>
+                          <option value="Broadwell-noTSX">Intel Broadwell (no TSX)</option>
+                          <option value="Broadwell-noTSX-IBRS">Intel Broadwell no TSX IBRS</option>
+                          <option value="Haswell">Intel Haswell</option>
+                          <option value="Haswell-IBRS">Intel Haswell IBRS</option>
+                          <option value="Haswell-noTSX">Intel Haswell (no TSX)</option>
+                          <option value="Haswell-noTSX-IBRS">Intel Haswell no TSX IBRS</option>
+                          <option value="IvyBridge">Intel Ivy Bridge</option>
+                          <option value="IvyBridge-IBRS">Intel Ivy Bridge IBRS</option>
+                          <option value="SandyBridge">Intel Sandy Bridge</option>
+                          <option value="SandyBridge-IBRS">Intel Sandy Bridge IBRS</option>
+                          <option value="Westmere">Intel Westmere</option>
+                          <option value="Westmere-IBRS">Intel Westmere IBRS</option>
+                          <option value="Nehalem">Intel Nehalem</option>
+                          <option value="Nehalem-IBRS">Intel Nehalem IBRS</option>
+                          <option value="Penryn">Intel Penryn</option>
+                          <option value="Conroe">Intel Conroe</option>
+                        </optgroup>
+
+                        <optgroup label="Intel Client & Embedded">
+                          <option value="Icelake-Client">Intel Ice Lake Client</option>
+                          <option value="Icelake-Client-noTSX">Intel Ice Lake Client (no TSX)</option>
+                          <option value="Skylake-Client">Intel Skylake Client</option>
+                          <option value="Skylake-Client-IBRS">Intel Skylake Client IBRS</option>
+                          <option value="Skylake-Client-noTSX-IBRS">Intel Skylake Client no TSX IBRS</option>
+                          <option value="Snowridge">Intel Snowridge</option>
+                          <option value="Denverton">Intel Denverton</option>
+                          <option value="Denverton-v2">Intel Denverton v2</option>
+                          <option value="Denverton-v3">Intel Denverton v3</option>
+                          <option value="KnightsMill">Intel Knights Mill</option>
+                          <option value="n270">Intel Atom N270</option>
+                          <option value="core2duo">Intel Core 2 Duo</option>
+                          <option value="coreduo">Intel Core Duo</option>
+                          <option value="pentium">Intel Pentium</option>
+                          <option value="pentium2">Intel Pentium 2</option>
+                          <option value="pentium3">Intel Pentium 3</option>
+                          <option value="pentiumpro">Intel Pentium Pro</option>
+                          <option value="486">486</option>
+                        </optgroup>
+
+                        <optgroup label="ARM & Other Architectures">
+                          <option value="Dhyana">Hygon Dhyana</option>
+                          <option value="Dhyana-v2">Hygon Dhyana v2</option>
+                          <option value="neoverse-n1">Neoverse N1</option>
+                          <option value="neoverse-v1">Neoverse V1</option>
+                          <option value="cortex-a72">Cortex-A72</option>
+                        </optgroup>
+                      </select>
                       <span className="mt-0.5 block text-[11px] text-fg-subtle">
                         Applies to KVM instances only. LXC containers directly inherit the host kernel CPU model.
                       </span>

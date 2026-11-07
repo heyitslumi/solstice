@@ -2863,6 +2863,15 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
     const sshPublicKeys = userSshKeys.map((k) => k.public_key)
 
+    const nodeId = await defaultNodeId()
+    const targetNode = nodeId
+      ? await queryOne<{ cpu_model: string }>('SELECT cpu_model FROM nodes WHERE id = $1', [nodeId])
+      : null
+    const rawQemu =
+      type === 'kvm' && targetNode?.cpu_model && targetNode.cpu_model !== 'host'
+        ? `-cpu ${targetNode.cpu_model}`
+        : undefined
+
     try {
       await incus.createInstance({
         name: cleanName,
@@ -2877,6 +2886,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         timezone: timezone || undefined,
         swapMb,
         dnsServers,
+        rawQemu,
       })
 
       // Start the newly provisioned instance
@@ -2884,7 +2894,6 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         console.warn('Failed to start newly created instance:', e)
       })
 
-      const nodeId = await defaultNodeId()
       await query(
         `INSERT INTO instances (id, user_id, name, type, os, image_alias, cores, memory_mb, disk_gb, node_id, hostname, timezone, swap_mb, dns_servers)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)`,
@@ -6205,6 +6214,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       `SELECT n.id,
               n.name,
               n.display_name AS "displayName",
+              n.cpu_model AS "cpuModel",
               n.fqdn,
               n.ip_address AS "ipAddress",
               n.public_ip AS "publicIp",
@@ -6251,12 +6261,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<{ id: string }>(
-        `INSERT INTO nodes (name, display_name, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `INSERT INTO nodes (name, display_name, cpu_model, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING id`,
         [
           String(body.name).trim(),
           String(body.displayName || '').trim(),
+          String(body.cpuModel || '').trim(),
           String(body.fqdn).trim(),
           String(body.ipAddress || body.fqdn).trim(),
           String(body.publicIp || '').trim(),
@@ -6310,6 +6321,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.displayName !== undefined) {
       fields.push(`display_name = $${idx++}`)
       values.push(String(body.displayName).trim())
+    }
+    if (body.cpuModel !== undefined) {
+      fields.push(`cpu_model = $${idx++}`)
+      values.push(String(body.cpuModel).trim())
     }
     if (body.fqdn !== undefined && !isDefaultLocal) {
       fields.push(`fqdn = $${idx++}`)
@@ -7177,6 +7192,23 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     )
     const sshPublicKeys = ownerSshKeys.map((k) => k.public_key)
 
+    let nodeId: string | null = null
+    if (body.nodeId) {
+      const node = await queryOne<{ id: string }>('SELECT id FROM nodes WHERE id = $1', [body.nodeId])
+      if (!node) return c.json({ message: 'Target node not found.' }, 404)
+      nodeId = node.id
+    } else {
+      nodeId = await defaultNodeId()
+    }
+
+    const targetNode = nodeId
+      ? await queryOne<{ cpu_model: string }>('SELECT cpu_model FROM nodes WHERE id = $1', [nodeId])
+      : null
+    const rawQemu =
+      type === 'kvm' && targetNode?.cpu_model && targetNode.cpu_model !== 'host'
+        ? `-cpu ${targetNode.cpu_model}`
+        : undefined
+
     try {
       await incus.createInstance({
         name: cleanName,
@@ -7187,20 +7219,12 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         disk: `${diskGb}GiB`,
         sshKeys: sshPublicKeys,
         uefi: osConfig.uefi,
+        rawQemu,
       })
 
       await incus.setInstanceState(cleanName, 'start').catch((e) => {
         console.warn('[admin] Failed to start newly created instance:', e)
       })
-
-      let nodeId: string | null = null
-      if (body.nodeId) {
-        const node = await queryOne<{ id: string }>('SELECT id FROM nodes WHERE id = $1', [body.nodeId])
-        if (!node) return c.json({ message: 'Target node not found.' }, 404)
-        nodeId = node.id
-      } else {
-        nodeId = await defaultNodeId()
-      }
 
       await query(
         `INSERT INTO instances (id, user_id, name, type, os, image_alias, cores, memory_mb, disk_gb, node_id)
