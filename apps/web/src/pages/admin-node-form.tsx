@@ -580,12 +580,76 @@ export function AdminNodeFormPage() {
               </div>
             </section>
 
+            {/* VirtFusion-style Primary Network Configuration Form (full width panel like Host IP) */}
+            <form
+              onSubmit={handleUpdatePrimaryNetwork}
+              className="rounded-panel border border-border bg-surface p-6 shadow-2xs"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[15px] font-semibold text-fg">Primary Network Configuration</h2>
+                    <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-400">
+                      ACTIVE: {primaryNetwork}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-fg-subtle">
+                    Default bridge interface and MTU used for provisioning new servers on this node.
+                  </p>
+                </div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={savingPrimary}
+                >
+                  {savingPrimary ? 'Updating...' : 'Update Primary Network'}
+                </Button>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">Interface Name</label>
+                  <select
+                    value={primaryNetwork}
+                    onChange={(e) => setPrimaryNetwork(e.target.value)}
+                    className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                  >
+                    {nodeNetwork?.networks.map((net) => (
+                      <option key={net.name} value={net.name}>
+                        {net.name} ({net.type}{net.managed ? ', managed' : ''})
+                      </option>
+                    ))}
+                    {!nodeNetwork?.networks.some((n) => n.name === primaryNetwork) && (
+                      <option value={primaryNetwork}>{primaryNetwork}</option>
+                    )}
+                  </select>
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Primary Incus network device attached to guest instances.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-semibold text-fg">Network Mode</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="NAT / Bridged (Incus)"
+                    className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-surface-2 px-3 text-[13px] text-fg-subtle opacity-70 cursor-not-allowed"
+                  />
+                  <span className="mt-1 block text-[11px] text-fg-subtle">
+                    Direct layer-2 attachment or masqueraded NAT bridge.
+                  </span>
+                </div>
+              </div>
+            </form>
+
             {/* Network Interfaces Header with Add Network Button */}
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-[15px] font-semibold text-fg">Hypervisor Networks</h2>
+                <h2 className="text-[15px] font-semibold text-fg">Hypervisor Network Bridges</h2>
                 <p className="text-[11px] text-fg-subtle">
-                  Bridges and virtual network interfaces configured for instances on this hypervisor.
+                  All managed primary and secondary network adapters on this hypervisor.
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -605,148 +669,107 @@ export function AdminNodeFormPage() {
               </div>
             </div>
 
-            {/* Grid of Network Cards: Primary Network + Any Managed Secondary Networks */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* Primary Network Card */}
-              <form
-                onSubmit={handleUpdatePrimaryNetwork}
-                className="flex flex-col justify-between rounded-panel border border-border bg-surface p-6 shadow-2xs"
-              >
-                <div>
-                  <div className="flex items-center justify-between border-b border-border pb-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-[15px] font-semibold text-fg">Primary Network</h3>
-                        <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400">
-                          PRIMARY
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-[11px] text-fg-subtle">
-                        Default network adapter attached to new servers.
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-emerald-400">
-                      ENABLED
-                    </span>
-                  </div>
-
-                  <div className="mt-5 space-y-4">
-                    <div>
-                      <label className="text-[12px] font-semibold text-fg">Interface Name</label>
-                      <select
-                        value={primaryNetwork}
-                        onChange={(e) => setPrimaryNetwork(e.target.value)}
-                        className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
-                      >
-                        {nodeNetwork?.networks.map((net) => (
-                          <option key={net.name} value={net.name}>
-                            {net.name} ({net.type}{net.managed ? ', managed' : ''})
-                          </option>
-                        ))}
-                        {!nodeNetwork?.networks.some((n) => n.name === primaryNetwork) && (
-                          <option value={primaryNetwork}>{primaryNetwork}</option>
-                        )}
-                      </select>
-                      <span className="mt-1 block text-[11px] text-fg-subtle">
-                        Incus bridge/device connected to server eth0.
-                      </span>
-                    </div>
-
-                    <div>
-                      <label className="text-[12px] font-semibold text-fg">Network Mode</label>
-                      <input
-                        type="text"
-                        disabled
-                        value="NAT / Bridged (Incus)"
-                        className="mt-1.5 h-10 w-full rounded-control border border-field-border bg-surface-2 px-3 text-[13px] text-fg-subtle opacity-70 cursor-not-allowed"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex justify-end border-t border-border pt-4">
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    disabled={savingPrimary}
-                  >
-                    {savingPrimary ? 'Updating...' : 'Update Primary Network'}
-                  </Button>
-                </div>
-              </form>
-
-              {/* Secondary & Managed Network Bridges */}
+            {/* Grid of Square Cards for ALL Bridges (Primary & Secondary) */}
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
               {nodeNetwork?.networks
-                .filter((net) => net.managed && net.name !== primaryNetwork)
-                .map((net) => (
-                  <div
-                    key={net.name}
-                    className="flex flex-col justify-between rounded-panel border border-border bg-surface p-6 shadow-2xs"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between border-b border-border pb-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-mono text-[15px] font-semibold text-fg">{net.name}</h3>
-                            <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] text-accent-text">
-                              secondary
-                            </span>
+                .filter((net) => net.managed || ['bridge', 'physical'].includes(net.type))
+                .map((net) => {
+                  const isPrimary = net.name === primaryNetwork
+                  return (
+                    <div
+                      key={net.name}
+                      className={`flex flex-col justify-between rounded-panel border bg-surface p-6 shadow-2xs ${
+                        isPrimary ? 'border-accent/40 bg-accent/[0.02]' : 'border-border'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between border-b border-border pb-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-mono text-[15px] font-semibold text-fg">{net.name}</h3>
+                              {isPrimary ? (
+                                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400">
+                                  PRIMARY
+                                </span>
+                              ) : (
+                                <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-subtle">
+                                  secondary
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-fg-subtle">
+                              {net.description || `${net.type.toUpperCase()} adapter on hypervisor.`}
+                            </p>
                           </div>
-                          <p className="mt-0.5 text-[11px] text-fg-subtle">
-                            {net.description || 'Managed hypervisor network bridge.'}
-                          </p>
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 font-mono text-[11px] font-semibold tracking-wider ${
+                              isPrimary
+                                ? 'bg-emerald-500/15 text-emerald-400'
+                                : 'bg-surface-2 text-fg-subtle'
+                            }`}
+                          >
+                            {isPrimary ? 'ACTIVE' : 'READY'}
+                          </span>
                         </div>
-                        <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-emerald-400">
-                          ACTIVE
+
+                        <div className="mt-5 grid grid-cols-2 gap-3.5">
+                          <div className="rounded-control border border-border bg-surface-2/40 p-3">
+                            <span className="text-[11px] font-medium text-fg-subtle">IPv4 Subnet</span>
+                            <p className="mt-1 truncate font-mono text-[12px] font-semibold text-fg" title={net.config?.['ipv4.address'] || 'None'}>
+                              {net.config?.['ipv4.address'] || 'None'}
+                            </p>
+                          </div>
+                          <div className="rounded-control border border-border bg-surface-2/40 p-3">
+                            <span className="text-[11px] font-medium text-fg-subtle">MTU</span>
+                            <p className="mt-1 font-mono text-[12px] font-semibold text-fg">
+                              {net.config?.['bridge.mtu'] || '1500'}
+                            </p>
+                          </div>
+                          <div className="rounded-control border border-border bg-surface-2/40 p-3">
+                            <span className="text-[11px] font-medium text-fg-subtle">NAT Masquerade</span>
+                            <p className="mt-1 text-[12px] font-medium text-fg">
+                              {net.config?.['ipv4.nat'] === 'true' ? 'Enabled' : 'Disabled'}
+                            </p>
+                          </div>
+                          <div className="rounded-control border border-border bg-surface-2/40 p-3">
+                            <span className="text-[11px] font-medium text-fg-subtle">Type</span>
+                            <p className="mt-1 font-mono uppercase text-[12px] font-semibold text-fg">
+                              {net.type}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+                        <span className="text-[11px] text-fg-subtle">
+                          {net.used_by?.length ?? 0} instances attached
                         </span>
-                      </div>
-
-                      <div className="mt-5 grid grid-cols-2 gap-4">
-                        <div className="rounded-control border border-border bg-surface-2/40 p-3">
-                          <span className="text-[11px] font-medium text-fg-subtle">IPv4 Subnet</span>
-                          <p className="mt-1 font-mono text-[12px] font-semibold text-fg">
-                            {net.config?.['ipv4.address'] || 'None'}
-                          </p>
-                        </div>
-                        <div className="rounded-control border border-border bg-surface-2/40 p-3">
-                          <span className="text-[11px] font-medium text-fg-subtle">MTU</span>
-                          <p className="mt-1 font-mono text-[12px] font-semibold text-fg">
-                            {net.config?.['bridge.mtu'] || '1500'}
-                          </p>
-                        </div>
-                        <div className="rounded-control border border-border bg-surface-2/40 p-3">
-                          <span className="text-[11px] font-medium text-fg-subtle">NAT Masquerade</span>
-                          <p className="mt-1 text-[12px] font-medium text-fg">
-                            {net.config?.['ipv4.nat'] === 'true' ? 'Enabled' : 'Disabled'}
-                          </p>
-                        </div>
-                        <div className="rounded-control border border-border bg-surface-2/40 p-3">
-                          <span className="text-[11px] font-medium text-fg-subtle">Type</span>
-                          <p className="mt-1 font-mono uppercase text-[12px] font-semibold text-fg">
-                            {net.type}
-                          </p>
-                        </div>
+                        {!isPrimary ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={async () => {
+                              setPrimaryNetwork(net.name)
+                              if (id) {
+                                setSavingPrimary(true)
+                                const res = await api.adminUpdateNode(id, { primaryNetwork: net.name } as any)
+                                if (res.ok) {
+                                  loadNetworkData()
+                                }
+                                setSavingPrimary(false)
+                              }
+                            }}
+                          >
+                            Set as Primary
+                          </Button>
+                        ) : (
+                          <span className="text-[12px] font-medium text-emerald-400">Default Gateway</span>
+                        )}
                       </div>
                     </div>
-
-                    <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
-                      <span className="text-[11px] text-fg-subtle">
-                        {net.used_by?.length ?? 0} instances attached
-                      </span>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setPrimaryNetwork(net.name)
-                        }}
-                      >
-                        Set as Primary
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
             </div>
           </div>
         )}
