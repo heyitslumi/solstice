@@ -1559,6 +1559,16 @@ export const api = {
     return patch<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}/storage`, input)
   },
 
+  adminCreateNodeStoragePool(id: string, input: { name: string; driver: string; source?: string; sizeGb?: number }) {
+    return post<{ ok: true; name: string }>(`/api/admin/nodes/${encodeURIComponent(id)}/storage-pools`, input)
+  },
+
+  adminDeleteNodeStoragePool(id: string, poolName: string) {
+    return request<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}/storage-pools/${encodeURIComponent(poolName)}`, {
+      method: 'DELETE',
+    })
+  },
+
   adminDeleteNode(id: string) {
     return request<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}`, {
       method: 'DELETE',

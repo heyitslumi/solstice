@@ -6678,6 +6678,66 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     return c.json({ ok: true })
   })
 
+  /* Create new storage pool on node */
+  app.post('/api/admin/nodes/:id/storage-pools', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const node = await queryOne<{ id: string }>('SELECT id FROM nodes WHERE id = $1', [id])
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    const body = await c.req.json<any>().catch(() => null)
+    const name = String(body?.name ?? '').trim().toLowerCase()
+    const driver = String(body?.driver ?? 'dir').trim().toLowerCase()
+    const source = String(body?.source ?? '').trim()
+    const sizeGb = Number(body?.sizeGb) || 0
+
+    if (!name || !/^[a-z0-9_-]+$/.test(name)) {
+      return c.json({ message: 'Valid storage pool name required (alphanumeric, -, _).' }, 400)
+    }
+
+    try {
+      const config: Record<string, string> = {}
+      if (source) config.source = source
+      if (sizeGb > 0 && ['btrfs', 'zfs', 'lvm'].includes(driver)) {
+        config.size = `${sizeGb}GiB`
+      }
+
+      await incusRequest<any>('POST', '/1.0/storage-pools', {
+        name,
+        driver,
+        config,
+      })
+
+      return c.json({ ok: true, name }, 201)
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Failed to create storage pool in Incus.' }, 500)
+    }
+  })
+
+  /* Delete storage pool on node */
+  app.delete('/api/admin/nodes/:id/storage-pools/:poolName', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const node = await queryOne<{ id: string }>('SELECT id FROM nodes WHERE id = $1', [id])
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    const poolName = c.req.param('poolName')
+    if (poolName === 'default') {
+      return c.json({ message: 'Cannot delete default system storage pool.' }, 400)
+    }
+
+    try {
+      await incusRequest<any>('DELETE', `/1.0/storage-pools/${encodeURIComponent(poolName)}`)
+      return c.json({ ok: true })
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Failed to delete storage pool in Incus.' }, 500)
+    }
+  })
+
   /* OS templates for VPS provisioning (images.linuxcontainers.org aliases) */
 
   function publicOsTemplate(row: OsTemplateRow) {

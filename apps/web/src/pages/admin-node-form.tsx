@@ -107,16 +107,29 @@ export function AdminNodeFormPage() {
       used_by?: string[]
     }>
   } | null>(null)
-  const [, setLoadingStorage] = useState(false)
+  const [loadingStorage, setLoadingStorage] = useState(false)
   const [storageEnabled, setStorageEnabled] = useState(true)
   const [storageMaxDisk, setStorageMaxDisk] = useState(1000)
-  const [storageProfile, setStorageProfile] = useState('any')
   const [updatingStorage, setUpdatingStorage] = useState(false)
   const [storageSavedMsg, setStorageSavedMsg] = useState(false)
+
+  // Add storage pool modal state
+  const [addPoolOpen, setAddPoolOpen] = useState(false)
+  const [newPoolName, setNewPoolName] = useState('')
+  const [newPoolDriver, setNewPoolDriver] = useState<'dir' | 'btrfs' | 'zfs'>('dir')
+  const [newPoolSource, setNewPoolSource] = useState('')
+  const [newPoolSizeGb, setNewPoolSizeGb] = useState(100)
+  const [addingPool, setAddingPool] = useState(false)
+  const [storageError, setStorageError] = useState<string | null>(null)
+
+  // Delete storage pool modal state
+  const [deletePoolName, setDeletePoolName] = useState<string | null>(null)
+  const [deletingPool, setDeletingPool] = useState(false)
 
   function loadStorageData() {
     if (!id) return
     setLoadingStorage(true)
+    setStorageError(null)
     void api.adminGetNodeStorage(id).then((res) => {
       if (res.ok) {
         setNodeStorage(res.data)
@@ -125,6 +138,44 @@ export function AdminNodeFormPage() {
       }
       setLoadingStorage(false)
     })
+  }
+
+  async function handleCreatePool(e: React.FormEvent) {
+    e.preventDefault()
+    if (!id || !newPoolName.trim()) return
+    setAddingPool(true)
+    setStorageError(null)
+
+    const res = await api.adminCreateNodeStoragePool(id, {
+      name: newPoolName.trim(),
+      driver: newPoolDriver,
+      source: newPoolSource.trim() || undefined,
+      sizeGb: ['btrfs', 'zfs'].includes(newPoolDriver) ? Number(newPoolSizeGb) || 0 : undefined,
+    })
+
+    if (res.ok) {
+      setAddPoolOpen(false)
+      setNewPoolName('')
+      setNewPoolSource('')
+      loadStorageData()
+    } else {
+      setStorageError(res.error.message || 'Failed to create storage pool.')
+    }
+    setAddingPool(false)
+  }
+
+  async function handleDeletePool() {
+    if (!id || !deletePoolName) return
+    setDeletingPool(true)
+    setStorageError(null)
+    const res = await api.adminDeleteNodeStoragePool(id, deletePoolName)
+    if (res.ok) {
+      setDeletePoolName(null)
+      loadStorageData()
+    } else {
+      setStorageError(res.error.message || 'Failed to delete storage pool.')
+    }
+    setDeletingPool(false)
   }
 
   async function handleSaveStorage() {
@@ -1274,118 +1325,172 @@ export function AdminNodeFormPage() {
             </div>
           </div>
         ) : (
-          /* Storage Tab (VirtFusion style) */
+          /* Storage Tab (VirtFusion style Square Cards Grid) */
           <div className="flex flex-col gap-6">
             {storageSavedMsg && (
               <Alert tone="success">Storage settings updated successfully.</Alert>
             )}
+            {storageError && <Alert tone="danger">{storageError}</Alert>}
 
-            {/* Storage mountpoint card */}
-            <div className="rounded-panel border border-border bg-surface shadow-2xs">
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-border p-6">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-[14px] font-semibold text-fg">
-                    {nodeStorage?.pools[0]?.name
-                      ? `Local (${nodeStorage.pools[0].name})`
-                      : 'Local (Default mountpoint)'}
-                  </span>
-                </div>
-                <span
-                  className={cn(
-                    'rounded px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider',
-                    storageEnabled
-                      ? 'bg-emerald-500/15 text-emerald-400'
-                      : 'bg-surface-2 text-fg-subtle',
-                  )}
-                >
-                  {storageEnabled ? 'Enabled' : 'Disabled'}
-                </span>
+            {/* Storage Header with Add Storage Button */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-[15px] font-semibold text-fg">Storage Pools & Mountpoints</h2>
+                <p className="text-[11px] text-fg-subtle">
+                  Managed storage pools, volume backends, and storage limits configured on this hypervisor.
+                </p>
               </div>
-
-              {/* Rows */}
-              <div className="flex flex-col divide-y divide-border/60 p-6">
-                {/* Row: Enabled */}
-                <div className="flex items-center justify-between py-4 first:pt-0">
-                  <span className="text-[13px] font-medium text-fg">Enabled</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={storageEnabled}
-                    onClick={() => setStorageEnabled(!storageEnabled)}
-                    className={cn(
-                      'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                      storageEnabled ? 'bg-emerald-500' : 'bg-surface-2',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
-                        storageEnabled ? 'translate-x-5' : 'translate-x-0',
-                      )}
-                    />
-                  </button>
-                </div>
-
-                {/* Row: Type */}
-                <div className="flex items-center justify-between py-4">
-                  <span className="text-[13px] font-medium text-fg">Type</span>
-                  <span className="font-mono text-[13px] text-fg">
-                    {nodeStorage?.pools[0]?.driver
-                      ? `${nodeStorage.pools[0].driver.toUpperCase()} Storage Pool`
-                      : 'Local Mountpoint'}
-                  </span>
-                </div>
-
-                {/* Row: Path */}
-                <div className="flex items-center justify-between py-4">
-                  <span className="text-[13px] font-medium text-fg">Path</span>
-                  <span className="font-mono text-[13px] text-fg">
-                    {nodeStorage?.pools[0]?.config?.source || '/var/lib/incus/disks/default.img'}
-                  </span>
-                </div>
-
-                {/* Row: Maximum Disk */}
-                <div className="flex items-center justify-between py-4">
-                  <span className="text-[13px] font-medium text-fg">Maximum Disk</span>
-                  <div className="flex items-center">
-                    <input
-                      type="number"
-                      value={storageMaxDisk}
-                      onChange={(e) => setStorageMaxDisk(Number(e.target.value))}
-                      className="h-9 w-44 rounded-l-control border border-r-0 border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
-                    />
-                    <div className="flex h-9 items-center justify-center rounded-r-control border border-field-border bg-surface-2 px-3 font-mono text-[12px] font-semibold text-fg-subtle">
-                      GB
-                    </div>
-                  </div>
-                </div>
-
-                {/* Row: Profile */}
-                <div className="flex items-center justify-between py-4">
-                  <span className="text-[13px] font-medium text-fg">Profile</span>
-                  <select
-                    value={storageProfile}
-                    onChange={(e) => setStorageProfile(e.target.value)}
-                    className="h-9 w-60 rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
-                  >
-                    <option value="any">Any</option>
-                    <option value="default">Default Profile</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Card Footer: Update Button */}
-              <div className="flex items-center justify-end border-t border-border bg-surface-2/20 p-4">
+              <div className="flex items-center gap-3">
+                {loadingStorage && (
+                  <span className="text-[12px] text-fg-subtle">Refreshing...</span>
+                )}
                 <Button
                   type="button"
                   variant="primary"
-                  onClick={handleSaveStorage}
-                  disabled={updatingStorage}
+                  size="sm"
+                  onClick={() => setAddPoolOpen(true)}
+                  className="gap-1.5"
                 >
-                  {updatingStorage ? 'Updating...' : 'Update'}
+                  <Plus size={15} />
+                  Add Storage
                 </Button>
               </div>
+            </div>
+
+            {/* Grid of Square Cards for Storage Pools */}
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {(nodeStorage?.pools || []).map((pool) => {
+                const isDefault = pool.name === 'default'
+                return (
+                  <div
+                    key={pool.name}
+                    className={`flex flex-col justify-between rounded-panel border bg-surface p-6 shadow-2xs ${
+                      isDefault ? 'border-accent/40 bg-accent/[0.02]' : 'border-border'
+                    }`}
+                  >
+                    <div>
+                      {/* Card Header */}
+                      <div className="flex items-center justify-between border-b border-border pb-4">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-mono text-[15px] font-semibold text-fg">
+                            {isDefault ? 'Local (default)' : pool.name}
+                          </h3>
+                          {isDefault ? (
+                            <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-400">
+                              DEFAULT
+                            </span>
+                          ) : (
+                            <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-fg-subtle">
+                              POOL
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className={cn(
+                            'rounded px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider',
+                            storageEnabled
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : 'bg-surface-2 text-fg-subtle',
+                          )}
+                        >
+                          {storageEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </div>
+
+                      {/* Card Body */}
+                      <div className="mt-4 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-medium text-fg-subtle">Enabled</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={storageEnabled}
+                            onClick={() => setStorageEnabled(!storageEnabled)}
+                            className={cn(
+                              'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                              storageEnabled ? 'bg-emerald-500' : 'bg-surface-2',
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
+                                storageEnabled ? 'translate-x-4' : 'translate-x-0',
+                              )}
+                            />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-medium text-fg-subtle">Driver</span>
+                          <span className="font-mono text-[12px] uppercase text-fg">
+                            {pool.driver || 'dir'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-medium text-fg-subtle">Path</span>
+                          <span
+                            className="max-w-[190px] truncate font-mono text-[11px] text-fg"
+                            title={pool.config?.source || '/var/lib/incus/disks/default.img'}
+                          >
+                            {pool.config?.source || '/var/lib/incus/disks/default.img'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-medium text-fg-subtle">Attached Targets</span>
+                          <span className="font-mono text-[12px] text-fg">
+                            {pool.used_by?.length || 0} instances/volumes
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[12px] font-medium text-fg-subtle">Maximum Disk</span>
+                          <div className="flex items-center">
+                            <input
+                              type="number"
+                              value={storageMaxDisk}
+                              onChange={(e) => setStorageMaxDisk(Number(e.target.value))}
+                              className="h-8 w-24 rounded-l-control border border-r-0 border-field-border bg-field px-2 text-right font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+                            />
+                            <div className="flex h-8 items-center justify-center rounded-r-control border border-field-border bg-surface-2 px-2 font-mono text-[11px] font-semibold text-fg-subtle">
+                              GB
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Actions */}
+                    <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+                      {!isDefault ? (
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          onClick={() => setDeletePoolName(pool.name)}
+                          className="gap-1 px-2 text-[11px]"
+                        >
+                          <Trash size={13} />
+                          Delete Pool
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] font-medium text-fg-subtle">System Pool</span>
+                      )}
+
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={handleSaveStorage}
+                        disabled={updatingStorage}
+                      >
+                        {updatingStorage ? 'Updating...' : 'Update'}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -1562,6 +1667,126 @@ export function AdminNodeFormPage() {
               disabled={deletingNet}
             >
               {deletingNet ? 'Deleting...' : 'Delete Bridge'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Storage Pool Dialog */}
+      <Dialog open={addPoolOpen} onOpenChange={setAddPoolOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Add Storage Pool</DialogTitle>
+          <DialogDescription>
+            Creates a new storage pool or attaches an existing directory/disk mountpoint.
+          </DialogDescription>
+
+          <form onSubmit={handleCreatePool} className="mt-4 flex flex-col gap-4">
+            <div>
+              <label className="text-[12px] font-semibold text-fg">
+                Pool Name <span className="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={newPoolName}
+                onChange={(e) => setNewPoolName(e.target.value)}
+                placeholder="fast-nvme"
+                className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+              />
+              <span className="mt-0.5 block text-[11px] text-fg-subtle">
+                Alphanumeric identifier for this storage pool.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[12px] font-semibold text-fg">Driver / Type</label>
+                <select
+                  value={newPoolDriver}
+                  onChange={(e) => setNewPoolDriver(e.target.value as any)}
+                  className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 text-[12px] text-fg focus:border-accent focus:outline-none"
+                >
+                  <option value="dir">dir (Directory / Mountpoint)</option>
+                  <option value="btrfs">btrfs (Btrfs Subvolume/Loop)</option>
+                  <option value="zfs">zfs (ZFS zpool / Dataset)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[12px] font-semibold text-fg">Max Size (GB)</label>
+                <input
+                  type="number"
+                  value={newPoolSizeGb}
+                  onChange={(e) => setNewPoolSizeGb(Number(e.target.value))}
+                  disabled={newPoolDriver === 'dir'}
+                  className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[12px] font-semibold text-fg">Source Path (Optional)</label>
+              <input
+                type="text"
+                value={newPoolSource}
+                onChange={(e) => setNewPoolSource(e.target.value)}
+                placeholder="/mnt/nvme-drive/pool"
+                className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+              />
+              <span className="mt-0.5 block text-[11px] text-fg-subtle">
+                Existing directory path or block device. Leave blank for Incus default managed path.
+              </span>
+            </div>
+
+            <div className="mt-2 flex items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setAddPoolOpen(false)}
+                disabled={addingPool}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={addingPool || !newPoolName.trim()}
+              >
+                {addingPool ? 'Creating...' : 'Create Storage Pool'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Storage Pool Confirmation Dialog */}
+      <Dialog open={Boolean(deletePoolName)} onOpenChange={(open) => !open && setDeletePoolName(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>Delete Storage Pool</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete storage pool <span className="font-mono font-semibold text-fg">{deletePoolName}</span>? This action cannot be undone.
+          </DialogDescription>
+
+          <div className="mt-5 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setDeletePoolName(null)}
+              disabled={deletingPool}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={handleDeletePool}
+              disabled={deletingPool}
+            >
+              {deletingPool ? 'Deleting...' : 'Delete Pool'}
             </Button>
           </div>
         </DialogContent>
