@@ -1,6 +1,6 @@
 import '@xterm/xterm/css/xterm.css'
 
-import { ArrowLeft, ArrowClockwise, ArrowsIn, ArrowsOut, Terminal } from '@phosphor-icons/react'
+import { ArrowLeft, ArrowClockwise, ArrowsIn, ArrowsOut, DeviceMobile, Terminal } from '@phosphor-icons/react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -343,6 +343,19 @@ export function ServerConsolePage() {
         </div>
 
         {reason && state === 'closed' && <Alert tone="warning">{reason}</Alert>}
+
+        {/* Mobile Notice for Graphical & Console Modes */}
+        {mode !== 'shell' && (
+          <div className="flex sm:hidden items-start gap-2.5 rounded-control border border-amber-500/30 bg-amber-500/10 p-3 text-[12px] text-amber-200">
+            <DeviceMobile size={18} className="shrink-0 text-amber-400 mt-0.5" />
+            <p className="leading-snug">
+              <strong className="font-semibold text-amber-300">Mobile notice:</strong>{' '}
+              {mode === 'graphical'
+                ? 'Graphical (SPICE) view requires pointer capture and fine mouse control which is difficult on touchscreens. For best results, use a desktop browser or switch to Shell.'
+                : 'Serial Console requires a physical keyboard for interactive input. We recommend using Shell or connecting via SSH on mobile.'}
+            </p>
+          </div>
+        )}
 
         <Dialog open={takenCode === 4409 && state === 'closed'} onOpenChange={() => {}}>
           <DialogContent className="max-w-md p-6 text-center" style={{ width: 'min(26rem, calc(100vw - 2rem))' }}>
