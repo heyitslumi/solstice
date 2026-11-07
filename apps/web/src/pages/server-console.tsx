@@ -35,6 +35,7 @@ export function ServerConsolePage() {
   const [mode, setMode] = useState<'shell' | 'console' | 'graphical'>('shell')
   const [instanceType, setInstanceType] = useState<string>('')
   const spiceRef = useRef<any>(null)
+  const graphicalRef = useRef(false)
   const spiceScreenRef = useRef<HTMLDivElement>(null)
   const spiceMsgRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -123,7 +124,7 @@ export function ServerConsolePage() {
       }
       ws.onclose = (evt) => {
         // In graphical mode the terminal ws is stale — SPICE owns the state.
-        if (mode === 'graphical') return
+        if (graphicalRef.current) return
         setState('closed')
         setTakenCode(evt.code === 4409 ? evt.code : null)
         if (evt.code === 4409) setTakeover(false)
@@ -174,6 +175,10 @@ export function ServerConsolePage() {
       termRef.current = null
     }
   }, [id, attempt, mode, takeover])
+
+  useEffect(() => {
+    graphicalRef.current = mode === 'graphical'
+  }, [mode])
 
   useEffect(() => connect(), [connect])
 
