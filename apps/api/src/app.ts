@@ -6389,6 +6389,38 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
 
     const config = await getSystemSettings()
+
+    // Node overview statistics
+    const statsRow = await queryOne<{
+      total_instances: string
+      active_instances: string
+      suspended_instances: string
+    }>(
+      `SELECT
+         COUNT(*)::text AS total_instances,
+         COUNT(*) FILTER (WHERE status = 'running' OR status = 'active')::text AS active_instances,
+         COUNT(*) FILTER (WHERE status = 'stopped' OR status = 'suspended')::text AS suspended_instances
+       FROM instances
+       WHERE node_id = $1`,
+      [id],
+    )
+
+    const pfRow = await queryOne<{
+      used_ports: string
+    }>(
+      `SELECT COUNT(*)::text AS used_ports
+       FROM port_forwards pf
+       JOIN instances i ON i.id = pf.instance_id
+       WHERE i.node_id = $1`,
+      [id],
+    )
+
+    const portRangeStart = Number(config['port_forward_start']) || 22000
+    const portRangeEnd = Number(config['port_forward_end']) || 22999
+    const totalPorts = Math.max(0, portRangeEnd - portRangeStart + 1)
+    const usedPorts = Number(pfRow?.used_ports || 0)
+    const availablePorts = Math.max(0, totalPorts - usedPorts)
+
     return c.json({
       node: {
         id: node.id,
@@ -6398,9 +6430,23 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         publicIp: node.public_ip,
         primaryNetwork: node.primary_network || 'incusbr0',
       },
+      stats: {
+        servers: {
+          total: Number(statsRow?.total_instances || 0),
+          active: Number(statsRow?.active_instances || 0),
+          suspended: Number(statsRow?.suspended_instances || 0),
+          awaitingSetup: 0,
+        },
+        ports: {
+          total: totalPorts,
+          available: availablePorts,
+          inUse: usedPorts,
+          reserved: 0,
+        },
+      },
       portForwardRange: {
-        start: Number(config['port_forward_start']) || 22000,
-        end: Number(config['port_forward_end']) || 22999,
+        start: portRangeStart,
+        end: portRangeEnd,
       },
       networks,
     })

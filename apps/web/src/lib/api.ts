@@ -1506,6 +1506,10 @@ export const api = {
   adminGetNodeNetwork(id: string) {
     return request<{
       node: { id: string; name: string; fqdn: string; ipAddress: string; publicIp: string; primaryNetwork: string }
+      stats: {
+        servers: { total: number; active: number; suspended: number; awaitingSetup: number }
+        ports: { total: number; available: number; inUse: number; reserved: number }
+      }
       portForwardRange: { start: number; end: number }
       networks: Array<{
         name: string

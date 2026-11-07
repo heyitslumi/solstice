@@ -49,6 +49,10 @@ export function AdminNodeFormPage() {
   const [activeTab, setActiveTab] = useState<NodeTab>('general')
   const [nodeNetwork, setNodeNetwork] = useState<{
     primaryNetwork: string
+    stats?: {
+      servers: { total: number; active: number; suspended: number; awaitingSetup: number }
+      ports: { total: number; available: number; inUse: number; reserved: number }
+    }
     portForwardRange: { start: number; end: number }
     networks: Array<{
       name: string
@@ -63,6 +67,9 @@ export function AdminNodeFormPage() {
   const [loadingNetwork, setLoadingNetwork] = useState(false)
   const [primaryNetwork, setPrimaryNetwork] = useState('incusbr0')
   const [savingPrimary, setSavingPrimary] = useState(false)
+
+  // System toggles quick save
+  const [updatingSystem, setUpdatingSystem] = useState(false)
 
   // Add network modal state
   const [addNetOpen, setAddNetOpen] = useState(false)
@@ -92,6 +99,7 @@ export function AdminNodeFormPage() {
       if (res.ok) {
         setNodeNetwork({
           primaryNetwork: res.data.node.primaryNetwork,
+          stats: res.data.stats,
           portForwardRange: res.data.portForwardRange,
           networks: res.data.networks,
         })
@@ -102,10 +110,22 @@ export function AdminNodeFormPage() {
   }
 
   useEffect(() => {
-    if (activeTab === 'network' && id && !nodeNetwork) {
+    if (id && !nodeNetwork) {
       loadNetworkData()
     }
-  }, [activeTab, id, nodeNetwork])
+  }, [id, nodeNetwork])
+
+  async function handleToggleSystem(key: 'maintenance' | 'isPublic', nextVal: boolean) {
+    if (!id) return
+    setUpdatingSystem(true)
+    if (key === 'maintenance') setMaintenance(nextVal)
+    if (key === 'isPublic') setIsPublic(nextVal)
+    const res = await api.adminUpdateNode(id, { [key]: nextVal } as any)
+    if (!res.ok) {
+      setNetError(res.error.message || 'Failed to update system state.')
+    }
+    setUpdatingSystem(false)
+  }
 
   async function handleUpdatePrimaryNetwork(e: React.FormEvent) {
     e.preventDefault()
@@ -344,6 +364,234 @@ export function AdminNodeFormPage() {
               <Globe size={15} aria-hidden />
               Network
             </button>
+          </div>
+        )}
+
+        {/* VirtFusion-style Overview Status Widgets (Servers, System, Port Allocation) */}
+        {isEdit && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Widget 1: Servers Status Donut */}
+            <div className="flex items-center gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs">
+              <div className="relative flex size-28 shrink-0 items-center justify-center">
+                <svg className="size-full -rotate-90" viewBox="0 0 36 36">
+                  {/* Background Track */}
+                  <path
+                    className="text-surface-2"
+                    strokeWidth="3.5"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                  {/* Active servers slice */}
+                  <path
+                    className="text-emerald-500"
+                    strokeDasharray={`${
+                      nodeNetwork?.stats?.servers.total
+                        ? Math.round(
+                            ((nodeNetwork.stats.servers.active || 0) /
+                              nodeNetwork.stats.servers.total) *
+                              100,
+                          )
+                        : 0
+                    }, 100`}
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-[20px] font-bold text-fg">
+                    {nodeNetwork?.stats?.servers.total ?? 0}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Total</span>
+                </div>
+              </div>
+
+              <div className="flex flex-1 flex-col justify-center">
+                <h3 className="text-[13px] font-semibold text-fg">Servers</h3>
+                <div className="mt-3 space-y-1.5 text-[12px]">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-fg-subtle">
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                      Active
+                    </span>
+                    <span className="font-mono font-medium text-fg">
+                      {nodeNetwork?.stats?.servers.active ?? 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-fg-subtle">
+                      <span className="size-2 rounded-full bg-purple-500" />
+                      Suspended
+                    </span>
+                    <span className="font-mono font-medium text-fg">
+                      {nodeNetwork?.stats?.servers.suspended ?? 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-fg-subtle">
+                      <span className="size-2 rounded-full bg-amber-500" />
+                      Awaiting Setup
+                    </span>
+                    <span className="font-mono font-medium text-fg">
+                      {nodeNetwork?.stats?.servers.awaitingSetup ?? 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Widget 2: System Toggles */}
+            <div className="flex flex-col justify-between rounded-panel border border-border bg-surface p-6 shadow-2xs">
+              <div>
+                <h3 className="text-[13px] font-semibold text-fg">System</h3>
+                <p className="mt-0.5 text-[11px] text-fg-subtle">
+                  Hypervisor operational and scheduling status.
+                </p>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-medium text-fg">Enabled</span>
+                  <button
+                    type="button"
+                    disabled={updatingSystem}
+                    onClick={() => handleToggleSystem('maintenance', !maintenance)}
+                    className={cn(
+                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                      !maintenance ? 'bg-emerald-500' : 'bg-surface-2',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
+                        !maintenance ? 'translate-x-4' : 'translate-x-0',
+                      )}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-medium text-fg">Maintenance Mode</span>
+                  <button
+                    type="button"
+                    disabled={updatingSystem}
+                    onClick={() => handleToggleSystem('maintenance', !maintenance)}
+                    className={cn(
+                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                      maintenance ? 'bg-amber-500' : 'bg-surface-2',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
+                        maintenance ? 'translate-x-4' : 'translate-x-0',
+                      )}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-medium text-fg">Prohibit New Server Creations</span>
+                  <button
+                    type="button"
+                    disabled={updatingSystem}
+                    onClick={() => handleToggleSystem('isPublic', !isPublic)}
+                    className={cn(
+                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                      !isPublic ? 'bg-rose-500' : 'bg-surface-2',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
+                        !isPublic ? 'translate-x-4' : 'translate-x-0',
+                      )}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Widget 3: Port Forwarding Pool Status Donut */}
+            <div className="flex items-center gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs">
+              <div className="relative flex size-28 shrink-0 items-center justify-center">
+                <svg className="size-full -rotate-90" viewBox="0 0 36 36">
+                  {/* Background Track */}
+                  <path
+                    className="text-surface-2"
+                    strokeWidth="3.5"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                  {/* Available ports slice */}
+                  <path
+                    className="text-emerald-500"
+                    strokeDasharray={`${
+                      nodeNetwork?.stats?.ports.total
+                        ? Math.round(
+                            ((nodeNetwork.stats.ports.available || 0) /
+                              nodeNetwork.stats.ports.total) *
+                              100,
+                          )
+                        : 100
+                    }, 100`}
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-[20px] font-bold text-fg">
+                    {nodeNetwork?.stats?.ports.total ?? 1000}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Ports</span>
+                </div>
+              </div>
+
+              <div className="flex flex-1 flex-col justify-center">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[13px] font-semibold text-fg">Port Forwards</h3>
+                  <span className="font-mono text-[10px] text-fg-subtle">
+                    {nodeNetwork?.portForwardRange.start ?? 22000}-{nodeNetwork?.portForwardRange.end ?? 22999}
+                  </span>
+                </div>
+                <div className="mt-3 space-y-1.5 text-[12px]">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-fg-subtle">
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                      Available
+                    </span>
+                    <span className="font-mono font-medium text-fg">
+                      {nodeNetwork?.stats?.ports.available ?? 1000}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-fg-subtle">
+                      <span className="size-2 rounded-full bg-purple-500" />
+                      In Use
+                    </span>
+                    <span className="font-mono font-medium text-fg">
+                      {nodeNetwork?.stats?.ports.inUse ?? 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-fg-subtle">
+                      <span className="size-2 rounded-full bg-amber-500" />
+                      Reserved
+                    </span>
+                    <span className="font-mono font-medium text-fg">
+                      {nodeNetwork?.stats?.ports.reserved ?? 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
