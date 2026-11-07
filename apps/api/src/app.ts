@@ -3736,11 +3736,20 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     row: { kind: string; host_port: number; container_port: number; protocol: string },
     containerIp: string,
   ) {
-    // NAT-mode proxies require the connect IP to be a *static* instance
-    // address. Pin the DHCP lease as a static IP on the default NIC first.
+    // NAT-mode proxies in Incus require the connect IP to be a *static* instance
+    // address attached to the NIC on a managed network (e.g. incusbr0).
+    // Ensure eth0 defines network and ipv4.address explicitly so Incus validates the static IP.
     await incus
-      .addInstanceDevice(instanceName, 'eth0', { type: 'nic', 'ipv4.address': containerIp })
-      .catch(() => {})
+      .addInstanceDevice(instanceName, 'eth0', {
+        type: 'nic',
+        network: 'incusbr0',
+        name: 'eth0',
+        'ipv4.address': containerIp,
+      })
+      .catch((err) => {
+        console.warn('Failed to set static eth0 IP on instance:', err)
+      })
+
     for (const dev of forwardDeviceNames(row.kind, row.host_port, row.protocol)) {
       await incus.addInstanceDevice(instanceName, dev.name, {
         type: 'proxy',
