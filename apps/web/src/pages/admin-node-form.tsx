@@ -42,7 +42,7 @@ export function AdminNodeFormPage() {
   const [maintenance, setMaintenance] = useState(false)
   const [cpuCores, setCpuCores] = useState(4)
   const [memoryLimitMb, setMemoryLimitMb] = useState(5894)
-  const [diskLimitGb, setDiskLimitGb] = useState(88)
+  const [serverLimit, setServerLimit] = useState(0)
 
   const isDefaultLocalNode = isEdit && (name === 'local-incus' || fqdn === 'localhost')
 
@@ -238,14 +238,14 @@ export function AdminNodeFormPage() {
             setMaintenance(found.maintenance === true)
             setCpuCores(found.cpuCores || 4)
             setMemoryLimitMb(found.memoryLimitMb || found.memoryMb || 5894)
-            setDiskLimitGb(found.diskLimitGb || found.diskGb || 88)
+            setServerLimit(found.serverLimit || 0)
           } else {
             setError('Node not found.')
           }
         } else if (nodesRes.data.systemDefaults) {
           setCpuCores(nodesRes.data.systemDefaults.cpuCores)
           setMemoryLimitMb(nodesRes.data.systemDefaults.memoryLimitMb)
-          setDiskLimitGb(nodesRes.data.systemDefaults.diskLimitGb)
+          setServerLimit(0)
         }
       } else {
         setError(nodesRes.error.message || 'Failed to initialize node settings.')
@@ -280,7 +280,7 @@ export function AdminNodeFormPage() {
       maintenance,
       cpuCores: Number(cpuCores),
       memoryLimitMb: Number(memoryLimitMb),
-      diskLimitGb: Number(diskLimitGb),
+      serverLimit: Number(serverLimit),
     }
 
     if (isEdit && id) {
@@ -781,14 +781,14 @@ export function AdminNodeFormPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className="w-24 text-[12px] font-medium text-fg">Disk Storage</span>
+                      <span className="w-24 text-[12px] font-medium text-fg">Servers</span>
                       <input
                         type="number"
-                        value={diskLimitGb}
-                        onChange={(e) => setDiskLimitGb(Number(e.target.value))}
+                        value={serverLimit}
+                        onChange={(e) => setServerLimit(Number(e.target.value))}
                         className="h-9 flex-1 rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
                       />
-                      <span className="w-20 text-right font-mono text-[11px] text-fg-subtle">GB</span>
+                      <span className="w-20 text-right font-mono text-[11px] text-fg-subtle">Instances</span>
                     </div>
                   </div>
                 </div>

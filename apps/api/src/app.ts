@@ -2865,8 +2865,20 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     const nodeId = await defaultNodeId()
     const targetNode = nodeId
-      ? await queryOne<{ cpu_model: string }>('SELECT cpu_model FROM nodes WHERE id = $1', [nodeId])
+      ? await queryOne<{ cpu_model: string; server_limit: number }>('SELECT cpu_model, server_limit FROM nodes WHERE id = $1', [nodeId])
       : null
+
+    if (targetNode && targetNode.server_limit > 0) {
+      const countRow = await queryOne<{ count: string }>(
+        'SELECT COUNT(*) AS count FROM instances WHERE node_id = $1',
+        [nodeId],
+      )
+      const currentCount = Number(countRow?.count || 0)
+      if (currentCount >= targetNode.server_limit) {
+        return c.json({ message: `Node capacity reached: maximum server limit of ${targetNode.server_limit} exceeded.` }, 400)
+      }
+    }
+
     const rawQemu =
       type === 'kvm' && targetNode?.cpu_model && targetNode.cpu_model !== 'host'
         ? `-cpu ${targetNode.cpu_model}`
@@ -6224,6 +6236,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
               n.maintenance,
               n.memory_limit_mb AS "memoryLimitMb",
               n.disk_limit_gb AS "diskLimitGb",
+              n.server_limit AS "serverLimit",
               n.cpu_cores AS "cpuCores",
               n.created_at AS "createdAt",
               l.short_code AS "locationShortCode",
@@ -6261,8 +6274,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<{ id: string }>(
-        `INSERT INTO nodes (name, display_name, cpu_model, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `INSERT INTO nodes (name, display_name, cpu_model, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores, server_limit)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING id`,
         [
           String(body.name).trim(),
@@ -6278,6 +6291,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           Number(body.memoryLimitMb) || 16384,
           Number(body.diskLimitGb) || 250,
           Number(body.cpuCores) || 8,
+          Number(body.serverLimit) || 0,
         ],
       )
 
@@ -6361,6 +6375,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.diskLimitGb !== undefined) {
       fields.push(`disk_limit_gb = $${idx++}`)
       values.push(Number(body.diskLimitGb) || 250)
+    }
+    if (body.serverLimit !== undefined) {
+      fields.push(`server_limit = $${idx++}`)
+      values.push(Number(body.serverLimit) || 0)
     }
     if (body.cpuCores !== undefined) {
       fields.push(`cpu_cores = $${idx++}`)
@@ -7202,8 +7220,19 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
 
     const targetNode = nodeId
-      ? await queryOne<{ cpu_model: string }>('SELECT cpu_model FROM nodes WHERE id = $1', [nodeId])
+      ? await queryOne<{ cpu_model: string; server_limit: number }>('SELECT cpu_model, server_limit FROM nodes WHERE id = $1', [nodeId])
       : null
+
+    if (targetNode && targetNode.server_limit > 0) {
+      const countRow = await queryOne<{ count: string }>(
+        'SELECT COUNT(*) AS count FROM instances WHERE node_id = $1',
+        [nodeId],
+      )
+      const currentCount = Number(countRow?.count || 0)
+      if (currentCount >= targetNode.server_limit) {
+        return c.json({ message: `Node capacity reached: maximum server limit of ${targetNode.server_limit} exceeded.` }, 400)
+      }
+    }
     const rawQemu =
       type === 'kvm' && targetNode?.cpu_model && targetNode.cpu_model !== 'host'
         ? `-cpu ${targetNode.cpu_model}`

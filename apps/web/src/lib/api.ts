@@ -346,6 +346,7 @@ export interface ApiNode {
   memoryMb?: number
   diskLimitGb?: number
   diskGb?: number
+  serverLimit?: number
   cpuCores?: number
   locationShortCode?: string
   locationName?: string
