@@ -938,6 +938,10 @@ export const api = {
     return post<{ ok: true; username: string; emailed: boolean }>(`/api/instances/${encodeURIComponent(id)}/ssh-password`)
   },
 
+  getInstanceActivity(id: string) {
+    return request<{ tasks: Array<{ id: string; action: string; details: string; ip_address: string | null; created_at: string }> }>(`/api/instances/${encodeURIComponent(id)}/activity`)
+  },
+
   getSshForward(id: string) {
     return request<{ forward: { host: string; hostPort: number; containerPort: number; username: string } | null }>(`/api/instances/${encodeURIComponent(id)}/ssh-forward`)
   },

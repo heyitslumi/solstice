@@ -4657,6 +4657,29 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     })
   })
 
+  /* Recent completed tasks for a server (from the activity log). */
+  app.get('/api/instances/:id/activity', async (c) => {
+    const session = await authIdentity(c)
+    if (!session) return c.json({ message: 'Not signed in.' }, 401)
+    const instance = await resolveInstance(c, session.user_id)
+    if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+    const rows = await query<{
+      id: string
+      action: string
+      details: string
+      ip_address: string | null
+      created_at: string
+    }>(
+      `SELECT id, action, details, ip_address, created_at
+         FROM activity_logs
+        WHERE user_id = $1 AND details LIKE $2
+        ORDER BY created_at DESC
+        LIMIT 50`,
+      [session.user_id, `%"${instance.name}"%`],
+    )
+    return c.json({ tasks: rows })
+  })
+
   app.get('/api/instances/:id', async (c) => {
     const session = await authIdentity(c)
     if (!session) return c.json({ message: 'Not signed in.' }, 401)

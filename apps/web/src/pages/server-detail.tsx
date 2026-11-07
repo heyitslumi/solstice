@@ -6,6 +6,7 @@ import {
   Globe,
   Key,
   ShieldCheck,
+  ClockCounterClockwise,
   SquaresFour,
   Cpu,
   Database,
@@ -151,13 +152,26 @@ export function ServerDetailPage() {
   const [pfWorking, setPfWorking] = useState(false)
   const [pfRemovingId, setPfRemovingId] = useState<string | null>(null)
 
-  type DetailTab = 'overview' | 'snapshots' | 'network' | 'firewall'
+  type DetailTab = 'overview' | 'snapshots' | 'network' | 'firewall' | 'tasks'
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
+  const [tasks, setTasks] = useState<Array<{ id: string; action: string; details: string; ip_address: string | null; created_at: string }>>([])
+  const [tasksLoading, setTasksLoading] = useState(false)
+
+  useEffect(() => {
+    if (activeTab !== 'tasks' || !id) return
+    setTasksLoading(true)
+    void api.getInstanceActivity(id).then((res) => {
+      if (res.ok) setTasks(res.data.tasks)
+      setTasksLoading(false)
+    })
+  }, [activeTab, id])
+
   const detailTabs: Array<{ id: DetailTab; label: string; icon: ReactNode }> = [
     { id: 'overview', label: 'Overview', icon: <SquaresFour size={15} aria-hidden /> },
     { id: 'snapshots', label: 'Snapshots', icon: <Camera size={15} aria-hidden /> },
     { id: 'network', label: 'Network', icon: <Globe size={15} aria-hidden /> },
     { id: 'firewall', label: 'Firewall', icon: <ShieldCheck size={15} aria-hidden /> },
+    { id: 'tasks', label: 'Tasks', icon: <ClockCounterClockwise size={15} aria-hidden /> },
   ]
 
   const [fwEnabled, setFwEnabled] = useState(false)
@@ -1381,6 +1395,43 @@ export function ServerDetailPage() {
           onCancel={() => setConfirmAction(null)}
         />
       )}
+
+        {activeTab === 'tasks' && (
+          <section className="rounded-panel border border-border bg-surface p-5">
+            <h2 className="text-[14px] font-semibold text-fg">Recently Completed Tasks</h2>
+            <p className="mt-1 text-[12px] text-fg-subtle">
+              Every action on this server — power, rebuilds, SSH, forwards, snapshots.
+            </p>
+            {tasksLoading ? (
+              <p className="mt-4 text-[12px] text-fg-subtle">Loading tasks...</p>
+            ) : tasks.length === 0 ? (
+              <p className="mt-4 text-[12px] text-fg-subtle">No tasks recorded yet.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-left text-[12px]">
+                  <thead>
+                    <tr className="border-b border-border text-fg-subtle">
+                      <th className="py-2 pr-4 font-medium">Task</th>
+                      <th className="py-2 pr-4 font-medium">Status</th>
+                      <th className="py-2 font-medium">When</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tasks.map((t) => (
+                      <tr key={t.id} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 pr-4 font-medium text-fg">{t.details}</td>
+                        <td className="py-2 pr-4">
+                          <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-400">Completed</span>
+                        </td>
+                        <td className="py-2 text-fg-subtle">{new Date(t.created_at).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
 
       {/* SSH session dialog */}
       <Dialog
