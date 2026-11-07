@@ -215,7 +215,13 @@ export const incus = {
       const dnsLines = dnsServers.map((d) => `DNS=${d.trim()}`).join('\\n')
       runcmd.push(
         'mkdir -p /etc/systemd/network',
-        `printf '[Match]\\nName=enp5s0\\n\\n[Network]\\n${dnsLines}\\n\\n[DHCPv4]\\nUseDNS=false\\n' > /etc/systemd/network/20-solstice-dns.network`,
+        `printf '[Match]\\nName=enp* eth*\\n\\n[Network]\\n${dnsLines}\\n\\n[DHCPv4]\\nUseDNS=false\\nUseMTU=true\\n' > /etc/systemd/network/20-solstice-dns.network`,
+        'systemctl restart systemd-networkd || true',
+      )
+    } else {
+      runcmd.push(
+        'mkdir -p /etc/systemd/network',
+        `printf '[Match]\\nName=enp* eth*\\n\\n[Network]\\n\\n[DHCPv4]\\nUseMTU=true\\n' > /etc/systemd/network/20-solstice-dns.network`,
         'systemctl restart systemd-networkd || true',
       )
     }
