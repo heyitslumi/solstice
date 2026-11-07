@@ -708,7 +708,11 @@ export function ServerSetupPage({
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-md">
           <DialogTitle className="text-center">Are you sure you want to install {osLabel} on this server{noKeysSelected ? ' without any SSH keys' : ''}?</DialogTitle>
-          <DialogDescription className="text-center">This is a test page — confirming will only simulate provisioning.</DialogDescription>
+          <DialogDescription className="text-center">
+            {isRebuild
+              ? 'This will wipe all existing data and install a fresh operating system.'
+              : 'This will provision the operating system and configure network and cloud-init settings.'}
+          </DialogDescription>
           <div className="mt-4 flex gap-3">
             <Button variant="secondary" className="flex-1" onClick={() => setConfirmOpen(false)}>Cancel</Button>
             <Button className="flex-1" onClick={startInstall}>Install Now</Button>
