@@ -57,7 +57,7 @@ export function AdminNodeFormPage() {
     primaryNetwork: string
     stats?: {
       servers: { total: number; active: number; suspended: number; awaitingSetup: number }
-      ports: { total: number; available: number; inUse: number; reserved: number }
+      ports: { total: number; available: number; inUse: number }
     }
     portForwardRange: { start: number; end: number }
     networks: Array<{
@@ -750,15 +750,6 @@ export function AdminNodeFormPage() {
                     </span>
                     <span className="font-mono font-medium text-fg">
                       {nodeNetwork?.stats?.ports.inUse ?? 0}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-fg-subtle">
-                      <span className="size-2 rounded-full bg-amber-500" />
-                      Reserved
-                    </span>
-                    <span className="font-mono font-medium text-fg">
-                      {nodeNetwork?.stats?.ports.reserved ?? 0}
                     </span>
                   </div>
                 </div>

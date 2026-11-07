@@ -6467,17 +6467,19 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     // Node overview statistics
     const statsRow = await queryOne<{
       total_instances: string
-      active_instances: string
       suspended_instances: string
     }>(
       `SELECT
          COUNT(*)::text AS total_instances,
-         COUNT(*) FILTER (WHERE status = 'running' OR status = 'active')::text AS active_instances,
-         COUNT(*) FILTER (WHERE status = 'stopped' OR status = 'suspended')::text AS suspended_instances
+         COUNT(*) FILTER (WHERE suspend_reason IS NOT NULL AND suspend_reason <> '')::text AS suspended_instances
        FROM instances
        WHERE node_id = $1`,
       [id],
     )
+
+    const totalInstances = Number(statsRow?.total_instances || 0)
+    const suspendedInstances = Number(statsRow?.suspended_instances || 0)
+    const activeInstances = Math.max(0, totalInstances - suspendedInstances)
 
     const pfRow = await queryOne<{
       used_ports: string
@@ -6506,16 +6508,15 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       },
       stats: {
         servers: {
-          total: Number(statsRow?.total_instances || 0),
-          active: Number(statsRow?.active_instances || 0),
-          suspended: Number(statsRow?.suspended_instances || 0),
+          total: totalInstances,
+          active: activeInstances,
+          suspended: suspendedInstances,
           awaitingSetup: 0,
         },
         ports: {
           total: totalPorts,
           available: availablePorts,
           inUse: usedPorts,
-          reserved: 0,
         },
       },
       portForwardRange: {

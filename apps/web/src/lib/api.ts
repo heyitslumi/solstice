@@ -1511,7 +1511,7 @@ export const api = {
       node: { id: string; name: string; fqdn: string; ipAddress: string; publicIp: string; primaryNetwork: string }
       stats: {
         servers: { total: number; active: number; suspended: number; awaitingSetup: number }
-        ports: { total: number; available: number; inUse: number; reserved: number }
+        ports: { total: number; available: number; inUse: number }
       }
       portForwardRange: { start: number; end: number }
       networks: Array<{
