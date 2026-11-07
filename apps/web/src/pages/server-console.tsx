@@ -122,6 +122,8 @@ export function ServerConsolePage() {
         else term.write(new Uint8Array(evt.data as ArrayBuffer))
       }
       ws.onclose = (evt) => {
+        // In graphical mode the terminal ws is stale — SPICE owns the state.
+        if (mode === 'graphical') return
         setState('closed')
         setTakenCode(evt.code === 4409 ? evt.code : null)
         if (evt.code === 4409) setTakeover(false)
@@ -166,6 +168,7 @@ export function ServerConsolePage() {
 
     return () => {
       clearTimeout(timer)
+      try { wsRef.current?.close() } catch { /* ignore */ }
       ;(term as unknown as { _cleanup?: () => void })._cleanup?.()
       term.dispose()
       termRef.current = null
