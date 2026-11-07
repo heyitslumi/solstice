@@ -227,7 +227,7 @@ export function ServerConsolePage() {
       try { spiceRef.current?.stop() } catch { /* ignore */ }
       spiceRef.current = null
     }
-  }, [mode, id, takeover])
+  }, [mode, id, takeover, attempt])
 
   useEffect(() => {
     const onChange = () => setIsFullscreen(document.fullscreenElement != null)
