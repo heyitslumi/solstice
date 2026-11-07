@@ -1379,23 +1379,6 @@ export function ServerDetailPage() {
           )}
         </section>
         )}
-      </div>
-
-      {confirmAction && (
-        <PowerConfirmDialog
-          open
-          action={confirmAction}
-          serverName={instance.name}
-          working={actionLoading}
-          onConfirm={(force) => {
-            const next = confirmAction
-            setConfirmAction(null)
-            void handlePowerAction(next, force)
-          }}
-          onCancel={() => setConfirmAction(null)}
-        />
-      )}
-
         {activeTab === 'tasks' && (
           <section className="rounded-panel border border-border bg-surface p-5">
             <h2 className="text-[14px] font-semibold text-fg">Recently Completed Tasks</h2>
@@ -1432,6 +1415,22 @@ export function ServerDetailPage() {
             )}
           </section>
         )}
+      </div>
+
+      {confirmAction && (
+        <PowerConfirmDialog
+          open
+          action={confirmAction}
+          serverName={instance.name}
+          working={actionLoading}
+          onConfirm={(force) => {
+            const next = confirmAction
+            setConfirmAction(null)
+            void handlePowerAction(next, force)
+          }}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
 
       {/* SSH session dialog */}
       <Dialog
