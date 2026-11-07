@@ -805,6 +805,9 @@ export function AdminNodeFormPage() {
                         value="Host Passthrough (Incus Native)"
                         className="mt-1 h-9 w-full rounded-control border border-field-border bg-surface-2 px-3 text-[12px] text-fg-subtle opacity-80 cursor-not-allowed"
                       />
+                      <span className="mt-0.5 block text-[11px] text-fg-subtle">
+                        Applies to KVM instances only. LXC containers directly inherit the host kernel CPU model.
+                      </span>
                     </div>
 
                     <div>
