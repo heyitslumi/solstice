@@ -6457,7 +6457,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const admin = await requireAdmin(c)
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
+    const id = c.req.param('id')
     const netName = c.req.param('netName')
+    const node = await queryOne<{ name: string }>('SELECT name FROM nodes WHERE id = $1', [id])
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
     const body = await c.req.json<any>().catch(() => null)
     if (!body) return c.json({ message: 'Invalid payload.' }, 400)
 
