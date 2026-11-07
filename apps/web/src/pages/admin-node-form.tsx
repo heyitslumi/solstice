@@ -371,13 +371,13 @@ export function AdminNodeFormPage() {
         {isEdit && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* Widget 1: Servers Status Donut */}
-            <div className="flex items-center gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs">
-              <div className="relative flex size-28 shrink-0 items-center justify-center">
+            <div className="flex items-center gap-5 rounded-panel border border-border bg-surface p-5 shadow-2xs">
+              <div className="relative flex size-20 shrink-0 items-center justify-center">
                 <svg className="size-full -rotate-90" viewBox="0 0 36 36">
                   {/* Background Track */}
                   <path
                     className="text-surface-2"
-                    strokeWidth="3.5"
+                    strokeWidth="3.2"
                     stroke="currentColor"
                     fill="none"
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -394,7 +394,7 @@ export function AdminNodeFormPage() {
                           )
                         : 0
                     }, 100`}
-                    strokeWidth="3.5"
+                    strokeWidth="3.2"
                     strokeLinecap="round"
                     stroke="currentColor"
                     fill="none"
@@ -402,10 +402,10 @@ export function AdminNodeFormPage() {
                   />
                 </svg>
                 <div className="absolute flex flex-col items-center">
-                  <span className="text-[20px] font-bold text-fg">
+                  <span className="text-[16px] font-bold text-fg leading-none">
                     {nodeNetwork?.stats?.servers.total ?? 0}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Total</span>
+                  <span className="mt-0.5 text-[9px] uppercase tracking-wider text-fg-subtle">Total</span>
                 </div>
               </div>
 
@@ -516,13 +516,13 @@ export function AdminNodeFormPage() {
             </div>
 
             {/* Widget 3: Port Forwarding Pool Status Donut */}
-            <div className="flex items-center gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs">
-              <div className="relative flex size-28 shrink-0 items-center justify-center">
+            <div className="flex items-center gap-5 rounded-panel border border-border bg-surface p-5 shadow-2xs">
+              <div className="relative flex size-20 shrink-0 items-center justify-center">
                 <svg className="size-full -rotate-90" viewBox="0 0 36 36">
                   {/* Background Track */}
                   <path
                     className="text-surface-2"
-                    strokeWidth="3.5"
+                    strokeWidth="3.2"
                     stroke="currentColor"
                     fill="none"
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -539,7 +539,7 @@ export function AdminNodeFormPage() {
                           )
                         : 100
                     }, 100`}
-                    strokeWidth="3.5"
+                    strokeWidth="3.2"
                     strokeLinecap="round"
                     stroke="currentColor"
                     fill="none"
@@ -547,10 +547,10 @@ export function AdminNodeFormPage() {
                   />
                 </svg>
                 <div className="absolute flex flex-col items-center">
-                  <span className="text-[20px] font-bold text-fg">
+                  <span className="text-[16px] font-bold text-fg leading-none">
                     {nodeNetwork?.stats?.ports.total ?? 1000}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wider text-fg-subtle">Ports</span>
+                  <span className="mt-0.5 text-[9px] uppercase tracking-wider text-fg-subtle">Ports</span>
                 </div>
               </div>
 
