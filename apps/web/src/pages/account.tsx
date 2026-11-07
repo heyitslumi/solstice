@@ -623,10 +623,12 @@ export function AccountPage() {
     if (!user) return
 
     async function load() {
-      const [sessionsResult, pendingResult, passkeysResult] = await Promise.all([
+      const [sessionsResult, pendingResult, passkeysResult, sshKeysResult, apiKeysResult] = await Promise.all([
         api.listSessions(),
         api.pendingEmailChange(),
         api.listPasskeys(),
+        api.listSshKeys(),
+        api.listApiKeys(),
       ])
 
       if (sessionsResult.ok) {
@@ -638,8 +640,16 @@ export function AccountPage() {
       if (passkeysResult.ok) {
         setPasskeys(passkeysResult.data.passkeys)
       }
+      if (sshKeysResult.ok) {
+        setSshKeys(sshKeysResult.data.keys)
+      }
+      if (apiKeysResult.ok) {
+        setApiKeys(apiKeysResult.data.keys)
+      }
       setSessionsLoading(false)
       setPasskeysLoading(false)
+      setSshLoading(false)
+      setApiLoading(false)
     }
 
     void load()
