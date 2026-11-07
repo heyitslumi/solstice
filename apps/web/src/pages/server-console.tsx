@@ -226,6 +226,12 @@ export function ServerConsolePage() {
       cancelled = true
       try { spiceRef.current?.stop() } catch { /* ignore */ }
       spiceRef.current = null
+      // spice-html5 appends canvases that can outlive the React unmount —
+      // clear the screen container explicitly.
+      const screen = document.getElementById('spice-screen')
+      if (screen) screen.replaceChildren()
+      const msg = document.getElementById('spice-message')
+      if (msg) msg.replaceChildren()
     }
   }, [mode, id, takeover, attempt])
 
