@@ -649,7 +649,9 @@ export function attachConsoleServer(server: Server) {
             ws.close(4410, 'Start the server first.')
             return
           }
-          const vga = await getVgaSession(vgaInstance.name, q.searchParams.get('takeover') === '1')
+          // VGA: spice-html5 cannot surface a 4409 close code, so stale VGA
+          // ops (common — tabs die without cleanup) are always taken over.
+          const vga = await getVgaSession(vgaInstance.name, true)
           await serveVgaChannel(ws, vga)
         } catch (err: any) {
           if (err?.message === 'CONSOLE_TAKEN') ws.close(4409, 'Someone is already using this console.')
