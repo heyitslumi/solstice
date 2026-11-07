@@ -179,8 +179,8 @@ export function ServerConsolePage() {
   useEffect(() => {
     if (mode !== 'graphical' || !id) return
     let cancelled = false
-    const SpiceHtml5 = (window as any).SpiceHtml5
     const start = () => {
+      const SpiceHtml5 = (window as any).SpiceHtml5
       if (cancelled || !spiceScreenRef.current) return
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
       const uri = `${proto}://${window.location.host}/api/instances/${encodeURIComponent(id)}/console?mode=vga${takeover ? '&takeover=1' : ''}`
@@ -206,7 +206,7 @@ export function ServerConsolePage() {
       spiceRef.current = sc
       setState('open')
     }
-    if (SpiceHtml5) {
+    if ((window as any).SpiceHtml5) {
       start()
     } else {
       const script = document.createElement('script')
