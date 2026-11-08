@@ -81,6 +81,7 @@ export function AdminTemplateFormPage() {
   const [catalog, setCatalog] = useState<OsCatalogEntry[]>([])
   const [formCloudInit, setFormCloudInit] = useState(true)
   const [formUefi, setFormUefi] = useState(false)
+  const [formDescription, setFormDescription] = useState('')
   const [formEnabled, setFormEnabled] = useState(true)
 
   const [loading, setLoading] = useState(isEdit)
@@ -113,6 +114,7 @@ export function AdminTemplateFormPage() {
             setFormImageAlias(found.imageAlias)
             setFormCloudInit(found.cloudInit !== false)
             setFormUefi(found.uefi === true)
+            setFormDescription(found.description || '')
             setFormEnabled(found.enabled !== false)
           } else {
             setError('Template not found.')
@@ -146,6 +148,7 @@ export function AdminTemplateFormPage() {
       imageAlias: formImageAlias.trim(),
       cloudInit: formCloudInit,
       uefi: formUefi,
+      description: formDescription.trim(),
       enabled: formEnabled,
     }
 
@@ -263,6 +266,19 @@ export function AdminTemplateFormPage() {
                       <option value={formImageAlias}>{formImageAlias} (current)</option>
                     )}
                 </select>
+              </Field>
+
+              <Field
+                label="Description"
+                help="Description of the template shown to the end user."
+              >
+                <textarea
+                  rows={4}
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  placeholder="e.g. Minimal installation with limited packages on an ext4 filesystem..."
+                  className="w-full rounded-control border border-field-border bg-field p-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
+                />
               </Field>
 
               <div className="flex items-center justify-end gap-3 border-t border-border pt-4">

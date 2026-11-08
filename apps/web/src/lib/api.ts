@@ -123,6 +123,7 @@ export interface OsTemplate {
   imageAlias: string
   cloudInit?: boolean
   uefi?: boolean
+  description?: string
   enabled: boolean
   createdAt: string
   updatedAt: string

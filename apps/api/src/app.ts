@@ -7187,6 +7187,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       imageAlias: row.image_alias,
       cloudInit: row.cloud_init !== false,
       uefi: !!row.uefi,
+      description: row.description || '',
       enabled: !!row.enabled,
       createdAt: toIso(row.created_at),
       updatedAt: toIso(row.updated_at),
@@ -7436,8 +7437,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<OsTemplateRow>(
-        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING *`,
         [
           str(body.name).trim(),
@@ -7451,6 +7452,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           body.cloudInit !== false,
           body.uefi === true,
           body.enabled !== false,
+          str(body.description || '').trim(),
         ],
       )
 
@@ -7531,6 +7533,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.enabled !== undefined) {
       fields.push(`enabled = $${idx++}`)
       values.push(body.enabled !== false)
+    }
+    if (body.description !== undefined) {
+      fields.push(`description = $${idx++}`)
+      values.push(str(body.description).trim())
     }
     if (fields.length === 0) return c.json({ message: 'No fields provided.' }, 400)
 

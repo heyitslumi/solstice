@@ -370,6 +370,7 @@ const SCHEMA = `
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS version text NOT NULL DEFAULT '1.00';
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_init boolean NOT NULL DEFAULT true;
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS uefi boolean NOT NULL DEFAULT false;
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '';
   CREATE UNIQUE INDEX IF NOT EXISTS os_templates_alias_idx ON os_templates (image_alias, arch);
 
   /* Infrastructure Locations */
@@ -577,6 +578,7 @@ export interface OsTemplateRow {
   image_alias: string
   cloud_init?: boolean
   uefi?: boolean
+  description?: string
   enabled: boolean
   group_name?: string
   group_logo?: string

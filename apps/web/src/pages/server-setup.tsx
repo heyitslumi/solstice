@@ -17,6 +17,7 @@ interface OsOption {
   version: string
   variant: string
   group: string
+  description?: string
 }
 
 const SWAPS = ['None', '256 MB', '512 MB', '768 MB', '1 GB', '1.5 GB']
@@ -55,6 +56,9 @@ function slugFor(group: string): string | null {
 }
 
 function variantDesc(o: OsOption): string {
+  if (o.description && o.description.trim()) {
+    return o.description.trim()
+  }
   const v = o.variant.toLowerCase()
   if (v.includes('minimal')) return 'Minimal installation with limited packages. New packages are easily installed using the distro package manager.'
   if (v.includes('cloud')) return 'Cloud image with cloud-init support for automated provisioning.'
@@ -221,6 +225,7 @@ export function ServerSetupPage({
             version: t.version || '',
             variant: t.variant || '',
             group: t.groupName || t.os || t.name,
+            description: t.description || '',
           })),
         )
       } else {
