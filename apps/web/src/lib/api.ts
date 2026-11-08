@@ -129,6 +129,7 @@ export interface OsTemplate {
   eolActionDays?: number
   eolWarning?: string
   eolWarningDays?: number
+  emailExcerpt?: string
   enabled: boolean
   createdAt: string
   updatedAt: string

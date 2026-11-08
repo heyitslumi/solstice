@@ -3,12 +3,7 @@ import { LegalLinks } from '@/components/legal-links'
 
 export function AuthFooter() {
   const { config } = useAppConfig()
-  let host = ''
-  try {
-    host = config.url ? new URL(config.url).host : window.location.host
-  } catch {
-    host = window.location.host
-  }
+  const name = config.name || 'VPS Panel'
   const hasLegalLinks = Boolean(
     config.legalTermsUrl?.trim() || config.legalPrivacyUrl?.trim() || config.legalAupUrl?.trim(),
   )
@@ -16,7 +11,15 @@ export function AuthFooter() {
     <footer className="auth-footer border-t border-border">
       <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
         <p className="font-mono text-[11px] tracking-wide text-fg-subtle">
-          © {new Date().getFullYear()} {host}
+          © {new Date().getFullYear()} {name} — powered by{' '}
+          <a
+            href="https://solstice.host"
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-accent-text"
+          >
+            Solstice
+          </a>
         </p>
 
         {hasLegalLinks ? (

@@ -376,6 +376,7 @@ const SCHEMA = `
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_action_days integer NOT NULL DEFAULT 60;
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_warning text NOT NULL DEFAULT 'none';
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_warning_days integer NOT NULL DEFAULT 90;
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS email_excerpt text NOT NULL DEFAULT '';
   CREATE UNIQUE INDEX IF NOT EXISTS os_templates_alias_idx ON os_templates (image_alias, arch);
 
   /* Infrastructure Locations */
@@ -589,6 +590,7 @@ export interface OsTemplateRow {
   eol_action_days?: number
   eol_warning?: string
   eol_warning_days?: number
+  email_excerpt?: string
   enabled: boolean
   group_name?: string
   group_logo?: string

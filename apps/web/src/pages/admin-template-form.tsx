@@ -82,6 +82,7 @@ export function AdminTemplateFormPage() {
   const [formCloudInit, setFormCloudInit] = useState(true)
   const [formUefi, setFormUefi] = useState(false)
   const [formDescription, setFormDescription] = useState('')
+  const [formEmailExcerpt, setFormEmailExcerpt] = useState('')
   const [formEolDate, setFormEolDate] = useState('')
   const [formEolAction, setFormEolAction] = useState<'none' | 'on_date' | 'before_date' | 'after_date'>('none')
   const [formEolActionDays, setFormEolActionDays] = useState(60)
@@ -120,6 +121,7 @@ export function AdminTemplateFormPage() {
             setFormCloudInit(found.cloudInit !== false)
             setFormUefi(found.uefi === true)
             setFormDescription(found.description || '')
+            setFormEmailExcerpt(found.emailExcerpt || '')
             setFormEolDate(found.eolDate ? found.eolDate.split('T')[0] : '')
             setFormEolAction((found.eolAction as any) || 'none')
             setFormEolActionDays(found.eolActionDays ?? 60)
@@ -159,6 +161,7 @@ export function AdminTemplateFormPage() {
       cloudInit: formCloudInit,
       uefi: formUefi,
       description: formDescription.trim(),
+      emailExcerpt: formEmailExcerpt.trim(),
       eolDate: formEolDate || null,
       eolAction: formEolAction,
       eolActionDays: Number(formEolActionDays) || 60,
@@ -288,12 +291,30 @@ export function AdminTemplateFormPage() {
                 help="Description of the template shown to the end user."
               >
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   placeholder="e.g. Minimal installation with limited packages on an ext4 filesystem..."
                   className="w-full rounded-control border border-field-border bg-field p-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none"
                 />
+              </Field>
+
+              <Field
+                label="Email Excerpt"
+                help="Information to be included in the server build email."
+              >
+                <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
+                  <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
+                    1
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={formEmailExcerpt}
+                    onChange={(e) => setFormEmailExcerpt(e.target.value)}
+                    placeholder="e.g. Special instructions or login notices specific to this template..."
+                    className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
+                  />
+                </div>
               </Field>
 
               <div className="flex items-center justify-end gap-3 border-t border-border pt-4">

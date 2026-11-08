@@ -703,6 +703,7 @@ function sshAccessEmail(opts: {
   password: string | null
   deployed: boolean
   keysInjected: boolean
+  emailExcerpt?: string | null
 }) {
   const lines: string[] = []
   if (opts.deployed) {
@@ -715,9 +716,12 @@ function sshAccessEmail(opts: {
   }
   if (opts.password) {
     lines.push('Your one-time root password is:', '', opts.password, '')
-    lines.push('Change it after signing in, and keep it somewhere safe — it will not be shown again.')
+    lines.push('Change it after signing in, and keep it somewhere safe — it will not be shown again.', '')
   } else if (opts.keysInjected) {
-    lines.push('Your SSH key(s) were installed — sign in with your key, no password needed.')
+    lines.push('Your SSH key(s) were installed — sign in with your key, no password needed.', '')
+  }
+  if (opts.emailExcerpt && opts.emailExcerpt.trim()) {
+    lines.push('Notes for this OS template:', '', opts.emailExcerpt.trim(), '')
   }
 
   const htmlParts: string[] = []
@@ -736,10 +740,16 @@ function sshAccessEmail(opts: {
     htmlParts.push(
       '<p style="margin:0 0 6px">Your one-time root password is:</p>',
       `<p style="margin:0 0 14px;font-family:ui-monospace,SFMono-Regular,monospace;background:#18181b;color:#f4f4f5;padding:8px 12px;border-radius:6px;word-break:break-all"><strong>${opts.password}</strong></p>`,
-      '<p style="margin:0;font-size:12px;color:#71717a">Change it after signing in, and keep it somewhere safe — it will not be shown again.</p>',
+      '<p style="margin:0 0 14px;font-size:12px;color:#71717a">Change it after signing in, and keep it somewhere safe — it will not be shown again.</p>',
     )
   } else if (opts.keysInjected) {
-    htmlParts.push('<p style="margin:0;color:#71717a">Your SSH key(s) were installed — sign in with your key, no password needed.</p>')
+    htmlParts.push('<p style="margin:0 0 14px;color:#71717a">Your SSH key(s) were installed — sign in with your key, no password needed.</p>')
+  }
+  if (opts.emailExcerpt && opts.emailExcerpt.trim()) {
+    htmlParts.push(
+      '<p style="margin:0 0 6px;font-weight:600">Notes for this OS template:</p>',
+      `<div style="margin:0 0 14px;padding:10px 14px;border-left:3px solid #fd9d1e;background:#18181b;color:#e4e4e7;border-radius:4px;white-space:pre-wrap;font-size:13px">${opts.emailExcerpt.trim()}</div>`,
+    )
   }
 
   return {
@@ -760,6 +770,7 @@ async function sendSshAccessEmail(opts: {
   password: string | null
   deployed: boolean
   keysInjected: boolean
+  emailExcerpt?: string | null
 }) {
   const config = await getSystemSettings()
   const appName = config['app_name'] || 'VPS Panel'
@@ -2781,14 +2792,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     templateId?: string
     imageAlias?: string
     os?: string
-  }): Promise<{ name: string; alias: string; uefi?: boolean }> {
+  }): Promise<{ name: string; alias: string; uefi?: boolean; emailExcerpt?: string }> {
     if (body.templateId) {
-      const tpl = await queryOne<{ name: string; image_alias: string; uefi: boolean }>(
-        'SELECT name, image_alias, uefi FROM os_templates WHERE id = $1 AND enabled = true',
+      const tpl = await queryOne<{ name: string; image_alias: string; uefi: boolean; email_excerpt: string }>(
+        'SELECT name, image_alias, uefi, email_excerpt FROM os_templates WHERE id = $1 AND enabled = true',
         [body.templateId],
       )
       if (!tpl) throw new Error('Selected OS template is not available.')
-      return { name: tpl.name, alias: tpl.image_alias, uefi: !!tpl.uefi }
+      return { name: tpl.name, alias: tpl.image_alias, uefi: !!tpl.uefi, emailExcerpt: tpl.email_excerpt || '' }
     }
     if (body.imageAlias && body.imageAlias.trim()) {
       return { name: body.imageAlias.trim(), alias: body.imageAlias.trim() }
@@ -3012,6 +3023,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           password: rootPassword,
           deployed: true,
           keysInjected: sshPublicKeys.length > 0,
+          emailExcerpt: osConfig.emailExcerpt,
         })
       } catch (err: any) {
         console.warn('Access email warning:', err?.message)
@@ -3204,6 +3216,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
             password: rootPassword,
             deployed: true,
             keysInjected: sshPublicKeys.length > 0,
+            emailExcerpt: osConfig.emailExcerpt,
           })
         }
       } catch (err: any) {
@@ -3422,6 +3435,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
             password: rootPassword,
             deployed: true,
             keysInjected: sshPublicKeys.length > 0,
+            emailExcerpt: osConfig.emailExcerpt,
           })
         }
       } catch (err: any) {
@@ -7193,6 +7207,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       eolActionDays: row.eol_action_days ?? 60,
       eolWarning: row.eol_warning || 'none',
       eolWarningDays: row.eol_warning_days ?? 90,
+      emailExcerpt: row.email_excerpt || '',
       enabled: !!row.enabled,
       createdAt: toIso(row.created_at),
       updatedAt: toIso(row.updated_at),
@@ -7442,8 +7457,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<OsTemplateRow>(
-        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description, eol_date, eol_action, eol_action_days, eol_warning, eol_warning_days)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description, eol_date, eol_action, eol_action_days, eol_warning, eol_warning_days, email_excerpt)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
          RETURNING *`,
         [
           str(body.name).trim(),
@@ -7463,6 +7478,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           Number(body.eolActionDays) || 60,
           str(body.eolWarning || 'none').trim(),
           Number(body.eolWarningDays) || 90,
+          str(body.emailExcerpt || '').trim(),
         ],
       )
 
@@ -7567,6 +7583,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.eolWarningDays !== undefined) {
       fields.push(`eol_warning_days = $${idx++}`)
       values.push(Number(body.eolWarningDays) || 90)
+    }
+    if (body.emailExcerpt !== undefined) {
+      fields.push(`email_excerpt = $${idx++}`)
+      values.push(str(body.emailExcerpt).trim())
     }
     if (fields.length === 0) return c.json({ message: 'No fields provided.' }, 400)
 
