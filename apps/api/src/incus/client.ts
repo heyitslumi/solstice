@@ -226,7 +226,8 @@ export const incus = {
       )
     }
     const userData = `#cloud-config
-${hostname ? `hostname: ${hostname}\nmanage_etc_hosts: true\n` : ''}${timezone ? `timezone: ${timezone}\n` : ''}packages:
+${hostname ? `hostname: ${hostname}\nmanage_etc_hosts: true\n` : ''}${timezone ? `timezone: ${timezone}\n` : ''}disable_root: false
+packages:
   - openssh-server
   - qemu-guest-agent
   - curl
