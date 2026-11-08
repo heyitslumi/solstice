@@ -265,28 +265,6 @@ export function AdminTemplateFormPage() {
                 </select>
               </Field>
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <Field label="Template Group" help="Distribution family this template belongs to.">
-                  <select value={formGroupId} onChange={(e) => setFormGroupId(e.target.value)} className={inputClass}>
-                    <option value="">(None)</option>
-                    {groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Release" help="Catalog release key, e.g. noble, trixie.">
-                  <input
-                    type="text"
-                    value={formRelease}
-                    onChange={(e) => setFormRelease(e.target.value)}
-                    placeholder="noble"
-                    className={inputClass}
-                  />
-                </Field>
-              </div>
-
               <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
                 <Button
                   type="button"
@@ -306,6 +284,25 @@ export function AdminTemplateFormPage() {
             {/* Right card: provisioning settings */}
             <aside className="flex flex-col rounded-panel border border-border bg-surface shadow-2xs">
               <div className="flex items-center justify-between gap-4 px-5 py-4">
+                <div>
+                  <p className="text-[13px] font-semibold text-fg">Template Group</p>
+                  <p className="text-[11px] text-fg-subtle">Distribution family this template belongs to.</p>
+                </div>
+                <select
+                  value={formGroupId}
+                  onChange={(e) => setFormGroupId(e.target.value)}
+                  className="h-9 w-44 rounded-control border border-field-border bg-field px-3 text-[13px] text-fg focus:border-accent focus:outline-none"
+                >
+                  <option value="">(None)</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 border-t border-border px-5 py-4">
                 <div>
                   <p className="text-[13px] font-semibold text-fg">Architecture</p>
                   <p className="text-[11px] text-fg-subtle">CPU architecture of the Incus image.</p>
