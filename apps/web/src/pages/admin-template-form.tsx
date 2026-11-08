@@ -82,6 +82,11 @@ export function AdminTemplateFormPage() {
   const [formCloudInit, setFormCloudInit] = useState(true)
   const [formUefi, setFormUefi] = useState(false)
   const [formDescription, setFormDescription] = useState('')
+  const [formEolDate, setFormEolDate] = useState('')
+  const [formEolAction, setFormEolAction] = useState<'none' | 'on_date' | 'before_date' | 'after_date'>('none')
+  const [formEolActionDays, setFormEolActionDays] = useState(60)
+  const [formEolWarning, setFormEolWarning] = useState<'none' | 'before_date'>('none')
+  const [formEolWarningDays, setFormEolWarningDays] = useState(90)
   const [formEnabled, setFormEnabled] = useState(true)
 
   const [loading, setLoading] = useState(isEdit)
@@ -115,6 +120,11 @@ export function AdminTemplateFormPage() {
             setFormCloudInit(found.cloudInit !== false)
             setFormUefi(found.uefi === true)
             setFormDescription(found.description || '')
+            setFormEolDate(found.eolDate ? found.eolDate.split('T')[0] : '')
+            setFormEolAction((found.eolAction as any) || 'none')
+            setFormEolActionDays(found.eolActionDays ?? 60)
+            setFormEolWarning((found.eolWarning as any) || 'none')
+            setFormEolWarningDays(found.eolWarningDays ?? 90)
             setFormEnabled(found.enabled !== false)
           } else {
             setError('Template not found.')
@@ -149,6 +159,11 @@ export function AdminTemplateFormPage() {
       cloudInit: formCloudInit,
       uefi: formUefi,
       description: formDescription.trim(),
+      eolDate: formEolDate || null,
+      eolAction: formEolAction,
+      eolActionDays: Number(formEolActionDays) || 60,
+      eolWarning: formEolWarning,
+      eolWarningDays: Number(formEolWarningDays) || 90,
       enabled: formEnabled,
     }
 
@@ -359,6 +374,145 @@ export function AdminTemplateFormPage() {
                   </p>
                 </div>
                 <Toggle checked={formUefi} onChange={setFormUefi} label="UEFI" />
+              </div>
+
+              {/* End of Life (EOL) Settings Card Section */}
+              <div className="border-t border-border p-5">
+                <div className="border-b border-border/80 pb-3">
+                  <h3 className="text-[14px] font-semibold text-fg">End of Life (EOL)</h3>
+                  <p className="mt-1 text-[11px] leading-relaxed text-fg-subtle">
+                    Most operating system versions have an end of life. You can prevent end users using these operating systems by setting the appropriate EOL settings.
+                  </p>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-fg-subtle">
+                    Set the EOL date to the exact date given for the version of the operating system.
+                  </p>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-fg-subtle">
+                    Set the appropriate EOL action to hide the operating system.
+                  </p>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-fg-subtle">
+                    Set the EOL warning if you would like to warn the user of an upcoming EOL.
+                  </p>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-4">
+                  <div>
+                    <label className="text-[12px] font-semibold text-fg">EOL Date</label>
+                    <input
+                      type="date"
+                      value={formEolDate}
+                      onChange={(e) => setFormEolDate(e.target.value)}
+                      placeholder="YYYY/MM/DD"
+                      className="mt-1 h-9 w-full rounded-control border border-field-border bg-field px-3 font-mono text-[13px] text-fg focus:border-accent focus:outline-none"
+                    />
+                  </div>
+
+                  <hr className="border-border/60" />
+
+                  <div>
+                    <span className="text-[12px] font-semibold text-fg">EOL Action</span>
+                    <div className="mt-2.5 flex flex-col gap-2 text-[12px]">
+                      <label className="flex items-center gap-2 cursor-pointer text-fg">
+                        <input
+                          type="radio"
+                          name="eolAction"
+                          checked={formEolAction === 'none'}
+                          onChange={() => setFormEolAction('none')}
+                          className="text-accent focus:ring-accent"
+                        />
+                        None
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-fg">
+                        <input
+                          type="radio"
+                          name="eolAction"
+                          checked={formEolAction === 'on_date'}
+                          onChange={() => setFormEolAction('on_date')}
+                          className="text-accent focus:ring-accent"
+                        />
+                        Hide on EOL date
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-fg">
+                        <input
+                          type="radio"
+                          name="eolAction"
+                          checked={formEolAction === 'before_date'}
+                          onChange={() => setFormEolAction('before_date')}
+                          className="text-accent focus:ring-accent"
+                        />
+                        <span>Hide</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={formEolActionDays}
+                          onChange={(e) => setFormEolActionDays(Number(e.target.value))}
+                          className="h-7 w-16 rounded-control border border-field-border bg-field px-2 text-center font-mono text-[11px] text-fg"
+                        />
+                        <span>days <strong>before</strong> EOL</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-fg">
+                        <input
+                          type="radio"
+                          name="eolAction"
+                          checked={formEolAction === 'after_date'}
+                          onChange={() => setFormEolAction('after_date')}
+                          className="text-accent focus:ring-accent"
+                        />
+                        <span>Hide</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={formEolActionDays}
+                          onChange={(e) => setFormEolActionDays(Number(e.target.value))}
+                          className="h-7 w-16 rounded-control border border-field-border bg-field px-2 text-center font-mono text-[11px] text-fg"
+                        />
+                        <span>days <strong>after</strong> EOL</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <hr className="border-border/60" />
+
+                  <div>
+                    <span className="text-[12px] font-semibold text-fg">EOL Warning</span>
+                    <div className="mt-2.5 flex flex-col gap-2 text-[12px]">
+                      <label className="flex items-center gap-2 cursor-pointer text-fg">
+                        <input
+                          type="radio"
+                          name="eolWarning"
+                          checked={formEolWarning === 'none'}
+                          onChange={() => setFormEolWarning('none')}
+                          className="text-accent focus:ring-accent"
+                        />
+                        None
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer text-fg">
+                        <input
+                          type="radio"
+                          name="eolWarning"
+                          checked={formEolWarning === 'before_date'}
+                          onChange={() => setFormEolWarning('before_date')}
+                          className="text-accent focus:ring-accent"
+                        />
+                        <span>Warn</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          value={formEolWarningDays}
+                          onChange={(e) => setFormEolWarningDays(Number(e.target.value))}
+                          className="h-7 w-16 rounded-control border border-field-border bg-field px-2 text-center font-mono text-[11px] text-fg"
+                        />
+                        <span>days <strong>before</strong> EOL</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
               </div>
 
             </aside>

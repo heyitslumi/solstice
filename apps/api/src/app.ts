@@ -7188,6 +7188,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       cloudInit: row.cloud_init !== false,
       uefi: !!row.uefi,
       description: row.description || '',
+      eolDate: row.eol_date ? String(row.eol_date).split('T')[0] : null,
+      eolAction: row.eol_action || 'none',
+      eolActionDays: row.eol_action_days ?? 60,
+      eolWarning: row.eol_warning || 'none',
+      eolWarningDays: row.eol_warning_days ?? 90,
       enabled: !!row.enabled,
       createdAt: toIso(row.created_at),
       updatedAt: toIso(row.updated_at),
@@ -7437,8 +7442,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<OsTemplateRow>(
-        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description, eol_date, eol_action, eol_action_days, eol_warning, eol_warning_days)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
          RETURNING *`,
         [
           str(body.name).trim(),
@@ -7453,6 +7458,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           body.uefi === true,
           body.enabled !== false,
           str(body.description || '').trim(),
+          body.eolDate ? str(body.eolDate).trim() : null,
+          str(body.eolAction || 'none').trim(),
+          Number(body.eolActionDays) || 60,
+          str(body.eolWarning || 'none').trim(),
+          Number(body.eolWarningDays) || 90,
         ],
       )
 
@@ -7537,6 +7547,26 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.description !== undefined) {
       fields.push(`description = $${idx++}`)
       values.push(str(body.description).trim())
+    }
+    if (body.eolDate !== undefined) {
+      fields.push(`eol_date = $${idx++}`)
+      values.push(body.eolDate ? str(body.eolDate).trim() : null)
+    }
+    if (body.eolAction !== undefined) {
+      fields.push(`eol_action = $${idx++}`)
+      values.push(str(body.eolAction).trim())
+    }
+    if (body.eolActionDays !== undefined) {
+      fields.push(`eol_action_days = $${idx++}`)
+      values.push(Number(body.eolActionDays) || 60)
+    }
+    if (body.eolWarning !== undefined) {
+      fields.push(`eol_warning = $${idx++}`)
+      values.push(str(body.eolWarning).trim())
+    }
+    if (body.eolWarningDays !== undefined) {
+      fields.push(`eol_warning_days = $${idx++}`)
+      values.push(Number(body.eolWarningDays) || 90)
     }
     if (fields.length === 0) return c.json({ message: 'No fields provided.' }, 400)
 

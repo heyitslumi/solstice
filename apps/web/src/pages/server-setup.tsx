@@ -18,6 +18,11 @@ interface OsOption {
   variant: string
   group: string
   description?: string
+  eolDate?: string | null
+  eolAction?: string
+  eolActionDays?: number
+  eolWarning?: string
+  eolWarningDays?: number
 }
 
 const SWAPS = ['None', '256 MB', '512 MB', '768 MB', '1 GB', '1.5 GB']
@@ -219,14 +224,28 @@ export function ServerSetupPage({
       const adminRes = await api.adminListOsTemplates()
       if (active && adminRes.ok) {
         setOsOptions(
-          adminRes.data.map((t) => ({
-            id: t.id,
-            name: t.name,
-            version: t.version || '',
-            variant: t.variant || '',
-            group: t.groupName || t.os || t.name,
-            description: t.description || '',
-          })),
+          adminRes.data
+            .filter((t) => {
+              if (!t.eolDate || t.eolAction === 'none') return true
+              const eolTime = new Date(t.eolDate).getTime()
+              const now = Date.now()
+              const daysDiff = (now - eolTime) / (1000 * 60 * 60 * 24)
+              if (t.eolAction === 'on_date' && daysDiff >= 0) return false
+              if (t.eolAction === 'before_date' && daysDiff >= -(t.eolActionDays || 60)) return false
+              if (t.eolAction === 'after_date' && daysDiff >= (t.eolActionDays || 60)) return false
+              return true
+            })
+            .map((t) => ({
+              id: t.id,
+              name: t.name,
+              version: t.version || '',
+              variant: t.variant || '',
+              group: t.groupName || t.os || t.name,
+              description: t.description || '',
+              eolDate: t.eolDate,
+              eolWarning: t.eolWarning,
+              eolWarningDays: t.eolWarningDays,
+            })),
         )
       } else {
         const pub = await api.listOsTemplates()
@@ -596,6 +615,27 @@ export function ServerSetupPage({
                             <img src={`https://cdn.simpleicons.org/${slugFor(group)}`} alt="" className="size-4 flex-none opacity-80" loading="lazy" />
                           )}
                           <p className="text-sm font-medium">{`${o.name} ${o.version} ${o.variant}`.trim()}</p>
+                          {(() => {
+                            if (!o.eolDate || o.eolWarning !== 'before_date') return null
+                            const eolTime = new Date(o.eolDate).getTime()
+                            const daysDiff = (eolTime - Date.now()) / (1000 * 60 * 60 * 24)
+                            const warnDays = o.eolWarningDays || 90
+                            if (daysDiff > 0 && daysDiff <= warnDays) {
+                              return (
+                                <span className="ml-auto rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-400">
+                                  EOL in {Math.ceil(daysDiff)}d
+                                </span>
+                              )
+                            }
+                            if (daysDiff <= 0) {
+                              return (
+                                <span className="ml-auto rounded bg-rose-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-rose-400">
+                                  End of Life
+                                </span>
+                              )
+                            }
+                            return null
+                          })()}
                         </div>
                         <p className={`text-fg-subtle ${selectedOs?.id === o.id ? 'mt-1 text-[12px]' : 'mt-1 text-[12px]'}`}>{variantDesc(o)}</p>
                       </button>

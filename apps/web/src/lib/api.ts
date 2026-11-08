@@ -124,6 +124,11 @@ export interface OsTemplate {
   cloudInit?: boolean
   uefi?: boolean
   description?: string
+  eolDate?: string | null
+  eolAction?: string
+  eolActionDays?: number
+  eolWarning?: string
+  eolWarningDays?: number
   enabled: boolean
   createdAt: string
   updatedAt: string

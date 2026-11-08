@@ -371,6 +371,11 @@ const SCHEMA = `
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_init boolean NOT NULL DEFAULT true;
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS uefi boolean NOT NULL DEFAULT false;
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS description text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_date date;
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_action text NOT NULL DEFAULT 'none';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_action_days integer NOT NULL DEFAULT 60;
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_warning text NOT NULL DEFAULT 'none';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_warning_days integer NOT NULL DEFAULT 90;
   CREATE UNIQUE INDEX IF NOT EXISTS os_templates_alias_idx ON os_templates (image_alias, arch);
 
   /* Infrastructure Locations */
@@ -579,6 +584,11 @@ export interface OsTemplateRow {
   cloud_init?: boolean
   uefi?: boolean
   description?: string
+  eol_date?: string | null
+  eol_action?: string
+  eol_action_days?: number
+  eol_warning?: string
+  eol_warning_days?: number
   enabled: boolean
   group_name?: string
   group_logo?: string
