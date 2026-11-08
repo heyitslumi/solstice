@@ -146,6 +146,11 @@ export default defineConfig(({ mode }) => {
           target: process.env.AGENTATION_URL ?? 'http://127.0.0.1:4747',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/agentation/, '') || '/',
+          configure: (proxy) => {
+            proxy.on('error', () => {
+              // Suppress connection refused logs when agentation is not running
+            })
+          },
         },
       },
     },

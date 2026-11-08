@@ -416,6 +416,18 @@ ${runcmd.map((r) => `  - ${r}`).join('\n')}
   },
 
   async restoreSnapshot(name: string, snapshotName: string) {
+    // Check if the instance is running; Incus requires instances to be stopped to restore snapshots.
+    let wasRunning = false
+    try {
+      const live = await this.getInstance(name)
+      if ((live.status || '').toLowerCase() === 'running') {
+        wasRunning = true
+        await this.setInstanceState(name, 'stop', true)
+      }
+    } catch {
+      // ignore
+    }
+
     const res = await incusRequest<IncusOperationMetadata>(
       // PUT (full update), like the CLI: restore takes the full snapshot path.
       'PUT',
@@ -426,6 +438,14 @@ ${runcmd.map((r) => `  - ${r}`).join('\n')}
     if (res.type === 'async' && res.operation) {
       await waitOperation(res.operation, 180)
     }
+
+    // If it was running before, restart it automatically
+    if (wasRunning) {
+      await this.setInstanceState(name, 'start').catch((err) => {
+        console.warn('Failed to restart instance after snapshot restore:', err)
+      })
+    }
+
     return res.metadata
   },
 
