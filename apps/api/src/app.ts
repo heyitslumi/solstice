@@ -6966,6 +6966,78 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     return c.json({ tasks })
   })
 
+  /* Node historical statistics & live resource metrics */
+  app.get('/api/admin/nodes/:id/statistics', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const range = c.req.query('range') || '1d'
+
+    // Supported ranges: 30m, 1h, 3h, 6h, 12h, 1d, 2d, 1wk, 2wk, 4wk
+    const rangeMap: Record<string, string> = {
+      '30m': '30 minutes',
+      '1h': '1 hour',
+      '3h': '3 hours',
+      '6h': '6 hours',
+      '12h': '12 hours',
+      '1d': '1 day',
+      '2d': '2 days',
+      '1wk': '7 days',
+      '2wk': '14 days',
+      '4wk': '28 days',
+    }
+    const intervalStr = rangeMap[range] || '1 day'
+
+    const points = await query<{
+      ts: string
+      cpu_pct: number
+      ram_pct: number
+      load_1: number
+      load_5: number
+      load_15: number
+    }>(
+      `SELECT ts,
+              ROUND(cpu_pct::numeric, 1)::float AS cpu_pct,
+              ROUND(ram_pct::numeric, 1)::float AS ram_pct,
+              ROUND(load_1::numeric, 2)::float AS load_1,
+              ROUND(load_5::numeric, 2)::float AS load_5,
+              ROUND(load_15::numeric, 2)::float AS load_15
+         FROM node_metrics
+        WHERE node_id = $1
+          AND ts >= now() - $2::interval
+        ORDER BY ts ASC`,
+      [id, intervalStr],
+    )
+
+    // Current live metrics snapshot
+    const totalMem = os.totalmem()
+    const freeMem = os.freemem()
+    const ramPct = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 100) : 0
+    const load = os.loadavg()
+
+    return c.json({
+      range,
+      points: points.map((p) => ({
+        t: p.ts,
+        cpu: p.cpu_pct,
+        memory: p.ram_pct,
+        load1: p.load_1,
+        load5: p.load_5,
+        load15: p.load_15,
+      })),
+      live: {
+        memoryPct: ramPct,
+        memoryTotalMb: Math.round(totalMem / (1024 * 1024)),
+        memoryUsedMb: Math.round((totalMem - freeMem) / (1024 * 1024)),
+        load1: Math.round(load[0] * 100) / 100,
+        load5: Math.round(load[1] * 100) / 100,
+        load15: Math.round(load[2] * 100) / 100,
+        cpus: os.cpus().length,
+      },
+    })
+  })
+
   /* OS templates for VPS provisioning (images.linuxcontainers.org aliases) */
 
   function publicOsTemplate(row: OsTemplateRow) {

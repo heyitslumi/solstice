@@ -1591,6 +1591,29 @@ export const api = {
     }>(`/api/admin/nodes/${encodeURIComponent(id)}/tasks`)
   },
 
+  adminGetNodeStatistics(id: string, range = '1d') {
+    return request<{
+      range: string
+      points: Array<{
+        t: string
+        cpu: number
+        memory: number
+        load1: number
+        load5: number
+        load15: number
+      }>
+      live: {
+        memoryPct: number
+        memoryTotalMb: number
+        memoryUsedMb: number
+        load1: number
+        load5: number
+        load15: number
+        cpus: number
+      }
+    }>(`/api/admin/nodes/${encodeURIComponent(id)}/statistics?range=${encodeURIComponent(range)}`)
+  },
+
   adminDeleteNode(id: string) {
     return request<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}`, {
       method: 'DELETE',

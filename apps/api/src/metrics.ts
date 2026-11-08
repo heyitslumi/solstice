@@ -2,10 +2,68 @@
    minute, pruned to 7 days. Runs only in the prod server (index.ts); tests
    import app.ts directly and never start it. */
 
+import os from 'node:os'
 import { incus } from './incus/client.ts'
 import { query } from './db.ts'
 
 const prev = new Map<string, { cpu: number; at: number; rx: number; tx: number }>()
+let prevHostCpu: { idle: number; total: number } | null = null
+
+function getHostCpuSample() {
+  const cpus = os.cpus()
+  let idle = 0
+  let total = 0
+  for (const cpu of cpus) {
+    for (const type in cpu.times) {
+      total += (cpu.times as any)[type]
+    }
+    idle += cpu.times.idle
+  }
+  return { idle, total }
+}
+
+async function collectNodeMetricsOnce(): Promise<void> {
+  try {
+    const nodes = await query<{ id: string; name: string }>(
+      'SELECT id, name FROM nodes ORDER BY (name = \'local-incus\') DESC LIMIT 1',
+    )
+    const localNode = nodes[0]
+    if (!localNode) return
+
+    // Host CPU
+    const curSample = getHostCpuSample()
+    let cpuPct = 0
+    if (prevHostCpu) {
+      const idleDiff = curSample.idle - prevHostCpu.idle
+      const totalDiff = curSample.total - prevHostCpu.total
+      if (totalDiff > 0) {
+        cpuPct = Math.min(100, Math.max(0, (1 - idleDiff / totalDiff) * 100))
+      }
+    }
+    prevHostCpu = curSample
+
+    // Host Memory
+    const totalMem = os.totalmem()
+    const freeMem = os.freemem()
+    const ramPct = totalMem > 0 ? Math.min(100, Math.max(0, ((totalMem - freeMem) / totalMem) * 100)) : 0
+
+    // Host Load Averages
+    const load = os.loadavg()
+    const load1 = Math.round(load[0] * 100) / 100
+    const load5 = Math.round(load[1] * 100) / 100
+    const load15 = Math.round(load[2] * 100) / 100
+
+    await query(
+      `INSERT INTO node_metrics (node_id, cpu_pct, ram_pct, load_1, load_5, load_15)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [localNode.id, cpuPct, ramPct, load1, load5, load15],
+    )
+
+    await query(`DELETE FROM node_metrics WHERE ts < now() - interval '30 days'`).catch(() => {})
+  } catch (err) {
+    console.warn('Failed to collect node metrics:', err)
+  }
+}
 
 export async function collectMetricsOnce(): Promise<void> {
   const rows = await query<{ id: string; name: string; cores: number; memory_mb: number; disk_gb: number }>(
@@ -81,7 +139,9 @@ export async function collectMetricsOnce(): Promise<void> {
 
 export function startMetricsSampler(): NodeJS.Timeout {
   void collectMetricsOnce()
+  void collectNodeMetricsOnce()
   return setInterval(() => {
     void collectMetricsOnce()
+    void collectNodeMetricsOnce()
   }, 60000)
 }

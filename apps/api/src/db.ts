@@ -241,6 +241,17 @@ const SCHEMA = `
   ALTER TABLE instance_metrics ALTER COLUMN cpu_pct DROP NOT NULL;
   ALTER TABLE instance_metrics ALTER COLUMN disk_pct DROP NOT NULL;
 
+  CREATE TABLE IF NOT EXISTS node_metrics (
+    node_id uuid NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    ts timestamptz NOT NULL DEFAULT now(),
+    cpu_pct real NOT NULL DEFAULT 0,
+    ram_pct real NOT NULL DEFAULT 0,
+    load_1 real NOT NULL DEFAULT 0,
+    load_5 real NOT NULL DEFAULT 0,
+    load_15 real NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS node_metrics_lookup_idx ON node_metrics (node_id, ts DESC);
+
   /* Global panel configuration key-value storage */
   CREATE TABLE IF NOT EXISTS system_settings (
     key   text PRIMARY KEY,

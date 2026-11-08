@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CaretDown,
+  ChartLineUp,
   CheckCircle,
   ClockCounterClockwise,
   Database,
@@ -54,7 +55,7 @@ export function AdminNodeFormPage() {
 
   const isDefaultLocalNode = isEdit && (name === 'local-incus' || fqdn === 'localhost')
 
-  type NodeTab = 'general' | 'network' | 'storage' | 'tasks'
+  type NodeTab = 'general' | 'network' | 'storage' | 'tasks' | 'statistics'
   const [activeTab, setActiveTab] = useState<NodeTab>('general')
   const [nodeNetwork, setNodeNetwork] = useState<{
     primaryNetwork: string
@@ -248,6 +249,41 @@ export function AdminNodeFormPage() {
     })
   }
 
+  // Statistics tab state
+  type StatRange = '30m' | '1h' | '3h' | '6h' | '12h' | '1d' | '2d' | '1wk' | '2wk' | '4wk'
+  const [statRange, setStatRange] = useState<StatRange>('12h')
+  const [nodeStats, setNodeStats] = useState<{
+    points: Array<{
+      t: string
+      cpu: number
+      memory: number
+      load1: number
+      load5: number
+      load15: number
+    }>
+    live: {
+      memoryPct: number
+      memoryTotalMb: number
+      memoryUsedMb: number
+      load1: number
+      load5: number
+      load15: number
+      cpus: number
+    }
+  } | null>(null)
+  const [loadingStats, setLoadingStats] = useState(false)
+
+  function loadStatsData(range = statRange) {
+    if (!id) return
+    setLoadingStats(true)
+    void api.adminGetNodeStatistics(id, range).then((res) => {
+      if (res.ok) {
+        setNodeStats(res.data)
+      }
+      setLoadingStats(false)
+    })
+  }
+
   useEffect(() => {
     if (id && !nodeNetwork) {
       loadNetworkData()
@@ -258,7 +294,10 @@ export function AdminNodeFormPage() {
     if (id && activeTab === 'tasks') {
       loadTasksData()
     }
-  }, [id, nodeNetwork, nodeStorage, activeTab])
+    if (id && activeTab === 'statistics') {
+      loadStatsData(statRange)
+    }
+  }, [id, nodeNetwork, nodeStorage, activeTab, statRange])
 
   async function handleToggleSystem(key: 'maintenance' | 'isPublic', nextVal: boolean) {
     if (!id) return
@@ -505,6 +544,7 @@ export function AdminNodeFormPage() {
                   <option value="network" className="bg-surface text-fg py-1.5">Network</option>
                   <option value="storage" className="bg-surface text-fg py-1.5">Storage</option>
                   <option value="tasks" className="bg-surface text-fg py-1.5">Tasks</option>
+                  <option value="statistics" className="bg-surface text-fg py-1.5">Statistics</option>
                 </select>
                 <CaretDown
                   size={15}
@@ -567,6 +607,19 @@ export function AdminNodeFormPage() {
               >
                 <ClockCounterClockwise size={15} aria-hidden />
                 Tasks
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('statistics')}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-control px-3.5 py-2 text-[13px] font-medium transition-colors',
+                  activeTab === 'statistics'
+                    ? 'bg-surface-2 text-fg shadow-xs'
+                    : 'text-fg-subtle hover:text-fg',
+                )}
+              >
+                <ChartLineUp size={15} aria-hidden />
+                Statistics
               </button>
             </div>
           </>
@@ -1580,7 +1633,7 @@ export function AdminNodeFormPage() {
               })}
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'tasks' ? (
           /* Tasks Tab (VirtFusion Node Tasks List) */
           <div className="flex flex-col gap-6">
             <div className="flex items-center justify-between">
@@ -1736,6 +1789,263 @@ export function AdminNodeFormPage() {
                 </table>
               </div>
             </div>
+          </div>
+        ) : (
+          /* Statistics Tab (VirtFusion Node Resource Graphs) */
+          <div className="flex flex-col gap-6">
+            {/* Header & Range Filters */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-[15px] font-semibold text-fg">Hypervisor Performance & Resource Load</h2>
+                <p className="text-[11px] text-fg-subtle">
+                  Historical telemetry and system utilization metrics sampled from physical host sensors.
+                </p>
+              </div>
+
+              {/* Time Range Pills matching VirtFusion (4wk, 2wk, 1wk, 2d, 1d, 12hrs, 6hr, 3hr, 1hr, 30m) */}
+              <div className="flex flex-wrap items-center gap-1 rounded-panel border border-border bg-surface p-1">
+                {(
+                  [
+                    { id: '4wk' as const, label: '4wk' },
+                    { id: '2wk' as const, label: '2wk' },
+                    { id: '1wk' as const, label: '1wk' },
+                    { id: '2d' as const, label: '2d' },
+                    { id: '1d' as const, label: '1d' },
+                    { id: '12h' as const, label: '12hrs' },
+                    { id: '6h' as const, label: '6hr' },
+                    { id: '3h' as const, label: '3hr' },
+                    { id: '1h' as const, label: '1hr' },
+                    { id: '30m' as const, label: '30m' },
+                  ] as const
+                ).map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      setStatRange(r.id)
+                      loadStatsData(r.id)
+                    }}
+                    className={cn(
+                      'rounded-control px-2.5 py-1 text-[11px] font-medium transition-colors',
+                      statRange === r.id
+                        ? 'bg-accent text-accent-fg shadow-xs font-semibold'
+                        : 'text-fg-subtle hover:text-fg hover:bg-surface-2',
+                    )}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {loadingStats && !nodeStats ? (
+              <div className="rounded-panel border border-border bg-surface p-12 text-center text-[13px] text-fg-subtle">
+                Loading hypervisor statistics...
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {/* Graph 1: CPU Utilization */}
+                <div className="rounded-panel border border-border bg-surface p-5 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-[14px] text-fg">CPU</span>
+                      <span className="text-[11px] font-mono text-fg-subtle">
+                        ({nodeStats?.live.cpus || 8} physical / logical cores)
+                      </span>
+                    </div>
+                    <span className="font-mono text-[13px] font-semibold text-accent">
+                      {nodeStats?.points.length ? `${nodeStats.points[nodeStats.points.length - 1].cpu}%` : '0%'}
+                    </span>
+                  </div>
+
+                  <div className="relative mt-4 h-48 w-full">
+                    <svg className="size-full overflow-visible" viewBox="0 0 1000 180" preserveAspectRatio="none">
+                      <line x1="0" y1="0" x2="1000" y2="0" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="45" x2="1000" y2="45" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="90" x2="1000" y2="90" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="135" x2="1000" y2="135" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="180" x2="1000" y2="180" stroke="currentColor" className="text-border/80" />
+
+                      {nodeStats?.points && nodeStats.points.length > 1 ? (
+                        <>
+                          <path
+                            d={(() => {
+                              const pts = nodeStats.points
+                              const step = 1000 / (pts.length - 1)
+                              const d = pts.map((p, i) => {
+                                const x = i * step
+                                const y = 180 - (Math.min(100, Math.max(0, p.cpu)) / 100) * 170
+                                return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+                              }).join(' ')
+                              return d
+                            })()}
+                            fill="none"
+                            stroke="#fe5c36"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d={(() => {
+                              const pts = nodeStats.points
+                              const step = 1000 / (pts.length - 1)
+                              const d = pts.map((p, i) => {
+                                const x = i * step
+                                const y = 180 - (Math.min(100, Math.max(0, p.cpu)) / 100) * 170
+                                return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+                              }).join(' ')
+                              return `${d} L 1000 180 L 0 180 Z`
+                            })()}
+                            fill="url(#cpuGrad)"
+                            opacity="0.25"
+                          />
+                        </>
+                      ) : (
+                        <line x1="0" y1="180" x2="1000" y2="180" stroke="#fe5c36" strokeWidth="2" />
+                      )}
+
+                      <defs>
+                        <linearGradient id="cpuGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#fe5c36" stopOpacity="0.8" />
+                          <stop offset="100%" stopColor="#fe5c36" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+
+                    <div className="pointer-events-none absolute left-2 top-0 text-[10px] font-mono text-fg-subtle/80">100%</div>
+                    <div className="pointer-events-none absolute left-2 top-[45%] text-[10px] font-mono text-fg-subtle/80">50%</div>
+                    <div className="pointer-events-none absolute left-2 bottom-1 text-[10px] font-mono text-fg-subtle/80">0%</div>
+                  </div>
+                </div>
+
+                {/* Graph 2: Memory (RAM) */}
+                <div className="rounded-panel border border-border bg-surface p-5 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-[14px] text-fg">Memory</span>
+                      <span className="text-[11px] font-mono text-fg-subtle">
+                        ({nodeStats?.live.memoryUsedMb || 0} MB / {nodeStats?.live.memoryTotalMb || 0} MB)
+                      </span>
+                    </div>
+                    <span className="font-mono text-[13px] font-semibold text-emerald-400">
+                      {nodeStats?.live.memoryPct ?? 0}%
+                    </span>
+                  </div>
+
+                  <div className="relative mt-4 h-48 w-full">
+                    <svg className="size-full overflow-visible" viewBox="0 0 1000 180" preserveAspectRatio="none">
+                      <line x1="0" y1="0" x2="1000" y2="0" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="45" x2="1000" y2="45" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="90" x2="1000" y2="90" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="135" x2="1000" y2="135" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="180" x2="1000" y2="180" stroke="currentColor" className="text-border/80" />
+
+                      {nodeStats?.points && nodeStats.points.length > 1 ? (
+                        <>
+                          <path
+                            d={(() => {
+                              const pts = nodeStats.points
+                              const step = 1000 / (pts.length - 1)
+                              const d = pts.map((p, i) => {
+                                const x = i * step
+                                const y = 180 - (Math.min(100, Math.max(0, p.memory)) / 100) * 170
+                                return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+                              }).join(' ')
+                              return d
+                            })()}
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d={(() => {
+                              const pts = nodeStats.points
+                              const step = 1000 / (pts.length - 1)
+                              const d = pts.map((p, i) => {
+                                const x = i * step
+                                const y = 180 - (Math.min(100, Math.max(0, p.memory)) / 100) * 170
+                                return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+                              }).join(' ')
+                              return `${d} L 1000 180 L 0 180 Z`
+                            })()}
+                            fill="url(#memGrad)"
+                            opacity="0.2"
+                          />
+                        </>
+                      ) : (
+                        <line x1="0" y1="180" x2="1000" y2="180" stroke="#10b981" strokeWidth="2" />
+                      )}
+
+                      <defs>
+                        <linearGradient id="memGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+
+                    <div className="pointer-events-none absolute left-2 top-0 text-[10px] font-mono text-fg-subtle/80">100%</div>
+                    <div className="pointer-events-none absolute left-2 top-[45%] text-[10px] font-mono text-fg-subtle/80">50%</div>
+                    <div className="pointer-events-none absolute left-2 bottom-1 text-[10px] font-mono text-fg-subtle/80">0%</div>
+                  </div>
+                </div>
+
+                {/* Graph 3: Load Average */}
+                <div className="rounded-panel border border-border bg-surface p-5 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-[14px] text-fg">Load</span>
+                      <span className="text-[11px] font-mono text-fg-subtle">
+                        (1m: {nodeStats?.live.load1 ?? 0} · 5m: {nodeStats?.live.load5 ?? 0} · 15m: {nodeStats?.live.load15 ?? 0})
+                      </span>
+                    </div>
+                    <span className="font-mono text-[13px] font-semibold text-sky-400">
+                      {nodeStats?.live.load1 ?? 0}
+                    </span>
+                  </div>
+
+                  <div className="relative mt-4 h-48 w-full">
+                    <svg className="size-full overflow-visible" viewBox="0 0 1000 180" preserveAspectRatio="none">
+                      <line x1="0" y1="0" x2="1000" y2="0" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="45" x2="1000" y2="45" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="90" x2="1000" y2="90" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="135" x2="1000" y2="135" stroke="currentColor" className="text-border/40" strokeDasharray="3 3" />
+                      <line x1="0" y1="180" x2="1000" y2="180" stroke="currentColor" className="text-border/80" />
+
+                      {nodeStats?.points && nodeStats.points.length > 1 ? (
+                        <>
+                          <path
+                            d={(() => {
+                              const pts = nodeStats.points
+                              const maxLoad = Math.max(4, ...pts.map((p) => p.load1))
+                              const step = 1000 / (pts.length - 1)
+                              const d = pts.map((p, i) => {
+                                const x = i * step
+                                const y = 180 - (Math.min(maxLoad, Math.max(0, p.load1)) / maxLoad) * 170
+                                return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+                              }).join(' ')
+                              return d
+                            })()}
+                            fill="none"
+                            stroke="#38bdf8"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                          />
+                        </>
+                      ) : (
+                        <line x1="0" y1="180" x2="1000" y2="180" stroke="#38bdf8" strokeWidth="2" />
+                      )}
+                    </svg>
+
+                    <div className="pointer-events-none absolute left-2 top-0 text-[10px] font-mono text-fg-subtle/80">4.0+</div>
+                    <div className="pointer-events-none absolute left-2 top-[25%] text-[10px] font-mono text-fg-subtle/80">3.0</div>
+                    <div className="pointer-events-none absolute left-2 top-[50%] text-[10px] font-mono text-fg-subtle/80">2.0</div>
+                    <div className="pointer-events-none absolute left-2 top-[75%] text-[10px] font-mono text-fg-subtle/80">1.0</div>
+                    <div className="pointer-events-none absolute left-2 bottom-1 text-[10px] font-mono text-fg-subtle/80">0</div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
