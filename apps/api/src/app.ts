@@ -3482,6 +3482,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         action,
         body?.force === true && (action === 'stop' || action === 'restart'),
       )
+
+      // When starting or restarting, auto-heal port forwards and proxy rules
+      if (action === 'start' || action === 'restart') {
+        setTimeout(async () => {
+          for (let attempt = 0; attempt < 10; attempt++) {
+            await new Promise((r) => setTimeout(r, 2000))
+            const liveState = await incus.getInstanceState(instance.name).catch(() => null)
+            const liveIp = containerGlobalIpv4(liveState)
+            if (liveIp) {
+              await healInstanceForwards(instance.id, instance.name).catch(() => {})
+              break
+            }
+          }
+        }, 1000)
+      }
+
       await logActivity(
         session.user_id,
         `${action}_instance`,
@@ -4315,7 +4331,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!instance) return c.json({ message: 'Instance not found.' }, 404)
 
     const body = await c.req
-      .json<{ containerPort?: number; protocol?: string; description?: string }>()
+      .json<{ containerPort?: number; protocol?: string; description?: string; containerIp?: string }>()
       .catch(() => null)
     const containerPort = Math.floor(Number(body?.containerPort))
     if (!Number.isFinite(containerPort) || containerPort < 1 || containerPort > 65535) {
@@ -4340,7 +4356,27 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       return c.json({ message: 'Start the server first.' }, 400)
     }
     const liveState = await incus.getInstanceState(instance.name).catch(() => null)
-    const containerIp = containerGlobalIpv4(liveState)
+
+    // Support explicitly targeting a specific network IP when multiple NICs/IPs exist
+    let containerIp = String(body?.containerIp || '').trim()
+    if (containerIp) {
+      // Validate that the requested IP actually belongs to this instance
+      let found = false
+      if (liveState?.network) {
+        for (const iface of Object.values<any>(liveState.network)) {
+          if (iface.addresses?.some((a: any) => a.address === containerIp && a.scope === 'global')) {
+            found = true
+            break
+          }
+        }
+      }
+      if (!found) {
+        return c.json({ message: `Specified IP "${containerIp}" is not an active global address on this server.` }, 400)
+      }
+    } else {
+      containerIp = containerGlobalIpv4(liveState) || ''
+    }
+
     if (!containerIp) {
       return c.json({ message: 'No address on the container yet, try again shortly.' }, 400)
     }
