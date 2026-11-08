@@ -247,15 +247,20 @@ ${runcmd.map((r) => `  - ${r}`).join('\n')}
       'user.user-data': userData,
     }
 
+    // If the image alias starts with "solstice/" or "solstice:", pull from our local/self-hosted stream server
+    const isSolsticeImage = (params.imageAlias || '').startsWith('solstice/') || (params.imageAlias || '').startsWith('solstice:')
+    const cleanAlias = (params.imageAlias || '').replace(/^solstice:/, '')
+    const imageServer = params.server || (isSolsticeImage ? 'https://dev.goon.codes/images/' : 'https://images.linuxcontainers.org')
+
     const body = {
       name: params.name,
       type: params.type,
       source: {
         type: 'image',
         mode: 'pull',
-        server: params.server || 'https://images.linuxcontainers.org',
+        server: imageServer,
         protocol: 'simplestreams',
-        alias: params.imageAlias || (params.type === 'virtual-machine' ? 'debian/12' : 'debian/12'),
+        alias: cleanAlias || (params.type === 'virtual-machine' ? 'debian/12' : 'debian/12'),
       },
       config: {
         // Firmware mode (VMs only): Incus boots UEFI by default.
