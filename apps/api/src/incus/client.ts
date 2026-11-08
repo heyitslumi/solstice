@@ -1,8 +1,35 @@
 import crypto from 'node:crypto'
+import fs from 'node:fs'
 import http from 'node:http'
+import https from 'node:https'
 import net from 'node:net'
+import path from 'node:path'
 
 const SOCKET_PATH = process.env.INCUS_SOCKET_PATH || '/var/lib/incus/unix.socket'
+
+// Load mTLS client certificates if available for remote Incus nodes
+let tlsAgent: https.Agent | null = null
+try {
+  const certDir = path.resolve(process.cwd(), 'apps/api/certs')
+  const clientCertPath = process.env.INCUS_CLIENT_CERT || path.join(certDir, 'client.crt')
+  const clientKeyPath = process.env.INCUS_CLIENT_KEY || path.join(certDir, 'client.key')
+
+  if (fs.existsSync(clientCertPath) && fs.existsSync(clientKeyPath)) {
+    tlsAgent = new https.Agent({
+      cert: fs.readFileSync(clientCertPath),
+      key: fs.readFileSync(clientKeyPath),
+      rejectUnauthorized: false, // Incus uses self-signed server certs added by fingerprint
+    })
+  }
+} catch {
+  // fallback to local socket
+}
+
+export interface NodeConnectionOptions {
+  host?: string
+  port?: number
+  isLocal?: boolean
+}
 
 export interface IncusResponse<T = unknown> {
   type: 'sync' | 'async' | 'error'
@@ -78,46 +105,67 @@ export function incusRequest<T>(
   path: string,
   body?: unknown,
   timeoutMs = 15000,
+  nodeOpts?: NodeConnectionOptions,
 ): Promise<IncusResponse<T>> {
   return new Promise((resolve, reject) => {
     const payload = body !== undefined ? JSON.stringify(body) : null
+    const isRemote = Boolean(nodeOpts?.host && !nodeOpts.isLocal && nodeOpts.host !== 'localhost')
 
-    const req = http.request(
-      {
-        socketPath: SOCKET_PATH,
-        path,
-        method,
-        headers: {
-          Host: 'localhost',
-          ...(payload
-            ? {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(payload),
-              }
-            : {}),
-        },
-        timeout: timeoutMs,
-      },
-      (res) => {
-        let raw = ''
-        res.setEncoding('utf8')
-        res.on('data', (chunk) => {
-          raw += chunk
-        })
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(raw) as IncusResponse<T>
-            if (res.statusCode && res.statusCode >= 400 && parsed.error) {
-              reject(new Error(parsed.error))
-            } else {
-              resolve(parsed)
-            }
-          } catch (err) {
-            reject(new Error(`Failed to parse Incus response: ${raw.slice(0, 200)}`))
+    const requestOptions: (http.RequestOptions | https.RequestOptions) = isRemote
+      ? {
+          hostname: nodeOpts!.host,
+          port: nodeOpts!.port || 8443,
+          path,
+          method,
+          agent: tlsAgent || undefined,
+          rejectUnauthorized: false,
+          headers: {
+            Host: nodeOpts!.host,
+            ...(payload
+              ? {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(payload),
+                }
+              : {}),
+          },
+          timeout: timeoutMs,
+        }
+      : {
+          socketPath: SOCKET_PATH,
+          path,
+          method,
+          headers: {
+            Host: 'localhost',
+            ...(payload
+              ? {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(payload),
+                }
+              : {}),
+          },
+          timeout: timeoutMs,
+        }
+
+    const requester = isRemote ? https.request : http.request
+    const req = requester(requestOptions, (res) => {
+      let raw = ''
+      res.setEncoding('utf8')
+      res.on('data', (chunk) => {
+        raw += chunk
+      })
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(raw) as IncusResponse<T>
+          if (res.statusCode && res.statusCode >= 400 && parsed.error) {
+            reject(new Error(parsed.error))
+          } else {
+            resolve(parsed)
           }
-        })
-      },
-    )
+        } catch (err) {
+          reject(new Error(`Failed to parse Incus response: ${raw.slice(0, 200)}`))
+        }
+      })
+    })
 
     req.on('timeout', () => {
       req.destroy(new Error(`Incus request timeout on ${method} ${path}`))

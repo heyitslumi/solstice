@@ -6560,15 +6560,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
     const id = c.req.param('id')
-    const node = await queryOne<{ id: string; name: string; fqdn: string; ip_address: string; public_ip: string; primary_network: string }>(
-      'SELECT id, name, fqdn, ip_address, public_ip, primary_network FROM nodes WHERE id = $1',
+    const node = await queryOne<{ id: string; name: string; fqdn: string; ip_address: string; port: number; public_ip: string; primary_network: string }>(
+      'SELECT id, name, fqdn, ip_address, port, public_ip, primary_network FROM nodes WHERE id = $1',
       [id],
     )
     if (!node) return c.json({ message: 'Node not found.' }, 404)
 
+    const isLocalNode = node.name === 'local-incus' || node.fqdn === 'localhost' || node.ip_address === '127.0.0.1'
+    const nodeOpts = {
+      host: node.ip_address || node.fqdn,
+      port: node.port || 8443,
+      isLocal: isLocalNode,
+    }
+
     let networks: any[] = []
     try {
-      const res = await incusRequest<any[]>('GET', '/1.0/networks?recursion=1')
+      const res = await incusRequest<any[]>('GET', '/1.0/networks?recursion=1', undefined, 15000, nodeOpts)
       const raw = res?.metadata ?? res
       if (Array.isArray(raw)) {
         networks = raw.filter((n) => n.managed || ['bridge', 'physical'].includes(n.type))
@@ -6648,8 +6655,15 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
     const id = c.req.param('id')
-    const node = await queryOne<{ name: string }>('SELECT name FROM nodes WHERE id = $1', [id])
+    const node = await queryOne<{ name: string; fqdn: string; ip_address: string; port: number }>('SELECT name, fqdn, ip_address, port FROM nodes WHERE id = $1', [id])
     if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    const isLocalNode = node.name === 'local-incus' || node.fqdn === 'localhost' || node.ip_address === '127.0.0.1'
+    const nodeOpts = {
+      host: node.ip_address || node.fqdn,
+      port: node.port || 8443,
+      isLocal: isLocalNode,
+    }
 
     const body = await c.req.json<any>().catch(() => null)
     const name = String(body?.name ?? '').trim().toLowerCase()
@@ -6675,7 +6689,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         name,
         type: 'bridge',
         config,
-      })
+      }, 15000, nodeOpts)
       await logActivity(
         admin.user.id,
         'create_network',
@@ -6750,6 +6764,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
 
     try {
+      const netRes = await incusRequest<any>('GET', `/1.0/networks/${encodeURIComponent(netName)}`).catch(() => null)
+      const usedBy: string[] = netRes?.metadata?.used_by || []
+      const attachedInstances = usedBy
+        .filter((u) => u.includes('/1.0/instances/'))
+        .map((u) => u.split('/').pop() || '')
+        .filter(Boolean)
+
+      if (attachedInstances.length > 0) {
+        return c.json(
+          {
+            message: `Cannot delete network "${netName}" while attached to ${attachedInstances.length} server(s): ${attachedInstances.join(', ')}. Please re-bridge or delete these instances first.`,
+          },
+          409,
+        )
+      }
+
       await incusRequest<any>('DELETE', `/1.0/networks/${encodeURIComponent(netName)}`)
       await logActivity(
         admin.user.id,
@@ -6769,15 +6799,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
     const id = c.req.param('id')
-    const node = await queryOne<{ id: string; disk_limit_gb: number; storage_enabled: boolean }>(
-      'SELECT id, disk_limit_gb, storage_enabled FROM nodes WHERE id = $1',
+    const node = await queryOne<{ id: string; name: string; fqdn: string; ip_address: string; port: number; disk_limit_gb: number; storage_enabled: boolean }>(
+      'SELECT id, name, fqdn, ip_address, port, disk_limit_gb, storage_enabled FROM nodes WHERE id = $1',
       [id],
     )
     if (!node) return c.json({ message: 'Node not found.' }, 404)
 
+    const isLocalNode = node.name === 'local-incus' || node.fqdn === 'localhost' || node.ip_address === '127.0.0.1'
+    const nodeOpts = {
+      host: node.ip_address || node.fqdn,
+      port: node.port || 8443,
+      isLocal: isLocalNode,
+    }
+
     let pools: any[] = []
     try {
-      const res = await incusRequest<any[]>('GET', '/1.0/storage-pools?recursion=1')
+      const res = await incusRequest<any[]>('GET', '/1.0/storage-pools?recursion=1', undefined, 15000, nodeOpts)
       const raw = res?.metadata ?? res
       if (Array.isArray(raw)) {
         pools = raw
@@ -6830,8 +6867,15 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
     const id = c.req.param('id')
-    const node = await queryOne<{ id: string }>('SELECT id FROM nodes WHERE id = $1', [id])
+    const node = await queryOne<{ id: string; name: string; fqdn: string; ip_address: string; port: number }>('SELECT id, name, fqdn, ip_address, port FROM nodes WHERE id = $1', [id])
     if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    const isLocalNode = node.name === 'local-incus' || node.fqdn === 'localhost' || node.ip_address === '127.0.0.1'
+    const nodeOpts = {
+      host: node.ip_address || node.fqdn,
+      port: node.port || 8443,
+      isLocal: isLocalNode,
+    }
 
     const body = await c.req.json<any>().catch(() => null)
     const name = String(body?.name ?? '').trim().toLowerCase()
@@ -6854,7 +6898,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         name,
         driver,
         config,
-      })
+      }, 15000, nodeOpts)
 
       return c.json({ ok: true, name }, 201)
     } catch (err: any) {
@@ -6877,6 +6921,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
 
     try {
+      const poolRes = await incusRequest<any>('GET', `/1.0/storage-pools/${encodeURIComponent(poolName)}`).catch(() => null)
+      const usedBy: string[] = poolRes?.metadata?.used_by || []
+      const attachedTargets = usedBy
+        .filter((u) => u.includes('/1.0/instances/') || u.includes('/1.0/images/') || u.includes('/1.0/custom/'))
+        .map((u) => u.split('/').pop() || '')
+        .filter(Boolean)
+
+      if (attachedTargets.length > 0) {
+        return c.json(
+          {
+            message: `Cannot delete storage pool "${poolName}" while in use by ${attachedTargets.length} target(s): ${attachedTargets.join(', ')}. Please delete or migrate attached instances and images first.`,
+          },
+          409,
+        )
+      }
+
       await incusRequest<any>('DELETE', `/1.0/storage-pools/${encodeURIComponent(poolName)}`)
       return c.json({ ok: true })
     } catch (err: any) {
@@ -6964,6 +7024,42 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     })
 
     return c.json({ tasks })
+  })
+
+  /* Test Incus daemon connectivity (local or mTLS remote) */
+  app.post('/api/admin/nodes/:id/test', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const id = c.req.param('id')
+    const node = await queryOne<{ id: string; name: string; fqdn: string; ip_address: string; port: number }>(
+      'SELECT id, name, fqdn, ip_address, port FROM nodes WHERE id = $1',
+      [id],
+    )
+    if (!node) return c.json({ message: 'Node not found.' }, 404)
+
+    const isLocalNode = node.name === 'local-incus' || node.fqdn === 'localhost' || node.ip_address === '127.0.0.1'
+    const nodeOpts = {
+      host: node.ip_address || node.fqdn,
+      port: node.port || 8443,
+      isLocal: isLocalNode,
+    }
+
+    try {
+      const ping = await incusRequest<any>('GET', '/1.0', undefined, 10000, nodeOpts)
+      const poolsRes = await incusRequest<any[]>('GET', '/1.0/storage-pools', undefined, 10000, nodeOpts).catch(() => ({ metadata: [] }))
+      const netsRes = await incusRequest<any[]>('GET', '/1.0/networks', undefined, 10000, nodeOpts).catch(() => ({ metadata: [] }))
+
+      return c.json({
+        ok: true,
+        version: ping.metadata?.api_version || '1.0',
+        daemon: ping.metadata?.environment?.server || 'Incus',
+        storagePools: (poolsRes.metadata || []).length,
+        networks: (netsRes.metadata || []).length,
+      })
+    } catch (err: any) {
+      return c.json({ message: err?.message || 'Failed to reach Incus daemon on this node.' }, 502)
+    }
   })
 
   /* Node historical statistics & live resource metrics */

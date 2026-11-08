@@ -249,6 +249,29 @@ export function AdminNodeFormPage() {
     })
   }
 
+  // Node test connection state
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  async function handleTestConnection() {
+    if (!id) return
+    setTestingConnection(true)
+    setTestResult(null)
+    const res = await api.adminTestNodeConnection(id)
+    if (res.ok) {
+      setTestResult({
+        ok: true,
+        message: `Successfully connected to ${res.data.daemon} (API ${res.data.version}). Found ${res.data.storagePools} storage pool(s) and ${res.data.networks} network(s).`,
+      })
+    } else {
+      setTestResult({
+        ok: false,
+        message: res.error.message || 'Connection failed.',
+      })
+    }
+    setTestingConnection(false)
+  }
+
   // Statistics tab state
   type StatRange = '30m' | '1h' | '3h' | '6h' | '12h' | '1d' | '2d' | '1wk' | '2wk' | '4wk'
   const [statRange, setStatRange] = useState<StatRange>('12h')
@@ -515,16 +538,37 @@ export function AdminNodeFormPage() {
           </div>
         </div>
 
-        <div>
-          <h1 className="text-[26px] font-bold tracking-tight text-fg">
-            {isEdit ? `Edit Node: ${name || 'Host'}` : 'Register New Node'}
-          </h1>
-          <p className="mt-0.5 text-[13px] text-fg-subtle">
-            Connect an Incus compute daemon or physical virtualization host.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-[26px] font-bold tracking-tight text-fg">
+              {isEdit ? `Edit Node: ${name || 'Host'}` : 'Register New Node'}
+            </h1>
+            <p className="mt-0.5 text-[13px] text-fg-subtle">
+              Connect an Incus compute daemon or physical virtualization host.
+            </p>
+          </div>
+
+          {isEdit && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={handleTestConnection}
+              disabled={testingConnection}
+              className="gap-1.5 self-start sm:self-auto"
+            >
+              {testingConnection ? <CliSpinner name="dots" /> : <ShareNetwork size={14} />}
+              {testingConnection ? 'Testing...' : 'Test Connection'}
+            </Button>
+          )}
         </div>
 
         {error && <Alert tone="danger">{error}</Alert>}
+        {testResult && (
+          <Alert tone={testResult.ok ? 'success' : 'danger'}>
+            {testResult.message}
+          </Alert>
+        )}
 
         {isEdit && (
           <>
@@ -2262,7 +2306,7 @@ export function AdminNodeFormPage() {
                 >
                   <option value="dir">dir (Directory / Mountpoint)</option>
                   <option value="btrfs">btrfs (Btrfs Subvolume/Loop)</option>
-                  <option value="zfs">zfs (ZFS zpool / Dataset)</option>
+                  <option value="zfs">zfs (ZFS zpool / Dataset — requires zpool installed on host)</option>
                 </select>
               </div>
 

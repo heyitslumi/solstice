@@ -1614,6 +1614,10 @@ export const api = {
     }>(`/api/admin/nodes/${encodeURIComponent(id)}/statistics?range=${encodeURIComponent(range)}`)
   },
 
+  adminTestNodeConnection(id: string) {
+    return post<{ ok: true; version: string; daemon: string; storagePools: number; networks: number }>(`/api/admin/nodes/${encodeURIComponent(id)}/test`)
+  },
+
   adminDeleteNode(id: string) {
     return request<{ ok: true }>(`/api/admin/nodes/${encodeURIComponent(id)}`, {
       method: 'DELETE',
