@@ -7186,6 +7186,18 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
   /* OS templates for VPS provisioning (images.linuxcontainers.org aliases) */
 
+  function formatDateOnly(val: unknown): string | null {
+    if (!val) return null
+    if (val instanceof Date) {
+      const year = val.getFullYear()
+      const month = String(val.getMonth() + 1).padStart(2, '0')
+      const day = String(val.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    const s = String(val).trim()
+    return s.includes('T') ? s.split('T')[0] : s.slice(0, 10)
+  }
+
   function publicOsTemplate(row: OsTemplateRow) {
     return {
       id: row.id,
@@ -7202,7 +7214,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       cloudInit: row.cloud_init !== false,
       uefi: !!row.uefi,
       description: row.description || '',
-      eolDate: row.eol_date ? String(row.eol_date).split('T')[0] : null,
+      eolDate: formatDateOnly(row.eol_date),
       eolAction: row.eol_action || 'none',
       eolActionDays: row.eol_action_days ?? 60,
       eolWarning: row.eol_warning || 'none',
