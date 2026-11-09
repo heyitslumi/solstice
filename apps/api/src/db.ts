@@ -377,6 +377,13 @@ const SCHEMA = `
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_warning text NOT NULL DEFAULT 'none';
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS eol_warning_days integer NOT NULL DEFAULT 90;
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS email_excerpt text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_config_pre text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_config_all text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_config_post text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_config_ssh text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_config_password text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS network_config_bridge text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS network_config_routed text NOT NULL DEFAULT '';
   CREATE UNIQUE INDEX IF NOT EXISTS os_templates_alias_idx ON os_templates (image_alias, arch);
 
   /* Infrastructure Locations */
@@ -591,6 +598,13 @@ export interface OsTemplateRow {
   eol_warning?: string
   eol_warning_days?: number
   email_excerpt?: string
+  cloud_config_pre?: string
+  cloud_config_all?: string
+  cloud_config_post?: string
+  cloud_config_ssh?: string
+  cloud_config_password?: string
+  network_config_bridge?: string
+  network_config_routed?: string
   enabled: boolean
   group_name?: string
   group_logo?: string

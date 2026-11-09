@@ -83,6 +83,13 @@ export function AdminTemplateFormPage() {
   const [formUefi, setFormUefi] = useState(false)
   const [formDescription, setFormDescription] = useState('')
   const [formEmailExcerpt, setFormEmailExcerpt] = useState('')
+  const [formCloudConfigPre, setFormCloudConfigPre] = useState('')
+  const [formCloudConfigAll, setFormCloudConfigAll] = useState('')
+  const [formCloudConfigPost, setFormCloudConfigPost] = useState('')
+  const [formCloudConfigSsh, setFormCloudConfigSsh] = useState('')
+  const [formCloudConfigPassword, setFormCloudConfigPassword] = useState('')
+  const [formNetworkConfigBridge, setFormNetworkConfigBridge] = useState('')
+  const [formNetworkConfigRouted, setFormNetworkConfigRouted] = useState('')
   const [formEolDate, setFormEolDate] = useState('')
   const [formEolAction, setFormEolAction] = useState<'none' | 'on_date' | 'before_date' | 'after_date'>('none')
   const [formEolActionDays, setFormEolActionDays] = useState(60)
@@ -122,6 +129,13 @@ export function AdminTemplateFormPage() {
             setFormUefi(found.uefi === true)
             setFormDescription(found.description || '')
             setFormEmailExcerpt(found.emailExcerpt || '')
+            setFormCloudConfigPre(found.cloudConfigPre || '')
+            setFormCloudConfigAll(found.cloudConfigAll || '')
+            setFormCloudConfigPost(found.cloudConfigPost || '')
+            setFormCloudConfigSsh(found.cloudConfigSsh || '')
+            setFormCloudConfigPassword(found.cloudConfigPassword || '')
+            setFormNetworkConfigBridge(found.networkConfigBridge || '')
+            setFormNetworkConfigRouted(found.networkConfigRouted || '')
             setFormEolDate(found.eolDate ? found.eolDate.split('T')[0] : '')
             setFormEolAction((found.eolAction as any) || 'none')
             setFormEolActionDays(found.eolActionDays ?? 60)
@@ -162,6 +176,13 @@ export function AdminTemplateFormPage() {
       uefi: formUefi,
       description: formDescription.trim(),
       emailExcerpt: formEmailExcerpt.trim(),
+      cloudConfigPre: formCloudConfigPre.trim(),
+      cloudConfigAll: formCloudConfigAll.trim(),
+      cloudConfigPost: formCloudConfigPost.trim(),
+      cloudConfigSsh: formCloudConfigSsh.trim(),
+      cloudConfigPassword: formCloudConfigPassword.trim(),
+      networkConfigBridge: formNetworkConfigBridge.trim(),
+      networkConfigRouted: formNetworkConfigRouted.trim(),
       eolDate: formEolDate || null,
       eolAction: formEolAction,
       eolActionDays: Number(formEolActionDays) || 60,
@@ -316,6 +337,135 @@ export function AdminTemplateFormPage() {
                   />
                 </div>
               </Field>
+
+              {/* Cloud-Init & Provisioning Configurations matching VirtFusion */}
+              <div className="flex flex-col gap-5 border-t border-border/80 pt-5">
+                <Field
+                  label="Cloud Config (All) Pre"
+                  help="Cloud-init user_data configuration executed before core commands. Examples can be found in cloud-init documentation."
+                >
+                  <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
+                    <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
+                      1
+                    </div>
+                    <textarea
+                      rows={5}
+                      value={formCloudConfigPre}
+                      onChange={(e) => setFormCloudConfigPre(e.target.value)}
+                      placeholder="# Custom pre-configuration..."
+                      className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
+                    />
+                  </div>
+                </Field>
+
+                <Field
+                  label="Cloud Config (All)"
+                  help="Cloud-init user_data configuration applied to all deployments. Examples can be found in cloud-init documentation."
+                >
+                  <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
+                    <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
+                      1
+                    </div>
+                    <textarea
+                      rows={6}
+                      value={formCloudConfigAll}
+                      onChange={(e) => setFormCloudConfigAll(e.target.value)}
+                      placeholder={"runcmd:\n  - 'DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get update'"}
+                      className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
+                    />
+                  </div>
+                </Field>
+
+                <Field
+                  label="Cloud Config (Used when SSH keys are installed)"
+                  help="Cloud-init user_data configuration injected specifically when the user provides SSH public keys."
+                >
+                  <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
+                    <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
+                      1
+                    </div>
+                    <textarea
+                      rows={5}
+                      value={formCloudConfigSsh}
+                      onChange={(e) => setFormCloudConfigSsh(e.target.value)}
+                      placeholder="# SSH-only cloud-config..."
+                      className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
+                    />
+                  </div>
+                </Field>
+
+                <Field
+                  label="Cloud Config (Used when no SSH keys are installed (Password))"
+                  help="Cloud-init user_data configuration injected when the instance authenticates with a root password."
+                >
+                  <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
+                    <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
+                      1
+                    </div>
+                    <textarea
+                      rows={5}
+                      value={formCloudConfigPassword}
+                      onChange={(e) => setFormCloudConfigPassword(e.target.value)}
+                      placeholder="# Password-only cloud-config..."
+                      className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
+                    />
+                  </div>
+                </Field>
+
+                <Field
+                  label="Bridged & MacVTap Network Configuration"
+                  help="Internal network configuration for bridged & MacVTap networks (cloud-init network-config)."
+                >
+                  <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
+                    <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
+                      1
+                    </div>
+                    <textarea
+                      rows={5}
+                      value={formNetworkConfigBridge}
+                      onChange={(e) => setFormNetworkConfigBridge(e.target.value)}
+                      placeholder="version: 2&#10;ethernets:&#10;  eth0:&#10;    dhcp4: true"
+                      className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
+                    />
+                  </div>
+                </Field>
+
+                <Field
+                  label="Libvirt Network Configuration"
+                  help="Internal network configuration for routed networks."
+                >
+                  <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
+                    <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
+                      1
+                    </div>
+                    <textarea
+                      rows={5}
+                      value={formNetworkConfigRouted}
+                      onChange={(e) => setFormNetworkConfigRouted(e.target.value)}
+                      placeholder="# Routed network configuration..."
+                      className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
+                    />
+                  </div>
+                </Field>
+
+                <Field
+                  label="Cloud Config (All) Post"
+                  help="Cloud-init user_data configuration appended at the end of the script."
+                >
+                  <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
+                    <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
+                      1
+                    </div>
+                    <textarea
+                      rows={5}
+                      value={formCloudConfigPost}
+                      onChange={(e) => setFormCloudConfigPost(e.target.value)}
+                      placeholder="# Final post-install commands..."
+                      className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
+                    />
+                  </div>
+                </Field>
+              </div>
 
               <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
                 <Button

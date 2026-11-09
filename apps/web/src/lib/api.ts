@@ -130,6 +130,13 @@ export interface OsTemplate {
   eolWarning?: string
   eolWarningDays?: number
   emailExcerpt?: string
+  cloudConfigPre?: string
+  cloudConfigAll?: string
+  cloudConfigPost?: string
+  cloudConfigSsh?: string
+  cloudConfigPassword?: string
+  networkConfigBridge?: string
+  networkConfigRouted?: string
   enabled: boolean
   createdAt: string
   updatedAt: string

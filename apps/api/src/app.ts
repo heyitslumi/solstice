@@ -2792,14 +2792,50 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     templateId?: string
     imageAlias?: string
     os?: string
-  }): Promise<{ name: string; alias: string; uefi?: boolean; emailExcerpt?: string }> {
+  }): Promise<{
+    name: string
+    alias: string
+    uefi?: boolean
+    emailExcerpt?: string
+    cloudConfigPre?: string
+    cloudConfigAll?: string
+    cloudConfigPost?: string
+    cloudConfigSsh?: string
+    cloudConfigPassword?: string
+    networkConfigBridge?: string
+    networkConfigRouted?: string
+  }> {
     if (body.templateId) {
-      const tpl = await queryOne<{ name: string; image_alias: string; uefi: boolean; email_excerpt: string }>(
-        'SELECT name, image_alias, uefi, email_excerpt FROM os_templates WHERE id = $1 AND enabled = true',
+      const tpl = await queryOne<{
+        name: string
+        image_alias: string
+        uefi: boolean
+        email_excerpt: string
+        cloud_config_pre: string
+        cloud_config_all: string
+        cloud_config_post: string
+        cloud_config_ssh: string
+        cloud_config_password: string
+        network_config_bridge: string
+        network_config_routed: string
+      }>(
+        'SELECT name, image_alias, uefi, email_excerpt, cloud_config_pre, cloud_config_all, cloud_config_post, cloud_config_ssh, cloud_config_password, network_config_bridge, network_config_routed FROM os_templates WHERE id = $1 AND enabled = true',
         [body.templateId],
       )
       if (!tpl) throw new Error('Selected OS template is not available.')
-      return { name: tpl.name, alias: tpl.image_alias, uefi: !!tpl.uefi, emailExcerpt: tpl.email_excerpt || '' }
+      return {
+        name: tpl.name,
+        alias: tpl.image_alias,
+        uefi: !!tpl.uefi,
+        emailExcerpt: tpl.email_excerpt || '',
+        cloudConfigPre: tpl.cloud_config_pre || '',
+        cloudConfigAll: tpl.cloud_config_all || '',
+        cloudConfigPost: tpl.cloud_config_post || '',
+        cloudConfigSsh: tpl.cloud_config_ssh || '',
+        cloudConfigPassword: tpl.cloud_config_password || '',
+        networkConfigBridge: tpl.network_config_bridge || '',
+        networkConfigRouted: tpl.network_config_routed || '',
+      }
     }
     if (body.imageAlias && body.imageAlias.trim()) {
       return { name: body.imageAlias.trim(), alias: body.imageAlias.trim() }
@@ -2941,6 +2977,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         dnsServers,
         rawQemu,
         network: targetNode?.primary_network || 'incusbr0',
+        cloudConfigPre: osConfig.cloudConfigPre,
+        cloudConfigAll: osConfig.cloudConfigAll,
+        cloudConfigPost: osConfig.cloudConfigPost,
+        cloudConfigSsh: osConfig.cloudConfigSsh,
+        cloudConfigPassword: osConfig.cloudConfigPassword,
+        networkConfigBridge: osConfig.networkConfigBridge,
+        networkConfigRouted: osConfig.networkConfigRouted,
       })
 
       // Start the newly provisioned instance
@@ -3136,6 +3179,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         swapMb,
         dnsServers,
         network: node?.primary_network || 'incusbr0',
+        cloudConfigPre: osConfig.cloudConfigPre,
+        cloudConfigAll: osConfig.cloudConfigAll,
+        cloudConfigPost: osConfig.cloudConfigPost,
+        cloudConfigSsh: osConfig.cloudConfigSsh,
+        cloudConfigPassword: osConfig.cloudConfigPassword,
+        networkConfigBridge: osConfig.networkConfigBridge,
+        networkConfigRouted: osConfig.networkConfigRouted,
       })
       await incus.setInstanceState(instance.name, 'start').catch((e) => {
         console.warn('Failed to start newly installed instance:', e)
@@ -3355,6 +3405,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         swapMb,
         dnsServers,
         network: rebuildNode?.primary_network || 'incusbr0',
+        cloudConfigPre: osConfig.cloudConfigPre,
+        cloudConfigAll: osConfig.cloudConfigAll,
+        cloudConfigPost: osConfig.cloudConfigPost,
+        cloudConfigSsh: osConfig.cloudConfigSsh,
+        cloudConfigPassword: osConfig.cloudConfigPassword,
+        networkConfigBridge: osConfig.networkConfigBridge,
+        networkConfigRouted: osConfig.networkConfigRouted,
       })
       await incus.setInstanceState(newName, 'start').catch((e) => {
         console.warn('Failed to start newly installed instance:', e)
@@ -7220,6 +7277,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       eolWarning: row.eol_warning || 'none',
       eolWarningDays: row.eol_warning_days ?? 90,
       emailExcerpt: row.email_excerpt || '',
+      cloudConfigPre: row.cloud_config_pre || '',
+      cloudConfigAll: row.cloud_config_all || '',
+      cloudConfigPost: row.cloud_config_post || '',
+      cloudConfigSsh: row.cloud_config_ssh || '',
+      cloudConfigPassword: row.cloud_config_password || '',
+      networkConfigBridge: row.network_config_bridge || '',
+      networkConfigRouted: row.network_config_routed || '',
       enabled: !!row.enabled,
       createdAt: toIso(row.created_at),
       updatedAt: toIso(row.updated_at),
@@ -7469,8 +7533,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<OsTemplateRow>(
-        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description, eol_date, eol_action, eol_action_days, eol_warning, eol_warning_days, email_excerpt)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description, eol_date, eol_action, eol_action_days, eol_warning, eol_warning_days, email_excerpt, cloud_config_pre, cloud_config_all, cloud_config_post, cloud_config_ssh, cloud_config_password, network_config_bridge, network_config_routed)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
          RETURNING *`,
         [
           str(body.name).trim(),
@@ -7491,6 +7555,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           str(body.eolWarning || 'none').trim(),
           Number(body.eolWarningDays) || 90,
           str(body.emailExcerpt || '').trim(),
+          str(body.cloudConfigPre || '').trim(),
+          str(body.cloudConfigAll || '').trim(),
+          str(body.cloudConfigPost || '').trim(),
+          str(body.cloudConfigSsh || '').trim(),
+          str(body.cloudConfigPassword || '').trim(),
+          str(body.networkConfigBridge || '').trim(),
+          str(body.networkConfigRouted || '').trim(),
         ],
       )
 
@@ -7599,6 +7670,34 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.emailExcerpt !== undefined) {
       fields.push(`email_excerpt = $${idx++}`)
       values.push(str(body.emailExcerpt).trim())
+    }
+    if (body.cloudConfigPre !== undefined) {
+      fields.push(`cloud_config_pre = $${idx++}`)
+      values.push(str(body.cloudConfigPre).trim())
+    }
+    if (body.cloudConfigAll !== undefined) {
+      fields.push(`cloud_config_all = $${idx++}`)
+      values.push(str(body.cloudConfigAll).trim())
+    }
+    if (body.cloudConfigPost !== undefined) {
+      fields.push(`cloud_config_post = $${idx++}`)
+      values.push(str(body.cloudConfigPost).trim())
+    }
+    if (body.cloudConfigSsh !== undefined) {
+      fields.push(`cloud_config_ssh = $${idx++}`)
+      values.push(str(body.cloudConfigSsh).trim())
+    }
+    if (body.cloudConfigPassword !== undefined) {
+      fields.push(`cloud_config_password = $${idx++}`)
+      values.push(str(body.cloudConfigPassword).trim())
+    }
+    if (body.networkConfigBridge !== undefined) {
+      fields.push(`network_config_bridge = $${idx++}`)
+      values.push(str(body.networkConfigBridge).trim())
+    }
+    if (body.networkConfigRouted !== undefined) {
+      fields.push(`network_config_routed = $${idx++}`)
+      values.push(str(body.networkConfigRouted).trim())
     }
     if (fields.length === 0) return c.json({ message: 'No fields provided.' }, 400)
 

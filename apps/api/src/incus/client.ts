@@ -240,6 +240,13 @@ export const incus = {
     dnsServers?: string[]
     network?: string
     rawQemu?: string
+    cloudConfigPre?: string
+    cloudConfigAll?: string
+    cloudConfigPost?: string
+    cloudConfigSsh?: string
+    cloudConfigPassword?: string
+    networkConfigBridge?: string
+    networkConfigRouted?: string
   }) {
     // Always ensure an SSH daemon exists so generated credentials and key
     // auth work out of the box; owner keys are appended when present.
@@ -273,6 +280,27 @@ export const incus = {
         'systemctl restart systemd-networkd || true',
       )
     }
+    const hasSshKeys = (params.sshKeys || []).length > 0
+    const customConfigSections: string[] = []
+
+    if (params.cloudConfigPre?.trim()) {
+      customConfigSections.push(params.cloudConfigPre.trim())
+    }
+    if (params.cloudConfigAll?.trim()) {
+      customConfigSections.push(params.cloudConfigAll.trim())
+    }
+    if (hasSshKeys && params.cloudConfigSsh?.trim()) {
+      customConfigSections.push(params.cloudConfigSsh.trim())
+    }
+    if (!hasSshKeys && params.cloudConfigPassword?.trim()) {
+      customConfigSections.push(params.cloudConfigPassword.trim())
+    }
+    if (params.cloudConfigPost?.trim()) {
+      customConfigSections.push(params.cloudConfigPost.trim())
+    }
+
+    const customUserData = customConfigSections.length > 0 ? `\n# --- Custom Template Cloud-Init Configurations ---\n${customConfigSections.join('\n\n')}\n` : ''
+
     const userData = `#cloud-config
 ${hostname ? `hostname: ${hostname}\nmanage_etc_hosts: true\n` : ''}${timezone ? `timezone: ${timezone}\n` : ''}disable_root: false
 packages:
@@ -288,11 +316,18 @@ users:
     ssh_authorized_keys:
 ${rootKeysFormatted || '      []'}
 runcmd:
-${runcmd.map((r) => `  - ${r}`).join('\n')}
+${runcmd.map((r) => `  - ${r}`).join('\n')}${customUserData}
 `
-    const cloudInitConfig = {
+    const cloudInitConfig: Record<string, string> = {
       'cloud-init.user-data': userData,
       'user.user-data': userData,
+    }
+
+    // Network configuration overrides if specified
+    const networkConfig = params.networkConfigBridge || params.networkConfigRouted
+    if (networkConfig?.trim()) {
+      cloudInitConfig['cloud-init.network-config'] = networkConfig.trim()
+      cloudInitConfig['user.network-config'] = networkConfig.trim()
     }
 
     // If the image alias starts with "solstice/" or "solstice:", pull from our local/self-hosted stream server
