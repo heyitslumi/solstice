@@ -10,7 +10,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { AppShell } from '@/components/app-shell'
 import { OsLogoImage } from '@/components/os-icons'
@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 
 export function AdminTemplatesPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [templates, setTemplates] = useState<OsTemplate[]>([])
   const [groups, setGroups] = useState<OsGroupItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,7 +33,7 @@ export function AdminTemplatesPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   // Template Manager Modal State (VirtFusion style: Updates, Available, Hidden)
-  const [managerOpen, setManagerOpen] = useState(false)
+  const [managerOpen, setManagerOpen] = useState(searchParams.get('manager') === '1')
   const [managerTab, setManagerTab] = useState<'available' | 'updates' | 'hidden'>('available')
   const [managerArch, setManagerArch] = useState<'x86_64' | 'aarch64'>('x86_64')
   const [managerData, setManagerData] = useState<{
@@ -98,7 +99,11 @@ export function AdminTemplatesPage() {
 
   useEffect(() => {
     void loadData()
-  }, [])
+    if (searchParams.get('manager') === '1') {
+      setManagerOpen(true)
+      void loadManagerData()
+    }
+  }, [searchParams])
 
   function handleSelectAll(checked: boolean) {
     if (checked) {
@@ -420,7 +425,16 @@ export function AdminTemplatesPage() {
       </div>
 
       {/* Template Manager Dialog (VirtFusion style: Updates, Available, Hidden) */}
-      <Dialog open={managerOpen} onOpenChange={setManagerOpen}>
+      <Dialog
+        open={managerOpen}
+        onOpenChange={(open) => {
+          setManagerOpen(open)
+          if (!open && searchParams.get('manager') === '1') {
+            searchParams.delete('manager')
+            setSearchParams(searchParams, { replace: true })
+          }
+        }}
+      >
         <DialogContent className="max-w-3xl">
           <DialogTitle>Operating System Template Manager</DialogTitle>
           <DialogDescription>

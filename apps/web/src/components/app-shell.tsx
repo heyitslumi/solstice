@@ -2,6 +2,7 @@ import {
   ArrowBendUpLeft,
   ChartLineUp,
   ClockCounterClockwise,
+  CloudArrowDown,
   Disc,
   FloppyDisk,
   FolderSimple,
@@ -82,7 +83,7 @@ const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
     items: [
       { label: 'Template Groups', icon: <FloppyDisk size={16} aria-hidden />, to: '/admin/template-groups' },
       { label: 'Templates', icon: <FloppyDisk size={16} aria-hidden />, to: '/admin/templates' },
-      { label: 'Template Manager', icon: <FloppyDisk size={16} aria-hidden /> },
+      { label: 'Template Manager', icon: <CloudArrowDown size={16} aria-hidden />, to: '/admin/templates?manager=1' },
       { label: 'Template Collections', icon: <FloppyDisk size={16} aria-hidden /> },
       { label: 'CD/DVD', icon: <Disc size={16} aria-hidden /> },
     ],
