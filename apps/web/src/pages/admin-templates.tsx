@@ -173,12 +173,12 @@ export function AdminTemplatesPage() {
       title="Operating System Templates"
       description="Manage OS container/VM templates, architectures, and cloud-init settings."
     >
-      <div className="flex w-full flex-col gap-5">
+      <div className="flex w-full min-w-0 flex-col gap-5 overflow-hidden">
         {error && <Alert tone="danger">{error}</Alert>}
         {successMsg && <Alert tone="success">{successMsg}</Alert>}
 
         {/* Top Control Bar matching Assets & Media pages */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-[11px] uppercase tracking-wider text-fg-subtle">
@@ -187,17 +187,17 @@ export function AdminTemplatesPage() {
               <span className="text-fg-subtle/50">/</span>
               <span className="text-[12px] font-medium text-fg">Templates</span>
             </div>
-            <h1 className="mt-1 text-[28px] font-bold tracking-tight text-fg">
+            <h1 className="mt-1 text-[22px] sm:text-[28px] font-bold tracking-tight text-fg truncate">
               Operating System Templates
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             {/* Filter by Group */}
             <select
               value={selectedGroupFilter}
               onChange={(e) => setSelectedGroupFilter(e.target.value)}
-              className="h-9 rounded-control border border-border bg-surface-2/50 px-3 text-[13px] text-fg focus:border-sun-500 focus:outline-none"
+              className="h-9 flex-1 sm:flex-none rounded-control border border-border bg-surface-2/50 px-3 text-[13px] text-fg focus:border-sun-500 focus:outline-none"
             >
               <option value="all">All Groups</option>
               {groups.map((g) => (
@@ -208,7 +208,7 @@ export function AdminTemplatesPage() {
             </select>
 
             {/* Search Input */}
-            <div className="relative">
+            <div className="relative flex-1 sm:flex-none min-w-[160px]">
               <MagnifyingGlass
                 size={15}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle"
@@ -218,7 +218,7 @@ export function AdminTemplatesPage() {
                 placeholder="Search templates..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-9 w-60 rounded-control border border-border bg-surface-2/50 pl-9 pr-8 text-[13px] text-fg placeholder:text-fg-subtle focus:border-sun-500 focus:outline-none"
+                className="h-9 w-full sm:w-60 rounded-control border border-border bg-surface-2/50 pl-9 pr-8 text-[13px] text-fg placeholder:text-fg-subtle focus:border-sun-500 focus:outline-none"
               />
               {search && (
                 <button
@@ -241,7 +241,8 @@ export function AdminTemplatesPage() {
               className="gap-1.5 text-[13px]"
             >
               <CloudArrowDown size={15} />
-              Template Manager
+              <span className="hidden sm:inline">Template Manager</span>
+              <span className="sm:hidden">Manager</span>
               {managerData && managerData.updates.length > 0 && (
                 <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
               )}
@@ -252,10 +253,10 @@ export function AdminTemplatesPage() {
               variant="secondary"
               onClick={loadData}
               disabled={loading}
-              className="gap-1.5 text-[13px]"
+              className="gap-1.5 text-[13px] px-2.5 sm:px-3.5"
             >
               <ArrowClockwise size={15} className={loading ? 'animate-spin' : ''} />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
 
             {/* Add Template Button */}
@@ -265,13 +266,14 @@ export function AdminTemplatesPage() {
               className="gap-1.5 text-[13px]"
             >
               <Plus size={16} weight="bold" />
-              Add Template
+              <span className="hidden sm:inline">Add Template</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
         </div>
 
         {/* Templates Table matching VirtFusion / Solstice Assets table */}
-        <div className="overflow-x-auto rounded-panel border border-border bg-surface shadow-2xs">
+        <div className="w-full max-w-full overflow-x-auto rounded-panel border border-border bg-surface shadow-2xs">
           <table className="w-full text-left text-[13px]">
             <thead>
               <tr className="border-b border-border bg-surface-2/40 text-[11px] font-semibold uppercase tracking-wider text-fg-subtle">
