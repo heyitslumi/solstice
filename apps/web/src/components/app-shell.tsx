@@ -135,13 +135,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
           alt=""
           className="h-7 w-auto max-w-[28px] max-h-[28px] shrink-0 object-contain"
         />
-        <span className="flex flex-col gap-0.5 min-w-0">
-          <span className="truncate text-[12px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
-            {config.name || 'VPS Panel'}
-          </span>
-          <span className="text-[8px] leading-none font-semibold tracking-[0.32em] text-sun-500 uppercase">
-            {isAdminArea ? 'Control Plane' : config.tagline || 'VPS Hosting'}
-          </span>
+        <span className="truncate text-[13px] leading-none font-semibold tracking-[0.22em] text-fg uppercase">
+          {config.name || 'VPS Panel'}
         </span>
       </Link>
 
