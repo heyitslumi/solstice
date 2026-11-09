@@ -137,6 +137,8 @@ export interface OsTemplate {
   cloudConfigPassword?: string
   networkConfigBridge?: string
   networkConfigRouted?: string
+  templateVersion?: string
+  slug?: string
   enabled: boolean
   createdAt: string
   updatedAt: string
@@ -1264,6 +1266,39 @@ export const api = {
 
   adminListOsTemplates() {
     return request<OsTemplate[]>('/api/admin/os-templates')
+  },
+
+  adminGetTemplateManager() {
+    return request<{
+      available: Array<{
+        slug: string
+        name: string
+        version: string
+        os: string
+        arch: string
+        variant: string
+        imageAlias: string
+        templateVersion: string
+        description?: string
+        emailExcerpt?: string
+        cloudConfigAll?: string
+        eolDate?: string | null
+        eolAction?: string
+        eolWarning?: string
+        eolWarningDays?: number
+        groupName?: string
+      }>
+      updates: Array<{
+        installed: OsTemplate
+        upstream: any
+      }>
+      hidden: OsTemplate[]
+      installedCount: number
+    }>('/api/admin/os-templates/manager')
+  },
+
+  adminInstallUpstreamTemplate(template: any) {
+    return post<{ ok: true; template: OsTemplate }>('/api/admin/os-templates/install-upstream', template)
   },
 
   adminCreateOsTemplate(input: Partial<OsTemplate>) {

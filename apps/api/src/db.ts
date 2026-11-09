@@ -384,6 +384,8 @@ const SCHEMA = `
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS cloud_config_password text NOT NULL DEFAULT '';
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS network_config_bridge text NOT NULL DEFAULT '';
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS network_config_routed text NOT NULL DEFAULT '';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS template_version text NOT NULL DEFAULT '1.00';
+  ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS slug text NOT NULL DEFAULT '';
   CREATE UNIQUE INDEX IF NOT EXISTS os_templates_alias_idx ON os_templates (image_alias, arch);
 
   /* Infrastructure Locations */
@@ -605,6 +607,8 @@ export interface OsTemplateRow {
   cloud_config_password?: string
   network_config_bridge?: string
   network_config_routed?: string
+  template_version?: string
+  slug?: string
   enabled: boolean
   group_name?: string
   group_logo?: string

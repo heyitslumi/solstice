@@ -7284,6 +7284,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       cloudConfigPassword: row.cloud_config_password || '',
       networkConfigBridge: row.network_config_bridge || '',
       networkConfigRouted: row.network_config_routed || '',
+      templateVersion: row.template_version || '1.00',
+      slug: row.slug || '',
       enabled: !!row.enabled,
       createdAt: toIso(row.created_at),
       updatedAt: toIso(row.updated_at),
@@ -7509,6 +7511,153 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     return c.json({ ok: true })
   })
 
+  /* Solstice Upstream Template Manager Feed & Sync */
+  app.get('/api/admin/os-templates/manager', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    // Load upstream registry (from local repo or fallback to GitHub raw)
+    let upstreamTemplates: any[] = []
+    try {
+      const localRegistryPath = '/root/solstice-images-repo/templates/index.json'
+      if (fs.existsSync(localRegistryPath)) {
+        upstreamTemplates = JSON.parse(fs.readFileSync(localRegistryPath, 'utf8'))
+      } else {
+        const ghRes = await fetch('https://raw.githubusercontent.com/heyitslumi/solstice-images/main/templates/index.json', { signal: AbortSignal.timeout(5000) })
+        if (ghRes.ok) upstreamTemplates = await ghRes.json()
+      }
+    } catch (err) {
+      console.warn('Failed to load upstream template registry:', err)
+    }
+
+    // Local installed templates
+    const installed = await query<OsTemplateRow>(`
+      SELECT t.*, g.name AS group_name, g.logo AS group_logo
+        FROM os_templates t
+        LEFT JOIN os_groups g ON g.id = t.group_id
+       ORDER BY t.name ASC
+    `)
+
+    const installedSlugs = new Map(installed.map((t) => [t.slug || t.image_alias, t]))
+
+    // 1. Available: Upstream templates not yet installed locally
+    const available = upstreamTemplates.filter((u) => !installedSlugs.has(u.slug) && !installedSlugs.has(u.imageAlias))
+
+    // 2. Updates: Installed templates where upstream templateVersion > installed templateVersion
+    const updates: Array<{
+      installed: ReturnType<typeof publicOsTemplate>
+      upstream: any
+    }> = []
+
+    for (const u of upstreamTemplates) {
+      const inst = installedSlugs.get(u.slug) || installedSlugs.get(u.imageAlias)
+      if (inst) {
+        const curVer = parseFloat(inst.template_version || '1.00')
+        const upVer = parseFloat(u.templateVersion || '1.00')
+        if (upVer > curVer) {
+          updates.push({
+            installed: publicOsTemplate(inst),
+            upstream: u,
+          })
+        }
+      }
+    }
+
+    // 3. Hidden: Installed templates disabled locally
+    const hidden = installed.filter((t) => t.enabled === false).map(publicOsTemplate)
+
+    return c.json({
+      available,
+      updates,
+      hidden,
+      installedCount: installed.length,
+    })
+  })
+
+  /* 1-Click Install Upstream Template */
+  app.post('/api/admin/os-templates/install-upstream', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const body = await c.req.json<any>().catch(() => null)
+    if (!body || !body.name || !body.imageAlias) {
+      return c.json({ message: 'Invalid template definition.' }, 400)
+    }
+
+    // Match or create group
+    let groupId: string | null = null
+    const groupName = body.groupName || body.os || body.name
+    if (groupName) {
+      const existingGrp = await queryOne<{ id: string }>('SELECT id FROM os_groups WHERE name ILIKE $1', [groupName])
+      if (existingGrp) {
+        groupId = existingGrp.id
+      }
+    }
+
+    try {
+      const row = await queryOne<OsTemplateRow>(
+        `INSERT INTO os_templates (
+          name, group_id, version, os, release, arch, variant, image_alias,
+          cloud_init, uefi, enabled, description, eol_date, eol_action,
+          eol_action_days, eol_warning, eol_warning_days, email_excerpt,
+          cloud_config_pre, cloud_config_all, cloud_config_post, cloud_config_ssh,
+          cloud_config_password, network_config_bridge, network_config_routed,
+          template_version, slug
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8,
+          $9, $10, $11, $12, $13, $14,
+          $15, $16, $17, $18,
+          $19, $20, $21, $22,
+          $23, $24, $25,
+          $26, $27
+        ) RETURNING *`,
+        [
+          str(body.name).trim(),
+          groupId,
+          str(body.version).trim() || '1.00',
+          str(body.os || body.name).trim(),
+          str(body.release || '').trim(),
+          str(body.arch || 'amd64').trim(),
+          str(body.variant || 'cloud').trim(),
+          str(body.imageAlias).trim(),
+          body.cloudInit !== false,
+          body.uefi === true,
+          true,
+          str(body.description || '').trim(),
+          body.eolDate ? str(body.eolDate).trim() : null,
+          str(body.eolAction || 'none').trim(),
+          Number(body.eolActionDays) || 60,
+          str(body.eolWarning || 'none').trim(),
+          Number(body.eolWarningDays) || 90,
+          str(body.emailExcerpt || '').trim(),
+          str(body.cloudConfigPre || '').trim(),
+          str(body.cloudConfigAll || '').trim(),
+          str(body.cloudConfigPost || '').trim(),
+          str(body.cloudConfigSsh || '').trim(),
+          str(body.cloudConfigPassword || '').trim(),
+          str(body.networkConfigBridge || '').trim(),
+          str(body.networkConfigRouted || '').trim(),
+          str(body.templateVersion || '1.00').trim(),
+          str(body.slug || '').trim(),
+        ],
+      )
+
+      await logActivity(
+        admin.user.id,
+        'install_os_template',
+        `Installed upstream OS template "${body.name}" (${body.imageAlias})`,
+        clientKey(c),
+      )
+
+      return c.json({ ok: true, template: publicOsTemplate(row!) }, 201)
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        return c.json({ message: 'A template with this image alias already exists.' }, 409)
+      }
+      return c.json({ message: err?.message || 'Database error' }, 500)
+    }
+  })
+
   app.get('/api/admin/os-templates', async (c) => {
     const admin = await requireAdmin(c)
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
@@ -7533,8 +7682,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<OsTemplateRow>(
-        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description, eol_date, eol_action, eol_action_days, eol_warning, eol_warning_days, email_excerpt, cloud_config_pre, cloud_config_all, cloud_config_post, cloud_config_ssh, cloud_config_password, network_config_bridge, network_config_routed)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+        `INSERT INTO os_templates (name, group_id, version, os, release, arch, variant, image_alias, cloud_init, uefi, enabled, description, eol_date, eol_action, eol_action_days, eol_warning, eol_warning_days, email_excerpt, cloud_config_pre, cloud_config_all, cloud_config_post, cloud_config_ssh, cloud_config_password, network_config_bridge, network_config_routed, template_version, slug)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
          RETURNING *`,
         [
           str(body.name).trim(),
@@ -7562,6 +7711,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           str(body.cloudConfigPassword || '').trim(),
           str(body.networkConfigBridge || '').trim(),
           str(body.networkConfigRouted || '').trim(),
+          str(body.templateVersion || '1.00').trim(),
+          str(body.slug || '').trim(),
         ],
       )
 
@@ -7698,6 +7849,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.networkConfigRouted !== undefined) {
       fields.push(`network_config_routed = $${idx++}`)
       values.push(str(body.networkConfigRouted).trim())
+    }
+    if (body.templateVersion !== undefined) {
+      fields.push(`template_version = $${idx++}`)
+      values.push(str(body.templateVersion).trim() || '1.00')
+    }
+    if (body.slug !== undefined) {
+      fields.push(`slug = $${idx++}`)
+      values.push(str(body.slug).trim())
     }
     if (fields.length === 0) return c.json({ message: 'No fields provided.' }, 400)
 
