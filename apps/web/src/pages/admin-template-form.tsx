@@ -413,8 +413,8 @@ export function AdminTemplateFormPage() {
                 </Field>
 
                 <Field
-                  label="Bridged & MacVTap Network Configuration"
-                  help="Internal network configuration for bridged & MacVTap networks (cloud-init network-config)."
+                  label="Network Configuration (cloud-init)"
+                  help="Custom cloud-init network-config YAML (e.g. static IP, nameservers, or subnets)."
                 >
                   <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
                     <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
@@ -425,24 +425,6 @@ export function AdminTemplateFormPage() {
                       value={formNetworkConfigBridge}
                       onChange={(e) => setFormNetworkConfigBridge(e.target.value)}
                       placeholder="version: 2&#10;ethernets:&#10;  eth0:&#10;    dhcp4: true"
-                      className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
-                    />
-                  </div>
-                </Field>
-
-                <Field
-                  label="Libvirt Network Configuration"
-                  help="Internal network configuration for routed networks."
-                >
-                  <div className="relative flex rounded-control border border-field-border bg-field overflow-hidden focus-within:border-accent">
-                    <div className="select-none bg-surface-2/60 border-r border-field-border px-2.5 py-3 font-mono text-[11px] text-fg-subtle/70 text-right">
-                      1
-                    </div>
-                    <textarea
-                      rows={5}
-                      value={formNetworkConfigRouted}
-                      onChange={(e) => setFormNetworkConfigRouted(e.target.value)}
-                      placeholder="# Routed network configuration..."
                       className="flex-1 bg-transparent p-3 font-mono text-[12px] text-fg placeholder:text-fg-subtle/60 focus:outline-none"
                     />
                   </div>
