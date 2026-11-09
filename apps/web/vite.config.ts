@@ -69,7 +69,7 @@ function dynamicSeo(apiUrl: string): Plugin {
 
         const pageUrl = config.url || ''
         const name = config.name || 'Solstice'
-        const title = `${name} Host`
+        const title = name
         const desc = config.metaDescription || 'Next-generation cloud infrastructure and VPS management platform.'
         const image = config.metaPreviewImage || config.banner || ''
         const twitterCard = config.metaTwitterCard || 'summary_large_image'
