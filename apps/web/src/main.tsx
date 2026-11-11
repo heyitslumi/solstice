@@ -7,6 +7,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from '@/App'
 import { ScrollToTop } from '@/components/scroll-to-top'
 import { SessionProvider } from '@/components/session-provider'
+import { UnsavedChangesProvider } from '@/components/unsaved-changes-provider'
 import { ConfigProvider } from '@/lib/config'
 import '@/index.css'
 
@@ -18,8 +19,10 @@ createRoot(container).render(
     <BrowserRouter>
       <SessionProvider>
         <ConfigProvider>
-          <ScrollToTop />
-          <App />
+          <UnsavedChangesProvider>
+            <ScrollToTop />
+            <App />
+          </UnsavedChangesProvider>
         </ConfigProvider>
       </SessionProvider>
     </BrowserRouter>

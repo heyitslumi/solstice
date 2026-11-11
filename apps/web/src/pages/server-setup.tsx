@@ -10,6 +10,7 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { api, type ApiSshKey } from '@/lib/api'
+import { useDirtyForm } from '@/components/unsaved-changes-provider'
 
 interface OsOption {
   id: string
@@ -216,6 +217,9 @@ export function ServerSetupPage({
   const [step, setStep] = useState(0)
   const [createError, setCreateError] = useState<string | null>(null)
   const [logLines, setLogLines] = useState<string[]>([])
+
+  const isFormDirty = phase === 'form' && Boolean(selectedOs || name || hostname)
+  useDirtyForm(isFormDirty)
 
   useEffect(() => {
     let active = true

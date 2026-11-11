@@ -26,6 +26,7 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { api } from '@/lib/api'
+import { useDirtyForm } from '@/components/unsaved-changes-provider'
 import { useAppConfig } from '@/lib/config'
 import { cn } from '@/lib/utils'
 
@@ -55,6 +56,9 @@ export function AdminSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+
+  useDirtyForm(isDirty && !saving)
   const tabStripRef = useRef<HTMLDivElement>(null)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -639,7 +643,7 @@ export function AdminSettingsPage() {
 
         {/* ── TAB 1: APPLICATION ───────────────────────────────────── */}
         {activeTab === 'application' ? (
-          <form onSubmit={handleSaveApplication} className="flex flex-col gap-6">
+          <form onSubmit={handleSaveApplication} onChange={() => setIsDirty(true)} className="flex flex-col gap-6">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {/* Name */}
               <div className="flex flex-col gap-1.5">
@@ -789,7 +793,7 @@ export function AdminSettingsPage() {
 
         {/* ── TAB: METADATA ─────────────────────────────────────────── */}
         {activeTab === 'metadata' ? (
-          <form onSubmit={handleSaveMetadata} className="flex flex-col gap-6">
+          <form onSubmit={handleSaveMetadata} onChange={() => setIsDirty(true)} className="flex flex-col gap-6">
             <div className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-5">
               <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px] font-semibold tracking-wider text-fg uppercase">
                 <ShareNetwork size={16} className="text-sun-500" />
@@ -957,7 +961,7 @@ export function AdminSettingsPage() {
 
         {/* ── TAB 2: STORAGE ───────────────────────────────────────── */}
         {activeTab === 'storage' ? (
-          <form onSubmit={handleSaveStorage} className="flex flex-col gap-6">
+          <form onSubmit={handleSaveStorage} onChange={() => setIsDirty(true)} className="flex flex-col gap-6">
             <div className="flex flex-col gap-5 rounded-panel border border-border bg-surface p-5">
               <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px] font-semibold tracking-wider text-fg uppercase">
                 <Database size={16} className="text-sun-500" />
@@ -1121,7 +1125,7 @@ export function AdminSettingsPage() {
 
         {/* ── TAB 3: MAIL ──────────────────────────────────────────── */}
         {activeTab === 'mail' ? (
-          <form onSubmit={handleSaveMail} className="flex flex-col gap-6">
+          <form onSubmit={handleSaveMail} onChange={() => setIsDirty(true)} className="flex flex-col gap-6">
             <div className="flex flex-col gap-5 rounded-panel border border-border bg-surface p-5">
               <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px] font-semibold tracking-wider text-fg uppercase">
                 <At size={16} className="text-sun-500" />
@@ -1412,7 +1416,7 @@ export function AdminSettingsPage() {
 
         {/* ── TAB: CAPTCHA ─────────────────────────────────────────── */}
         {activeTab === 'captcha' ? (
-          <form onSubmit={handleSaveCaptcha} className="flex flex-col gap-6">
+          <form onSubmit={handleSaveCaptcha} onChange={() => setIsDirty(true)} className="flex flex-col gap-6">
             <div className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-5">
               <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px] font-semibold tracking-wider text-fg uppercase">
                 <Robot size={16} className="text-sun-500" />
@@ -1510,7 +1514,7 @@ export function AdminSettingsPage() {
 
         {/* ── TAB 4: WEBAUTHN ──────────────────────────────────────── */}
         {activeTab === 'webauthn' ? (
-          <form onSubmit={handleSaveWebauthn} className="flex flex-col gap-6">
+          <form onSubmit={handleSaveWebauthn} onChange={() => setIsDirty(true)} className="flex flex-col gap-6">
             <div className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-5">
               <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px] font-semibold tracking-wider text-fg uppercase">
                 <Fingerprint size={16} className="text-sun-500" />
@@ -1665,7 +1669,7 @@ export function AdminSettingsPage() {
 
         {/* ── TAB: NETWORK ─────────────────────────────────────────── */}
         {activeTab === 'network' ? (
-          <form onSubmit={handleSaveNetwork} className="flex flex-col gap-6">
+          <form onSubmit={handleSaveNetwork} onChange={() => setIsDirty(true)} className="flex flex-col gap-6">
             <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface p-5">
               <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px] font-semibold tracking-wider text-fg uppercase">
                 <ArrowsDownUp size={16} className="text-sun-500" />
@@ -1743,7 +1747,7 @@ export function AdminSettingsPage() {
 
         {/* ── TAB 5: RATELIMITS ────────────────────────────────────── */}
         {activeTab === 'ratelimits' ? (
-          <form onSubmit={handleSaveRatelimits} className="flex flex-col gap-6">
+          <form onSubmit={handleSaveRatelimits} onChange={() => setIsDirty(true)} className="flex flex-col gap-6">
             <div className="flex flex-col gap-4 rounded-panel border border-border bg-surface p-5">
               <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px] font-semibold tracking-wider text-fg uppercase">
                 <Prohibit size={16} className="text-sun-500" />

@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { CliSpinner } from '@/components/ui/cli-spinner'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { api, type ApiLocation } from '@/lib/api'
+import { useDirtyForm } from '@/components/unsaved-changes-provider'
 import { cn } from '@/lib/utils'
 
 export function AdminNodeFormPage() {
@@ -36,6 +37,9 @@ export function AdminNodeFormPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+
+  useDirtyForm(isDirty && !submitting)
 
   // Form fields
   const [name, setName] = useState('')
@@ -895,6 +899,7 @@ export function AdminNodeFormPage() {
         ) : activeTab === 'general' ? (
           <form
             onSubmit={handleSubmit}
+            onChange={() => setIsDirty(true)}
             className="flex flex-col gap-6"
           >
             {/* Two-Column VirtFusion-style Panel Layout */}

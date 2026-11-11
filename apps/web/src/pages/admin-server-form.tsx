@@ -6,6 +6,7 @@ import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { api, type AdminUser, type ApiLocation, type ApiNode } from '@/lib/api'
+import { useDirtyForm } from '@/components/unsaved-changes-provider'
 import { cn } from '@/lib/utils'
 
 export function AdminServerFormPage() {
@@ -26,6 +27,9 @@ export function AdminServerFormPage() {
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+
+  useDirtyForm(isDirty && !saving)
 
   useEffect(() => {
     let active = true
@@ -132,6 +136,7 @@ export function AdminServerFormPage() {
         ) : (
           <form
             onSubmit={handleSubmit}
+            onChange={() => setIsDirty(true)}
             className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs"
           >
             {/* Owner + placement */}

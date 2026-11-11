@@ -6,6 +6,7 @@ import { AppShell } from '@/components/app-shell'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { api, type OsCatalogEntry, type OsGroupItem } from '@/lib/api'
+import { useDirtyForm } from '@/components/unsaved-changes-provider'
 import { cn } from '@/lib/utils'
 
 const inputClass =
@@ -100,6 +101,9 @@ export function AdminTemplateFormPage() {
   const [loading, setLoading] = useState(isEdit)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+
+  useDirtyForm(isDirty && !submitting)
 
   useEffect(() => {
     let active = true
@@ -242,7 +246,11 @@ export function AdminTemplateFormPage() {
             Loading template details...
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+          <form
+            onSubmit={handleSubmit}
+            onChange={() => setIsDirty(true)}
+            className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2"
+          >
             {/* Left card: identity & source */}
             <div className="flex flex-col gap-6 rounded-panel border border-border bg-surface p-6 shadow-2xs">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
