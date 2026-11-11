@@ -5,7 +5,7 @@ import { LegalLinks } from '@/components/legal-links'
    on the right. Hidden on small screens (no room). */
 export function SiteFooter() {
   const { config } = useAppConfig()
-  const name = config.name || 'VPS Panel'
+  const name = config.name || 'Solstice'
   const hasLegalLinks = Boolean(
     config.legalTermsUrl?.trim() || config.legalPrivacyUrl?.trim() || config.legalAupUrl?.trim(),
   )

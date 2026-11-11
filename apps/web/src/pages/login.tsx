@@ -360,7 +360,7 @@ export function LoginPage() {
   return (
     <div className="auth-stack flex flex-col gap-7">
       <AuthHeading
-        title={`Sign in to ${config.name || 'VPS Panel'}`}
+        title={`Sign in to ${config.name || 'Solstice'}`}
         description="Access your servers, snapshots and network allocations."
       />
 

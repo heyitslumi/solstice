@@ -37,7 +37,7 @@ export function BrandPanel() {
         />
         <div className="flex flex-col gap-1">
           <span className="text-[15px] leading-none font-semibold tracking-[0.26em] text-brand-ink uppercase">
-            {config.name || 'VPS Panel'}
+            {config.name || 'Solstice'}
           </span>
           {(config.tagline || 'VPS Hosting') && (
             <span className="text-[9px] leading-none font-medium tracking-[0.4em] text-sun-500 uppercase">

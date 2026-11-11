@@ -571,7 +571,7 @@ function findUserByEmail(email: string) {
 
 const CODE_TTL_MINUTES = Math.round(CODE_TTL_MS / 60_000)
 
-function verificationEmail(code: string, link: string, appName = 'VPS Panel') {
+function verificationEmail(code: string, link: string, appName = 'Solstice') {
   return {
     subject: `Confirm your ${appName} email`,
     text: [
@@ -596,7 +596,7 @@ function verificationEmail(code: string, link: string, appName = 'VPS Panel') {
   }
 }
 
-function accountCreatedEmail(name: string, origin: string, appName = 'VPS Panel') {
+function accountCreatedEmail(name: string, origin: string, appName = 'Solstice') {
   return {
     subject: `Your ${appName} account is ready`,
     text: [
@@ -620,7 +620,7 @@ function accountCreatedEmail(name: string, origin: string, appName = 'VPS Panel'
 
 async function sendVerificationCode(user: UserRow, config?: Record<string, string>) {
   const cfg = config ?? (await getSystemSettings())
-  const appName = cfg['app_name'] || 'VPS Panel'
+  const appName = cfg['app_name'] || 'Solstice'
   const origin = publicOrigin(cfg)
   const verification = await createEmailVerification(user.id)
   const link =
@@ -670,7 +670,7 @@ async function requireCurrentUser(c: Context) {
 
 const LOGIN_CODE_TTL_MINUTES = Math.round(LOGIN_CODE_TTL_MS / 60_000)
 
-function loginEmail(link: string, code: string, appName = 'VPS Panel') {
+function loginEmail(link: string, code: string, appName = 'Solstice') {
   return {
     subject: `Sign in to ${appName}`,
     text: [
@@ -773,7 +773,7 @@ async function sendSshAccessEmail(opts: {
   emailExcerpt?: string | null
 }) {
   const config = await getSystemSettings()
-  const appName = config['app_name'] || 'VPS Panel'
+  const appName = config['app_name'] || 'Solstice'
   const mailMsg = {
     to: opts.user.email,
     ...sshAccessEmail({ appName, ...opts }),
@@ -793,7 +793,7 @@ async function sendSshAccessEmail(opts: {
   }
 }
 
-async function sendLoginEmail(user: UserRow, link: string, code: string, appName = 'VPS Panel', config?: Record<string, string>) {
+async function sendLoginEmail(user: UserRow, link: string, code: string, appName = 'Solstice', config?: Record<string, string>) {
   const mailMsg = { to: user.email, ...loginEmail(link, code, appName) }
   const sent = await sendMail(mailMsg, config)
   await logEmail(user.email, mailMsg.subject, mailMsg.text, user.id)
@@ -806,7 +806,7 @@ async function sendLoginEmail(user: UserRow, link: string, code: string, appName
 
 const CHANGE_TTL_MINUTES = Math.round(CHANGE_CODE_TTL_MS / 60_000)
 
-function emailChangeCodeEmail(code: string, newEmail: string, appName = 'VPS Panel') {
+function emailChangeCodeEmail(code: string, newEmail: string, appName = 'Solstice') {
   return {
     subject: `Confirm your new ${appName} address`,
     text: [
@@ -824,7 +824,7 @@ function emailChangeCodeEmail(code: string, newEmail: string, appName = 'VPS Pan
   }
 }
 
-function emailChangeNoticeEmail(oldEmail: string, newEmail: string, cancelLink: string, appName = 'VPS Panel') {
+function emailChangeNoticeEmail(oldEmail: string, newEmail: string, cancelLink: string, appName = 'Solstice') {
   return {
     subject: `Your ${appName} sign-in address is being changed`,
     text: [
@@ -845,7 +845,7 @@ function emailChangeNoticeEmail(oldEmail: string, newEmail: string, cancelLink: 
   }
 }
 
-function emailChangeDoneEmail(oldEmail: string, newEmail: string, appName = 'VPS Panel') {
+function emailChangeDoneEmail(oldEmail: string, newEmail: string, appName = 'Solstice') {
   return {
     subject: `Your ${appName} sign-in address has changed`,
     text: [
@@ -863,7 +863,7 @@ function emailChangeDoneEmail(oldEmail: string, newEmail: string, appName = 'VPS
   }
 }
 
-function deletionEmail(code: string, appName = 'VPS Panel') {
+function deletionEmail(code: string, appName = 'Solstice') {
   return {
     subject: `Confirm deletion of your ${appName} account`,
     text: [
@@ -890,7 +890,7 @@ function deletionEmail(code: string, appName = 'VPS Panel') {
    caller decides whether the account exists and whether the response leaks it. */
 async function dispatchLoginChallenge(user: UserRow, remember: boolean, config?: Record<string, string>) {
   const cfg = config ?? (await getSystemSettings())
-  const appName = cfg['app_name'] || 'VPS Panel'
+  const appName = cfg['app_name'] || 'Solstice'
   const origin = publicOrigin(cfg)
   const challenge = await createLoginChallenge(user.id, remember)
   const link =
@@ -2130,7 +2130,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     // On the critical path, unlike the warning below: the caller is sitting at a
     // prompt waiting for this message, so it fails the request rather than logging.
     try {
-      const codeMsg = { to: newEmail, ...emailChangeCodeEmail(change.code, newEmail, mailConfig['app_name'] || 'VPS Panel') }
+      const codeMsg = { to: newEmail, ...emailChangeCodeEmail(change.code, newEmail, mailConfig['app_name'] || 'Solstice') }
       const sent = await sendMail(codeMsg, mailConfig)
       await logEmail(newEmail, codeMsg.subject, codeMsg.text, user.id)
       console.log(
@@ -2146,7 +2146,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     try {
       const warnMsg = {
         to: user.email,
-        ...emailChangeNoticeEmail(user.email, newEmail, cancelLink, mailConfig['app_name'] || 'VPS Panel'),
+        ...emailChangeNoticeEmail(user.email, newEmail, cancelLink, mailConfig['app_name'] || 'Solstice'),
       }
       await sendMail(warnMsg, mailConfig)
       await logEmail(user.email, warnMsg.subject, warnMsg.text, user.id)
@@ -2217,7 +2217,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       const mailConfig = await getSystemSettings()
       const doneMsg = {
         to: previousEmail,
-        ...emailChangeDoneEmail(previousEmail, claimed.newEmail, mailConfig['app_name'] || 'VPS Panel'),
+        ...emailChangeDoneEmail(previousEmail, claimed.newEmail, mailConfig['app_name'] || 'Solstice'),
       }
       await sendMail(doneMsg, mailConfig)
       await logEmail(previousEmail, doneMsg.subject, doneMsg.text, user.id)
@@ -2423,7 +2423,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     )
 
     const mailConfig = await getSystemSettings()
-    const mailMsg = { to: user.email, ...deletionEmail(code, mailConfig['app_name'] || 'VPS Panel') }
+    const mailMsg = { to: user.email, ...deletionEmail(code, mailConfig['app_name'] || 'Solstice') }
     try {
       const sent = await sendMail(mailMsg, mailConfig)
       await logEmail(user.email, mailMsg.subject, mailMsg.text, user.id)
@@ -5378,7 +5378,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       const config = await getSystemSettings()
       try {
         if (emailVerified) {
-          const appName = config['app_name'] || 'VPS Panel'
+          const appName = config['app_name'] || 'Solstice'
           const origin = publicOrigin(config)
           const mailMsg = {
             to: created.email,
@@ -8946,7 +8946,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
   app.get('/api/config', async (c) => {
     const config = await getSystemSettings()
     return c.json({
-      name: config['app_name'] || 'VPS Panel',
+      name: config['app_name'] || 'Solstice',
       tagline: config['app_tagline'] || 'VPS Hosting',
       language: config['app_language'] || 'en',
       icon: config['app_icon'] || '/brand/mark.svg',
@@ -8986,7 +8986,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     return c.json({
       application: {
-        name: config['app_name'] || 'VPS Panel',
+        name: config['app_name'] || 'Solstice',
         tagline: config['app_tagline'] || 'VPS Hosting',
         language: config['app_language'] || 'en',
         icon: config['app_icon'] || '/brand/mark.svg',
@@ -9008,7 +9008,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       mail: {
         provider: config['mail_provider'] || (config['mail_smtp_host'] ? 'smtp' : (process.env.SMTP_URL ? 'smtp' : 'filesystem')),
         mailFrom: config['mail_from'] || process.env.MAIL_FROM || 'no-reply@localhost',
-        mailFromName: config['mail_from_name'] || 'VPS Panel',
+        mailFromName: config['mail_from_name'] || 'Solstice',
         smtpHost: config['mail_smtp_host'] || '',
         smtpPort: Number(config['mail_smtp_port']) || 587,
         smtpUser: config['mail_smtp_user'] || '',
@@ -9031,7 +9031,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       webauthn: {
         enableSecurityKeys: config['webauthn_enable_security_keys'] !== 'false',
         allowUsernamelessLogin: config['webauthn_allow_usernameless'] === 'true',
-        rpName: config['webauthn_rp_name'] || config['app_name'] || 'VPS Panel',
+        rpName: config['webauthn_rp_name'] || config['app_name'] || 'Solstice',
         rpId: config['webauthn_rp_id'] || new URL(publicOrigin(config)).hostname,
         origin: config['webauthn_origin'] || publicOrigin(config),
         authenticationTimeout: Number(config['webauthn_authentication_timeout']) || 300,
@@ -9305,9 +9305,9 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       await sendMail(
         {
           to,
-          subject: `[${config['app_name'] || 'VPS Panel'}] Test Email Delivery`,
-          text: `This is a test email sent from your ${config['app_name'] || 'VPS Panel'} admin panel.\nTimestamp: ${new Date().toISOString()}\nProvider: ${config['mail_provider'] || 'smtp'}`,
-          html: `<div style="font-family: sans-serif; padding: 20px;"><h2>${config['app_name'] || 'VPS Panel'} Email Test</h2><p>This is a test email sent from your ${config['app_name'] || 'VPS Panel'} administrative panel.</p><p><strong>Timestamp:</strong> ${new Date().toISOString()}</p><p><strong>Configured Provider:</strong> <code>${config['mail_provider'] || 'smtp'}</code></p></div>`,
+          subject: `[${config['app_name'] || 'Solstice'}] Test Email Delivery`,
+          text: `This is a test email sent from your ${config['app_name'] || 'Solstice'} admin panel.\nTimestamp: ${new Date().toISOString()}\nProvider: ${config['mail_provider'] || 'smtp'}`,
+          html: `<div style="font-family: sans-serif; padding: 20px;"><h2>${config['app_name'] || 'Solstice'} Email Test</h2><p>This is a test email sent from your ${config['app_name'] || 'Solstice'} administrative panel.</p><p><strong>Timestamp:</strong> ${new Date().toISOString()}</p><p><strong>Configured Provider:</strong> <code>${config['mail_provider'] || 'smtp'}</code></p></div>`,
         },
         config,
       )

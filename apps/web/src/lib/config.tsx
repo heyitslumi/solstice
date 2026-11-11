@@ -4,7 +4,7 @@ import { useSession } from '@/lib/session'
 import { applyThemeToDom, THEME_PRESETS } from '@/lib/theme-utils'
 
 const DEFAULT_CONFIG: PublicConfig = {
-  name: 'VPS Panel',
+  name: 'Solstice',
   tagline: 'VPS Hosting',
   language: 'en',
   icon: '/brand/mark.svg',
@@ -74,7 +74,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     const res = await api.config()
     if (res.ok && res.data) {
       setConfig(res.data)
-      document.title = res.data.name || 'VPS Panel'
+      document.title = res.data.name || 'Solstice'
       if (res.data.icon) {
         let link = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null
         if (!link) {

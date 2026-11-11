@@ -16,7 +16,7 @@ function CompactBrand() {
         className="h-7 w-auto max-w-[28px] max-h-[28px] shrink-0 object-contain"
       />
       <span className="text-[13px] leading-none font-semibold tracking-[0.24em] text-fg uppercase">
-        {config.name || 'VPS Panel'}
+        {config.name || 'Solstice'}
       </span>
     </div>
   )

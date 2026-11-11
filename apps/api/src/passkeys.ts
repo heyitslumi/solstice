@@ -35,11 +35,11 @@ export function relyingParty(config?: Record<string, string>) {
   if (config?.['webauthn_origin']) {
     const origin = config['webauthn_origin'].replace(/\/+$/, '')
     const rpID = config['webauthn_rp_id'] || new URL(origin).hostname
-    const rpName = config['webauthn_rp_name'] || config['app_name'] || 'VPS Panel'
+    const rpName = config['webauthn_rp_name'] || config['app_name'] || 'Solstice'
     return { origin, rpID, rpName }
   }
   const origin = (process.env.PUBLIC_ORIGIN ?? 'http://localhost:5173').replace(/\/+$/, '')
-  return { origin, rpID: new URL(origin).hostname, rpName: 'VPS Panel' }
+  return { origin, rpID: new URL(origin).hostname, rpName: 'Solstice' }
 }
 
 function toBase64Url(bytes: Uint8Array) {

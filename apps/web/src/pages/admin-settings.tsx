@@ -162,7 +162,7 @@ export function AdminSettingsPage() {
     const res = await api.adminSettings()
     if (res.ok && res.data) {
       const app = res.data.application
-      setAppName(app.name || 'VPS Panel')
+      setAppName(app.name || 'Solstice')
       setAppTagline(app.tagline || 'VPS Hosting')
       setAppIcon(app.icon || '/brand/mark.svg')
       setAppBanner(app.banner || '')
@@ -220,7 +220,7 @@ export function AdminSettingsPage() {
       const webauthn = res.data.webauthn
       setEnableSecurityKeys(webauthn.enableSecurityKeys ?? true)
       setAllowUsernamelessLogin(webauthn.allowUsernamelessLogin ?? false)
-      setRpName(webauthn.rpName || app.name || 'VPS Panel')
+      setRpName(webauthn.rpName || app.name || 'Solstice')
       setRpId(webauthn.rpId || window.location.hostname)
       setWebauthnOrigin(webauthn.origin || window.location.origin)
       setAuthTimeout(webauthn.authenticationTimeout ?? 300)
@@ -353,7 +353,7 @@ export function AdminSettingsPage() {
   }
 
   function handleAutofillMetadata() {
-    setMetaDescription(`Manage your cloud instances and infrastructure with ${appName || 'VPS Panel'}.`)
+    setMetaDescription(`Manage your cloud instances and infrastructure with ${appName || 'Solstice'}.`)
     setMetaPreviewImage(appBanner || `${window.location.origin}/brand/mark.svg`)
     setMetaTwitterCard('summary_large_image')
     setMetaThemeColor('#6c5ce7')

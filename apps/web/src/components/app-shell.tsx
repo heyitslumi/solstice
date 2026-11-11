@@ -136,7 +136,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: (to?: string) => void }) 
           className="h-7 w-auto max-w-[28px] max-h-[28px] shrink-0 object-contain"
         />
         <span className="truncate text-[13px] leading-none font-semibold tracking-[0.22em] text-fg uppercase">
-          {config.name || 'VPS Panel'}
+          {config.name || 'Solstice'}
         </span>
       </Link>
 
