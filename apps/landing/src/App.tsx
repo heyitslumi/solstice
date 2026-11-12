@@ -93,14 +93,14 @@ const FEATURES: Feature[] = [
   {
     icon: Fingerprint,
     title: 'Sign in your way',
-    body: 'Passkeys, any OAuth2 or OIDC provider, API keys with expiry, and a second factor that does not need a phone app.',
+    body: 'Passkeys, any OAuth2 or OIDC provider, and API keys you can expire. Sign-in itself is a code or a link, never a password to leak.',
   },
 ]
 
 const STEPS = [
   {
     title: 'Run the command',
-    body: 'On a fresh Debian or Ubuntu box. It installs Node, Postgres, Incus and Caddy, then asks for your hostname and operator email.',
+    body: 'On a fresh Debian or Ubuntu box. It asks for your hostname and operator email, then installs Node, Postgres, Incus and Caddy.',
   },
   {
     title: 'Point DNS at it',
