@@ -245,8 +245,9 @@ function Hero() {
             Open source · self-hosted
           </p>
 
-          <h1 className="mt-5 text-balance text-[2.6rem] leading-[1.06] font-semibold tracking-[-0.03em] sm:text-5xl lg:text-[3.5rem]">
-            Your own VPS panel. One command.
+          <h1 className="mt-5 text-[2.25rem] leading-[1.06] font-semibold tracking-[-0.03em] sm:text-5xl lg:text-[3.5rem]">
+            <span className="block">Your own VPS panel.</span>
+            <span className="block">One command.</span>
           </h1>
 
           <p className="mt-6 max-w-[46ch] text-pretty text-[16.5px] leading-relaxed text-white/60">
