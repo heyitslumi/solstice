@@ -374,8 +374,9 @@ ensure_service_user() {
 fetch_app() {
   if repo_present; then
     log "existing install at $APP_DIR — updating"
-    git -C "$APP_DIR" fetch --depth 1 origin "$BRANCH"
-    git -C "$APP_DIR" reset --hard "origin/$BRANCH"
+    # The repo is owned by the service user, so root must opt in explicitly.
+    git -c safe.directory="$APP_DIR" -C "$APP_DIR" fetch --depth 1 origin "$BRANCH"
+    git -c safe.directory="$APP_DIR" -C "$APP_DIR" reset --hard "origin/$BRANCH"
   else
     mkdir -p "$(dirname "$APP_DIR")"
     git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
