@@ -9017,6 +9017,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         skipCertValidation: config['mail_skip_cert_validation'] === 'true',
         heloDomain: config['mail_helo_domain'] || '',
         sendmailPath: config['mail_sendmail_path'] || '/usr/sbin/sendmail',
+        relayToken: config['mail_relay_token'] || '',
       },
       storage: {
         driver: config['storage_driver'] || 'local',
@@ -9265,6 +9266,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       skipCertValidation: 'mail_skip_cert_validation',
       heloDomain: 'mail_helo_domain',
       sendmailPath: 'mail_sendmail_path',
+      relayToken: 'mail_relay_token',
     }
 
     for (const [key, dbKey] of Object.entries(mapping)) {
@@ -9315,6 +9317,34 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     } catch (err: any) {
       console.error('[mail test error]', err)
       return c.json({ message: `Failed to send test email: ${err?.message || 'SMTP error'}` }, 500)
+    }
+  })
+
+  app.post('/api/admin/mail/relay/register', async (c) => {
+    const admin = await requireAdmin(c)
+    if (!admin) return c.json({ message: 'Forbidden.' }, 403)
+
+    const config = await getSystemSettings()
+    const domain = new URL(publicOrigin(config)).hostname
+
+    try {
+      const res = await fetch('https://mail.solstice.host/v1/relay/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, adminEmail: admin.user.email }),
+      })
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; token?: string; error?: string } | null
+      if (!res.ok || !data?.ok || !data.token) {
+        return c.json({ message: data?.error || `Relay registration failed (${res.status}).` }, 502)
+      }
+      await query(
+        `INSERT INTO system_settings (key, value) VALUES ('mail_relay_token', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [data.token],
+      )
+      return c.json({ ok: true, token: data.token })
+    } catch (err: any) {
+      return c.json({ message: `Relay registration failed: ${err?.message || 'network error'}` }, 502)
     }
   })
 

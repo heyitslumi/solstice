@@ -118,7 +118,7 @@ export function AdminSettingsPage() {
   const [showSecretKey, setShowSecretKey] = useState(false)
 
   // Mail Settings Form State
-  const [mailProvider, setMailProvider] = useState<'smtp' | 'none' | 'sendmail' | 'filesystem'>('smtp')
+  const [mailProvider, setMailProvider] = useState<'smtp' | 'none' | 'sendmail' | 'filesystem' | 'solstice'>('smtp')
   const [smtpHost, setSmtpHost] = useState('')
   const [smtpPort, setSmtpPort] = useState(587)
   const [tlsMode, setTlsMode] = useState<'STARTTLS' | 'TLS' | 'None'>('STARTTLS')
@@ -130,6 +130,8 @@ export function AdminSettingsPage() {
   const [mailFrom, setMailFrom] = useState('')
   const [mailFromName, setMailFromName] = useState('')
   const [sendmailPath, setSendmailPath] = useState('/usr/sbin/sendmail')
+  const [relayToken, setRelayToken] = useState('')
+  const [registeringRelay, setRegisteringRelay] = useState(false)
   const [testingMail, setTestingMail] = useState(false)
   const [testMailResult, setTestMailResult] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -208,6 +210,7 @@ export function AdminSettingsPage() {
       setSkipCertValidation(mail.skipCertValidation ?? false)
       setHeloDomain(mail.heloDomain || '')
       setSendmailPath(mail.sendmailPath || '/usr/sbin/sendmail')
+      setRelayToken(mail.relayToken || '')
 
       const captcha = res.data.captcha
       if (captcha) {
@@ -410,6 +413,7 @@ export function AdminSettingsPage() {
         skipCertValidation,
         heloDomain,
         sendmailPath,
+        relayToken,
       })
 
       if (!res.ok) {
@@ -1140,12 +1144,54 @@ export function AdminSettingsPage() {
                   onChange={(e) => setMailProvider(e.target.value as any)}
                   className="h-10 rounded-control border border-border bg-surface px-3 text-[13px] text-fg focus:border-sun-500 focus:outline-none"
                 >
+                  <option value="solstice">Solstice Cloud Relay (Recommended)</option>
                   <option value="none">None</option>
                   <option value="smtp">SMTP</option>
                   <option value="sendmail">Sendmail Command</option>
                   <option value="filesystem">Filesystem</option>
                 </select>
               </div>
+
+              {mailProvider === 'solstice' && (
+                <div className="flex flex-col gap-3 rounded-control border border-border bg-surface-2 p-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[12px] font-medium text-fg">Solstice Cloud Relay</span>
+                    <span className="text-[11px] leading-relaxed text-fg-subtle">
+                      Zero-config transactional email, free for Solstice panels. Sends from <code className="font-mono">noreply@solstice.host</code> via our SES-backed relay — 30 emails/day, 5/minute. No SMTP server or SPF/DKIM setup needed.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={registeringRelay}
+                      onClick={async () => {
+                        setRegisteringRelay(true)
+                        setSaveError(null)
+                        try {
+                          const res = await api.adminRegisterMailRelay()
+                          if (res.ok) {
+                            setRelayToken(res.data.token)
+                            setTestMailResult({ ok: true, message: 'Relay token registered! Remember to save.' })
+                          } else {
+                            setTestMailResult({ ok: false, message: res.error?.message || 'Relay registration failed.' })
+                          }
+                        } finally {
+                          setRegisteringRelay(false)
+                        }
+                      }}
+                    >
+                      {registeringRelay ? 'Registering...' : relayToken ? 'Re-register Token' : 'Register Instance'}
+                    </Button>
+                    {relayToken && (
+                      <span className="truncate font-mono text-[11px] text-fg-subtle" title={relayToken}>
+                        {relayToken.slice(0, 12)}••••••••
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {mailProvider === 'smtp' && (
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-2">

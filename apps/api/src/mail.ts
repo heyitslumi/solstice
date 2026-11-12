@@ -30,13 +30,55 @@ export interface MailboxEntry {
 
 const DEFAULT_FROM = 'VPS Panel <no-reply@localhost>'
 
-export function mailTransportName(config?: Record<string, string>): 'smtp' | 'file' | 'sendmail' | 'none' {
+const RELAY_URL = 'https://mail.solstice.host/v1/relay/send'
+
+async function sendViaSolsticeRelay(
+  from: string,
+  message: MailMessage,
+  config: Record<string, string>,
+): Promise<void> {
+  const token = config['mail_relay_token']
+  if (!token) throw new Error('Solstice relay token is not configured (mail_relay_token).')
+
+  const fromName = config['mail_from_name'] || 'Solstice'
+  const replyTo = config['mail_reply_to'] || undefined
+
+  const res = await fetch(RELAY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+      fromName,
+      replyTo,
+    }),
+  })
+
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const data = (await res.json()) as { error?: string }
+      detail = data.error || ''
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    throw new Error(`Solstice mail relay error (${res.status}): ${detail || 'request failed'}`)
+  }
+}
+
+export function mailTransportName(config?: Record<string, string>): 'smtp' | 'file' | 'sendmail' | 'none' | 'relay' {
   if (config?.['mail_provider']) {
     const p = config['mail_provider']
     if (p === 'smtp') return 'smtp'
     if (p === 'filesystem') return 'file'
     if (p === 'sendmail') return 'sendmail'
     if (p === 'none') return 'none'
+    if (p === 'solstice') return 'relay'
   }
   return process.env.SMTP_URL ? 'smtp' : 'file'
 }
@@ -174,6 +216,11 @@ export async function sendMail(
   }
 
   const from = formatSender(config)
+
+  if (provider === 'solstice') {
+    await sendViaSolsticeRelay(from, message, config ?? {})
+    return { id, to: message.to, subject: message.subject, text: message.text }
+  }
 
   if (provider === 'smtp') {
     let transport: any

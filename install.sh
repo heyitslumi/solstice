@@ -172,6 +172,41 @@ while [ -z "$ADMIN_EMAIL" ]; do
   fi
 done
 
+# --- Email delivery --------------------------------------------------------
+MAIL_MODE="skip"   # relay | smtp | skip
+SMTP_HOST=""; SMTP_PORT="587"; SMTP_USER=""; SMTP_PASS=""; SMTP_TLS="STARTTLS"
+
+echo
+if [ "$HAVE_GUM" -eq 1 ]; then
+  MAIL_MODE=$(gum choose --header "Email delivery — how should the panel send mail?" \
+    "relay" "smtp" "skip") || MAIL_MODE="skip"
+else
+  echo "Email delivery:"
+  echo "  1) Solstice relay — instant, free, sends from noreply@solstice.host"
+  echo "  2) Own SMTP server"
+  echo "  3) Skip (mails land in $APP_DIR/data/mail/)"
+  read -rp "> [1] " pick
+  case "${pick:-1}" in
+    2) MAIL_MODE="smtp" ;;
+    3) MAIL_MODE="skip" ;;
+    *) MAIL_MODE="relay" ;;
+  esac
+fi
+
+if [ "$MAIL_MODE" = "smtp" ]; then
+  SMTP_HOST=$(ui_input "SMTP host" "smtp.example.com")
+  SMTP_PORT=$(ui_input "SMTP port" "587" "587")
+  SMTP_TLS=$(ui_choice "TLS mode" "STARTTLS" "TLS" "None")
+  SMTP_USER=$(ui_input "SMTP username (empty = no auth)" "user@example.com")
+  if [ -n "$SMTP_USER" ]; then
+    if [ "$HAVE_GUM" -eq 1 ]; then
+      SMTP_PASS=$(gum input --password --prompt "SMTP password " )
+    else
+      read -rsp "SMTP password: " SMTP_PASS; echo
+    fi
+  fi
+fi
+
 if ! ui_confirm "Install into $APP_DIR ${DOMAIN:+with domain $DOMAIN}${TUNNEL:+via quick tunnel}?"; then
   echo "aborted" >&2; exit 1
 fi
@@ -299,11 +334,34 @@ if [ -n "${TUNNEL_URL:-}" ]; then
     || echo "[install] (settings update deferred: API seeds them on boot, set Application URL in Settings)"
 fi
 
+# --- Mail provider into settings -------------------------------------------
+if [ "$MAIL_MODE" = "relay" ]; then
+  RELAY_DOMAIN="${DOMAIN:-$(echo "${TUNNEL_URL:-}" | sed -E 's#https://([^/]+).*#\1#')}"
+  echo "[install] registering with Solstice mail relay"
+  RELAY_TOKEN=$(curl -fsS -m 15 -X POST https://mail.solstice.host/v1/relay/register \
+    -H 'Content-Type: application/json' \
+    -d "{\"domain\": \"$RELAY_DOMAIN\", \"adminEmail\": \"$ADMIN_EMAIL\"}" 2>/dev/null \
+    | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d).token||"")}catch{console.log("")}})' 2>/dev/null || true)
+  if [ -n "$RELAY_TOKEN" ]; then
+    PGPASSWORD="$(echo "$DB_URL" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')" \
+    psql "$DB_URL" -q -c "INSERT INTO system_settings (key, value) VALUES ('mail_provider', 'solstice'), ('mail_relay_token', '$RELAY_TOKEN') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value" 2>/dev/null \
+      || echo "[install] (relay token deferred: set Provider = Solstice Cloud Relay in Settings > Mail)"
+  else
+    echo "[install] (relay unreachable: set Provider = Solstice Cloud Relay in Settings > Mail later)"
+  fi
+elif [ "$MAIL_MODE" = "smtp" ]; then
+  echo "[install] writing SMTP settings"
+  PGPASSWORD="$(echo "$DB_URL" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')" \
+  psql "$DB_URL" -q -c "INSERT INTO system_settings (key, value) VALUES ('mail_provider', 'smtp'), ('mail_smtp_host', '$SMTP_HOST'), ('mail_smtp_port', '$SMTP_PORT'), ('mail_smtp_user', '$SMTP_USER'), ('mail_smtp_pass', '$SMTP_PASS'), ('mail_tls_mode', '$SMTP_TLS') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value" 2>/dev/null \
+    || echo "[install] (SMTP settings deferred: configure in Settings > Mail)"
+fi
+
 echo
 if [ "$HAVE_GUM" -eq 1 ]; then
   gum style --border rounded --padding "0 2" --border-foreground 82 \
     "Done." \
     "Open ${TUNNEL_URL:-your domain} and register with $ADMIN_EMAIL" \
+    $([ "$MAIL_MODE" = "relay" ] && echo "Emails send via Solstice relay (noreply@solstice.host)." || true) \
     "No SMTP yet? The sign-in code lands in $APP_DIR/data/mail/ on the host." \
     "Review Settings (name, mail, captcha, legal URLs) as admin."
 else

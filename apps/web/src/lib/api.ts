@@ -284,6 +284,7 @@ export interface AdminSettings {
     skipCertValidation: boolean
     heloDomain: string
     sendmailPath: string
+    relayToken: string
   }
   storage: {
     driver: string
@@ -1412,6 +1413,10 @@ export const api = {
 
   adminTestMail(input?: { to?: string }) {
     return post<{ ok: true; message: string }>('/api/admin/mail/test', input ?? {})
+  },
+
+  adminRegisterMailRelay() {
+    return post<{ ok: true; token: string }>('/api/admin/mail/relay/register')
   },
 
   adminUpdateWebauthnSettings(input: Partial<AdminSettings['webauthn']>) {
