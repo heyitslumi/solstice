@@ -1,91 +1,92 @@
 #!/usr/bin/env bash
-# Panel installer: Debian 12/13 or Ubuntu 22.04/24.04, run as root from the repo root.
+# Solstice panel installer.
 #
+# One-liner:
+#   curl -fsSL https://solstice.host/install.sh | sudo bash
+#
+# Or from a clone:
 #   sudo ./install.sh --domain panel.example.com --admin-email you@example.com
-#   sudo ./install.sh --tunnel --admin-email you@example.com
 #
-# Flags (all optional in an interactive terminal — gum walks you through it):
-#   --domain HOST     public hostname served by Caddy with automatic TLS
-#   --tunnel          skip Caddy; expose via a Cloudflare quick tunnel instead
-#   --admin-email     operator email; admin immediately after registering
-#   --db-url URL      reuse an existing Postgres (default: create local one)
-#   --no-incus        skip Incus install/init (panel only, no local workloads)
-#   --app-dir DIR     install target (default: current repo directory)
-#   --yes             answer yes to every confirmation (non-interactive)
-set -euo pipefail
+# Flags (all optional; interactive prompts fill the gaps):
+#   --domain HOST          public hostname served by Caddy with automatic TLS
+#   --tunnel               skip Caddy; expose via a Cloudflare quick tunnel
+#   --admin-email EMAIL    operator email; becomes admin on first registration
+#   --mail relay|smtp      email delivery (default: relay = Solstice Cloud Relay)
+#   --smtp-host HOST       SMTP server hostname (with --mail smtp)
+#   --smtp-port PORT       SMTP port (default 587)
+#   --smtp-user USER       SMTP username (empty = no auth)
+#   --smtp-pass PASS       SMTP password
+#   --smtp-tls MODE        STARTTLS | TLS | None (default STARTTLS)
+#   --db-url URL           reuse an existing Postgres (default: install local)
+#   --no-incus             skip Incus install/init (panel only, no workloads)
+#   --no-caddy             do not touch Caddy; you run your own proxy
+#   --app-dir DIR          install target (default /opt/solstice, or the clone)
+#   --branch NAME          git branch to install (default main)
+#   --yes                  answer yes to every confirmation
+#   --upgrade              update an existing install (pull, build, restart)
+#   --uninstall            stop and remove services (add --purge to delete data)
+#   -h, --help             show this help
+set -Eeuo pipefail
+
+REPO_URL="https://github.com/heyitslumi/solstice.git"
+BRANCH="main"
+SERVICE_USER="solstice"
+API_PORT="${SOLSTICE_API_PORT:-8788}"
+WEB_PORT="${SOLSTICE_WEB_PORT:-5173}"
+LOG_FILE="${SOLSTICE_LOG:-/var/log/solstice-install.log}"
 
 DOMAIN=""
 TUNNEL=0
 ADMIN_EMAIL=""
 DB_URL=""
 INSTALL_INCUS=1
-APP_DIR="$(pwd)"
+INSTALL_CADDY=1
+APP_DIR=""
 ASSUME_YES=0
+MAIL_MODE="ask"
+SMTP_HOST=""; SMTP_PORT="587"; SMTP_USER=""; SMTP_PASS=""; SMTP_TLS="STARTTLS"
+UPGRADE=0
+UNINSTALL=0
+PURGE=0
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --domain) DOMAIN="$2"; shift 2 ;;
-    --tunnel) TUNNEL=1; shift 1 ;;
-    --admin-email) ADMIN_EMAIL="$2"; shift 2 ;;
-    --db-url) DB_URL="$2"; shift 2 ;;
-    --no-incus) INSTALL_INCUS=0; shift 1 ;;
-    --app-dir) APP_DIR="$2"; shift 2 ;;
-    --yes) ASSUME_YES=1; shift 1 ;;
-    *) echo "unknown flag: $1" >&2; exit 1 ;;
-  esac
-done
+# ---------------------------------------------------------------------------
+# Output helpers
+# ---------------------------------------------------------------------------
+log() { printf '[solstice] %s\n' "$*"; printf '[%s] %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; }
+warn() { printf '[solstice] warning: %s\n' "$*" >&2; printf '[%s] WARN %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; }
+die() { printf '[solstice] error: %s\n' "$*" >&2; printf '[%s] ERROR %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; exit 1; }
 
-if [ "$(id -u)" -ne 0 ]; then echo "run as root" >&2; exit 1; fi
-if [ ! -f "$APP_DIR/package.json" ] || [ ! -d "$APP_DIR/apps/api" ]; then
-  echo "run from the repo root (or pass --app-dir)" >&2; exit 1
-fi
+run_step() { # $1=label, rest=command
+  local label="$1"; shift
+  local start=$SECONDS
+  log "→ $label"
+  if "$@" >>"$LOG_FILE" 2>&1; then
+    log "✓ $label ($((SECONDS - start))s)"
+  else
+    local rc=$?
+    log "✗ $label failed (exit $rc)"
+    echo "--- last 25 lines of $LOG_FILE ---" >&2
+    tail -n 25 "$LOG_FILE" >&2 || true
+    echo "Full log: $LOG_FILE" >&2
+    exit "$rc"
+  fi
+}
 
-export DEBIAN_FRONTEND=noninteractive
-
-# --- Pretty prompts (gum when interactive, plain fallbacks otherwise) -------
+# ---------------------------------------------------------------------------
+# Prompt helpers (gum when interactive, plain read otherwise)
+# ---------------------------------------------------------------------------
 HAVE_GUM=0
-if [ -t 0 ] && [ -t 1 ]; then
-  if ! command -v gum >/dev/null 2>&1; then
-    echo "[install] gum (pretty prompts)"
-    mkdir -p /etc/apt/keyrings
-    curl -fsSL https://repo.charm.sh/apt/gpg.key | gpg --dearmor -o /etc/apt/keyrings/charm.gpg
-    echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" > /etc/apt/sources.list.d/charm.list
-    apt-get update -qq
-    apt-get install -y -qq gum || echo "[install] gum unavailable, using plain prompts"
-  fi
-  command -v gum >/dev/null 2>&1 && HAVE_GUM=1
-fi
+have_tty() { [ -t 0 ] && [ -t 1 ]; }
 
-ui_header() {
-  if [ "$HAVE_GUM" -eq 1 ]; then
-    gum style --border rounded --padding "0 2" --border-foreground 212 "VPS Panel installer"
-  else
-    echo "=== VPS Panel installer ==="
+ui_confirm() { # $1=question -> 0=yes
+  [ "$ASSUME_YES" -eq 1 ] && return 0
+  if [ "$HAVE_GUM" -eq 1 ]; then gum confirm "$1"; else
+    local ans; read -rp "$1 [Y/n] " ans
+    [[ "${ans:-Y}" =~ ^[Yy]$ ]]
   fi
 }
 
-ui_choose() { # $1=header, $2...=options -> prints choice
-  local header="$1"; shift
-  if [ "$HAVE_GUM" -eq 1 ]; then
-    gum choose --header "$header" "$@"
-  else
-    echo "$header" >&2
-    local i=1
-    for opt in "$@"; do echo "  $i) $opt" >&2; i=$((i + 1)); done
-    local pick
-    read -rp "> [1] " pick
-    pick="${pick:-1}"
-    # print the Nth option
-    i=1
-    for opt in "$@"; do
-      if [ "$i" = "$pick" ]; then echo "$opt"; return; fi
-      i=$((i + 1))
-    done
-    echo "$1"
-  fi
-}
-
-ui_input() { # $1=prompt $2=placeholder $3=default -> prints value
+ui_input() { # $1=prompt $2=placeholder $3=default
   local prompt="$1" placeholder="${2:-}" default="${3:-}"
   if [ "$HAVE_GUM" -eq 1 ]; then
     if [ -n "$default" ]; then
@@ -95,160 +96,257 @@ ui_input() { # $1=prompt $2=placeholder $3=default -> prints value
     fi
   else
     local val
-    if [ -n "$default" ]; then
-      read -rp "$prompt [$default]: " val
-      echo "${val:-$default}"
-    else
-      read -rp "$prompt: " val
-      echo "$val"
-    fi
+    if [ -n "$default" ]; then read -rp "$prompt [$default]: " val; echo "${val:-$default}"
+    else read -rp "$prompt: " val; echo "$val"; fi
   fi
 }
 
-ui_confirm() { # $1=question -> 0=yes
-  if [ "$ASSUME_YES" -eq 1 ]; then return 0; fi
+ui_password() { # $1=prompt
+  if [ "$HAVE_GUM" -eq 1 ]; then gum input --password --prompt "$1 "
+  else local val; read -rsp "$1: " val; echo; echo "$val"; fi
+}
+
+ui_choose() { # $1=header, rest=options -> prints choice
+  local header="$1"; shift
   if [ "$HAVE_GUM" -eq 1 ]; then
-    gum confirm "$1"
+    gum choose --header "$header" "$@"
   else
-    local ans
-    read -rp "$1 [Y/n] " ans
-    [[ "${ans:-Y}" =~ ^[Yy]$ ]]
+    echo "$header" >&2
+    local i=1 opt
+    for opt in "$@"; do echo "  $i) $opt" >&2; i=$((i + 1)); done
+    local pick; read -rp "> [1] " pick; pick="${pick:-1}"
+    i=1
+    for opt in "$@"; do [ "$i" = "$pick" ] && { echo "$opt"; return; }; i=$((i + 1)); done
+    echo "$1"
   fi
 }
 
-ui_spin() { # $1=title, rest=command
-  local title="$1"; shift
-  if [ "$HAVE_GUM" -eq 1 ]; then
-    gum spin --title "$title" -- "$@"
-  else
-    echo "[install] $title"
-    "$@"
-  fi
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+usage() {
+  cat <<'EOF'
+Solstice panel installer
+
+  curl -fsSL https://solstice.host/install.sh | sudo bash
+  sudo ./install.sh --domain panel.example.com --admin-email you@example.com
+
+Flags:
+  --domain HOST          public hostname served by Caddy with automatic TLS
+  --tunnel               skip Caddy; expose via a Cloudflare quick tunnel
+  --admin-email EMAIL    operator email; becomes admin on first registration
+  --mail relay|smtp      email delivery (default: ask, relay when non-interactive)
+  --smtp-host HOST       SMTP server hostname (with --mail smtp)
+  --smtp-port PORT       SMTP port (default 587)
+  --smtp-user USER       SMTP username (empty = no auth)
+  --smtp-pass PASS       SMTP password
+  --smtp-tls MODE        STARTTLS | TLS | None (default STARTTLS)
+  --db-url URL           reuse an existing Postgres (default: install local)
+  --no-incus             skip Incus install/init (panel only, no workloads)
+  --no-caddy             do not touch Caddy; you run your own proxy
+  --app-dir DIR          install target (default /opt/solstice, or the clone)
+  --branch NAME          git branch to install (default main)
+  --yes                  answer yes to every confirmation
+  --upgrade              update an existing install (pull, build, restart)
+  --uninstall            stop and remove services (add --purge to delete data)
+  -h, --help             show this help
+EOF
 }
 
-ui_ok() {
-  if [ "$HAVE_GUM" -eq 1 ]; then
-    gum style --foreground 82 "✓ $1"
-  else
-    echo "ok: $1"
-  fi
-}
-
-ui_warn() {
-  if [ "$HAVE_GUM" -eq 1 ]; then
-    gum style --foreground 214 "! $1"
-  else
-    echo "warn: $1" >&2
-  fi
-}
-
-# --- Interactive answers for anything flags didn't cover ---------------------
-ui_header
-
-if [ -z "$DOMAIN" ] && [ "$TUNNEL" -eq 0 ]; then
-  if [ -t 0 ]; then
-    MODE=$(ui_choose "How should the panel be reachable?" "Custom domain (Caddy + automatic TLS)" "Quick tunnel (trycloudflare URL, zero setup)")
-    if [[ "$MODE" == Quick* ]]; then
-      TUNNEL=1
-    else
-      while [ -z "$DOMAIN" ]; do
-        DOMAIN=$(ui_input "Public hostname" "panel.example.com")
-      done
-    fi
-  else
-    echo "pass --domain HOST or --tunnel" >&2; exit 1
-  fi
-fi
-
-while [ -z "$ADMIN_EMAIL" ]; do
-  if [ -t 0 ]; then
-    ADMIN_EMAIL=$(ui_input "Operator email" "you@example.com")
-    if ! [[ "$ADMIN_EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]]; then
-      ui_warn "that doesn't look like an email address"
-      ADMIN_EMAIL=""
-    fi
-  else
-    echo "pass --admin-email you@example.com" >&2; exit 1
-  fi
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --domain) DOMAIN="${2:-}"; shift 2 ;;
+    --tunnel) TUNNEL=1; shift ;;
+    --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
+    --mail) MAIL_MODE="${2:-}"; shift 2 ;;
+    --smtp-host) SMTP_HOST="${2:-}"; shift 2 ;;
+    --smtp-port) SMTP_PORT="${2:-587}"; shift 2 ;;
+    --smtp-user) SMTP_USER="${2:-}"; shift 2 ;;
+    --smtp-pass) SMTP_PASS="${2:-}"; shift 2 ;;
+    --smtp-tls) SMTP_TLS="${2:-STARTTLS}"; shift 2 ;;
+    --db-url) DB_URL="${2:-}"; shift 2 ;;
+    --no-incus) INSTALL_INCUS=0; shift ;;
+    --no-caddy) INSTALL_CADDY=0; shift ;;
+    --app-dir) APP_DIR="${2:-}"; shift 2 ;;
+    --branch) BRANCH="${2:-main}"; shift 2 ;;
+    --yes) ASSUME_YES=1; shift ;;
+    --upgrade) UPGRADE=1; shift ;;
+    --uninstall) UNINSTALL=1; shift ;;
+    --purge) PURGE=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown flag: $1 (see --help)" ;;
+  esac
 done
 
-# --- Email delivery --------------------------------------------------------
-MAIL_MODE="relay"   # relay | smtp
-SMTP_HOST=""; SMTP_PORT="587"; SMTP_USER=""; SMTP_PASS=""; SMTP_TLS="STARTTLS"
+[ "$(id -u)" -eq 0 ] || die "run as root (or with sudo)"
 
-echo
-if [ "$HAVE_GUM" -eq 1 ]; then
-  MAIL_MODE=$(gum choose --header "Email delivery — how should the panel send mail?" \
-    "relay" "smtp") || MAIL_MODE="relay"
-else
-  echo "Email delivery:"
-  echo "  1) Solstice relay — instant, free, sends from noreply@solstice.host"
-  echo "  2) Own SMTP server"
-  read -rp "> [1] " pick
-  case "${pick:-1}" in
-    2) MAIL_MODE="smtp" ;;
-    *) MAIL_MODE="relay" ;;
-  esac
+mkdir -p "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+chmod 600 "$LOG_FILE"
+
+# Piped installs consume stdin; hand the terminal back so prompts still work.
+if [ ! -t 0 ] && [ -c /dev/tty ] && { : </dev/tty; } 2>/dev/null; then
+  exec </dev/tty
 fi
 
-if [ "$MAIL_MODE" = "smtp" ]; then
-  SMTP_HOST=$(ui_input "SMTP host" "smtp.example.com")
-  SMTP_PORT=$(ui_input "SMTP port" "587" "587")
-  SMTP_TLS=$(ui_choice "TLS mode" "STARTTLS" "TLS" "None")
-  SMTP_USER=$(ui_input "SMTP username (empty = no auth)" "user@example.com")
-  if [ -n "$SMTP_USER" ]; then
-    if [ "$HAVE_GUM" -eq 1 ]; then
-      SMTP_PASS=$(gum input --password --prompt "SMTP password " )
-    else
-      read -rsp "SMTP password: " SMTP_PASS; echo
-    fi
+# ---------------------------------------------------------------------------
+# Resolve install directory
+# ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd || true)"
+if [ -z "$APP_DIR" ]; then
+  if [ -n "${SCRIPT_DIR:-}" ] && [ -f "$SCRIPT_DIR/package.json" ] && [ -d "$SCRIPT_DIR/apps/api" ]; then
+    APP_DIR="$SCRIPT_DIR"
+  else
+    APP_DIR="/opt/solstice"
   fi
 fi
 
-if ! ui_confirm "Install into $APP_DIR ${DOMAIN:+with domain $DOMAIN}${TUNNEL:+via quick tunnel}?"; then
-  echo "aborted" >&2; exit 1
-fi
+DATA_DIR="/var/lib/solstice"
+CONFIG_DIR="/etc/solstice"
+ENV_FILE="$CONFIG_DIR/api.env"
+INSTALL_META="$CONFIG_DIR/install.env"
 
-apt-get update -qq
+repo_present() { [ -f "$APP_DIR/package.json" ] && [ -d "$APP_DIR/apps/api" ]; }
 
-# --- Node 24 ---------------------------------------------------------------
-if ! command -v node >/dev/null || ! node --version | grep -qE "^v(24|[3-9][0-9])"; then
-  ui_spin "Node 24" bash -c 'curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -y -qq nodejs'
-fi
+# ---------------------------------------------------------------------------
+# Uninstall
+# ---------------------------------------------------------------------------
+uninstall() {
+  log "removing services"
+  systemctl disable --now solstice-api.service solstice-web.service solstice-tunnel.service 2>/dev/null || true
+  rm -f /etc/systemd/system/solstice-api.service \
+        /etc/systemd/system/solstice-web.service \
+        /etc/systemd/system/solstice-tunnel.service \
+        /usr/local/bin/solstice-tunnel.sh \
+        /usr/local/bin/solstice
+  systemctl daemon-reload
+  if [ "$PURGE" -eq 1 ]; then
+    log "purging app + data"
+    rm -rf "$APP_DIR" "$DATA_DIR" "$CONFIG_DIR"
+    userdel "$SERVICE_USER" 2>/dev/null || true
+  else
+    log "kept $APP_DIR, $DATA_DIR and $CONFIG_DIR (use --purge to delete)"
+  fi
+  log "done"
+}
 
-# --- Postgres --------------------------------------------------------------
-if [ -z "$DB_URL" ]; then
-  ui_spin "Postgres" apt-get install -y -qq postgresql openssl
-  DB_PASS="$(openssl rand -hex 24)"
-  su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='panel'\"" | grep -q 1 \
-    || su postgres -c "psql -c \"CREATE USER panel WITH PASSWORD '$DB_PASS'\""
-  su postgres -c "psql -c \"ALTER USER panel WITH PASSWORD '$DB_PASS'\""
-  su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='panel'\"" | grep -q 1 \
-    || su postgres -c "createdb -O panel panel"
-  DB_URL="postgres://panel:${DB_PASS}@127.0.0.1:5432/panel"
-fi
+# ---------------------------------------------------------------------------
+# Preflight
+# ---------------------------------------------------------------------------
+preflight() {
+  [ -f /etc/os-release ] || die "unsupported system (no /etc/os-release)"
+  . /etc/os-release
+  case "${ID:-}" in
+    debian|ubuntu) : ;;
+    *) die "unsupported distro '${ID:-unknown}' (Debian 12/13 or Ubuntu 22.04/24.04 required)" ;;
+  esac
 
-# --- Incus -----------------------------------------------------------------
-if [ "$INSTALL_INCUS" -eq 1 ]; then
+  local arch; arch="$(dpkg --print-architecture)"
+  case "$arch" in
+    amd64|arm64) : ;;
+    *) die "unsupported architecture: $arch" ;;
+  esac
+
+  command -v systemctl >/dev/null || die "systemd is required"
+
+  local mem_mb disk_gb
+  mem_mb="$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)"
+  disk_gb="$(df -Pk / | awk 'NR==2 {print int($4/1024/1024)}')"
+  [ "$mem_mb" -ge 900 ] || warn "only ${mem_mb}MB RAM; 1GB+ recommended"
+  [ "$disk_gb" -ge 4 ] || die "need at least 4GB free disk (have ${disk_gb}GB)"
+
+  if [ -e /dev/kvm ]; then
+    log "KVM available (/dev/kvm)"
+  else
+    warn "no /dev/kvm — KVM instances will not work (containers still will)"
+  fi
+
+  if [ "$TUNNEL" -eq 0 ] && [ "$INSTALL_CADDY" -eq 1 ]; then
+    local p
+    for p in 80 443; do
+      if ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$p$"; then
+        local owner
+        owner="$(ss -ltnp 2>/dev/null | grep -E "[:.]$p\s" | sed -n 's/.*users:(("\([^"]*\)".*/\1/p' | head -1)"
+        if [ "$owner" != "caddy" ]; then
+          die "port $p is already in use${owner:+ by $owner}; stop it or pass --no-caddy"
+        fi
+      fi
+    done
+  fi
+
+  if [ -n "$DOMAIN" ]; then
+    local resolved
+    resolved="$(getent ahosts "$DOMAIN" 2>/dev/null | awk 'NR==1 {print $1}')"
+    if [ -z "$resolved" ]; then
+      warn "$DOMAIN does not resolve yet; TLS issuance will fail until DNS points here"
+    else
+      log "$DOMAIN resolves to $resolved"
+    fi
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+install_deps() {
+  apt-get update -qq
+  apt-get install -y -qq curl ca-certificates git gnupg lsb-release openssl jq postgresql-client
+
+  if have_tty && ! command -v gum >/dev/null 2>&1; then
+    mkdir -p /etc/apt/keyrings
+    curl -fsSL https://repo.charm.sh/apt/gpg.key | gpg --dearmor -o /etc/apt/keyrings/charm.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" > /etc/apt/sources.list.d/charm.list
+    apt-get update -qq
+    apt-get install -y -qq gum || warn "gum unavailable, using plain prompts"
+  fi
+  have_tty && command -v gum >/dev/null 2>&1 && HAVE_GUM=1
+
+  if ! command -v node >/dev/null || ! node --version | grep -qE "^v(24|[3-9][0-9])"; then
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
+    apt-get install -y -qq nodejs
+  fi
+  log "node $(node --version)"
+}
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+setup_database() {
+  if [ -z "$DB_URL" ]; then
+    apt-get install -y -qq postgresql
+    local pass; pass="$(openssl rand -hex 24)"
+    su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='panel'\"" | grep -q 1 \
+      || su postgres -c "psql -c \"CREATE USER panel WITH PASSWORD '$pass'\""
+    su postgres -c "psql -c \"ALTER USER panel WITH PASSWORD '$pass'\""
+    su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='panel'\"" | grep -q 1 \
+      || su postgres -c "createdb -O panel panel"
+    DB_URL="postgres://panel:${pass}@127.0.0.1:5432/panel"
+  fi
+  psql "$DB_URL" -tAc 'SELECT 1' >/dev/null || die "cannot connect to $DB_URL"
+}
+
+# ---------------------------------------------------------------------------
+# Incus
+# ---------------------------------------------------------------------------
+setup_incus() {
+  [ "$INSTALL_INCUS" -eq 1 ] || { log "skipping Incus (--no-incus)"; return 0; }
+
   if ! command -v incus >/dev/null; then
-    ui_spin "Incus (zabbly)" bash -c '
-      curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc
-      cat > /etc/apt/sources.list.d/zabbly-incus-stable.sources <<EOF
+    curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc
+    cat > /etc/apt/sources.list.d/zabbly-incus-stable.sources <<EOF
 Enabled: yes
 Types: deb
 URIs: https://pkgs.zabbly.com/incus/stable
-Suites: {{ codename }}
+Suites: $(. /etc/os-release && echo "$VERSION_CODENAME")
 Components: main
 Architectures: $(dpkg --print-architecture)
 Signed-By: /etc/apt/keyrings/zabbly.asc
 EOF
-      sed -i "s/{{ codename }}/$(. /etc/os-release && echo "$VERSION_CODENAME")/" /etc/apt/sources.list.d/zabbly-incus-stable.sources
-      apt-get update -qq
-      apt-get install -y -qq incus
-    '
+    apt-get update -qq
+    apt-get install -y -qq incus
   fi
+
   if ! incus info >/dev/null 2>&1; then
-    echo "[install] incus init (defaults: dir pool, incusbr0)"
     incus admin init --auto || true
   fi
   # init --auto can half-fail (esp. nested); ensure pool + network + profile exist.
@@ -258,112 +356,386 @@ EOF
     || incus profile device add default root disk path=/ pool=default
   incus profile device show default eth0 >/dev/null 2>&1 \
     || incus profile device add default eth0 nic network=incusbr0 name=eth0
-fi
+}
 
-# --- App -------------------------------------------------------------------
-cd "$APP_DIR"
-ui_spin "Dependencies" sudo -u "${SUDO_USER:-root}" npm ci --no-audit --no-fund
-ui_spin "Web build" sudo -u "${SUDO_USER:-root}" npm run build --workspace @solstice/web
+# ---------------------------------------------------------------------------
+# Service user + app
+# ---------------------------------------------------------------------------
+ensure_service_user() {
+  if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+    useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
+  fi
+  # Incus socket access for the panel.
+  if getent group incus-admin >/dev/null 2>&1; then
+    usermod -aG incus-admin "$SERVICE_USER"
+  fi
+}
 
-if [ ! -f apps/api/.env ]; then
-  echo "[install] writing apps/api/.env"
-  cat > apps/api/.env <<EOF
-PORT=8788
+fetch_app() {
+  if repo_present; then
+    log "existing install at $APP_DIR — updating"
+    git -C "$APP_DIR" fetch --depth 1 origin "$BRANCH"
+    git -C "$APP_DIR" reset --hard "origin/$BRANCH"
+  else
+    mkdir -p "$(dirname "$APP_DIR")"
+    git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
+  fi
+}
+
+build_app() {
+  cd "$APP_DIR"
+  npm ci --no-audit --no-fund
+  npm run build --workspace @solstice/web
+  mkdir -p "$DATA_DIR/mail" "$DATA_DIR/uploads" "$CONFIG_DIR"
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR"
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR"
+  chmod 750 "$DATA_DIR" "$CONFIG_DIR"
+}
+
+write_env() {
+  if [ -f "$ENV_FILE" ]; then
+    log "keeping existing $ENV_FILE"
+    return 0
+  fi
+  umask 077
+  cat > "$ENV_FILE" <<EOF
+PORT=$API_PORT
 DATABASE_URL=$DB_URL
 ADMIN_EMAILS=$ADMIN_EMAIL
 TRUST_PROXY=1
+NODE_ENV=production
+MAIL_DIR=$DATA_DIR/mail
+STORAGE_LOCAL_DIR=$DATA_DIR/uploads
 EOF
-  chmod 600 apps/api/.env
-else
-  echo "[install] apps/api/.env exists, leaving it alone"
-fi
+  chown root:root "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+}
 
-echo "[install] systemd units"
-mkdir -p "$APP_DIR/data"
-sed "s#__APP_DIR__#$APP_DIR#g" deploy/solstice-api.service > /etc/systemd/system/solstice-api.service
-systemctl daemon-reload
-systemctl enable --now solstice-api.service
+write_meta() {
+  umask 077
+  cat > "$INSTALL_META" <<EOF
+APP_DIR=$APP_DIR
+DOMAIN=$DOMAIN
+TUNNEL=$TUNNEL
+BRANCH=$BRANCH
+MAIL_MODE=$MAIL_MODE
+EOF
+  chmod 600 "$INSTALL_META"
+}
 
-# --- Frontend --------------------------------------------------------------
-if [ "$TUNNEL" -eq 1 ]; then
-  echo "[install] cloudflared quick tunnel"
+install_units() {
+  cd "$APP_DIR"
+  sed -e "s#__APP_DIR__#$APP_DIR#g" -e "s#__API_PORT__#$API_PORT#g" -e "s#__SERVICE_USER__#$SERVICE_USER#g" \
+    deploy/solstice-api.service > /etc/systemd/system/solstice-api.service
+  sed -e "s#__APP_DIR__#$APP_DIR#g" -e "s#__WEB_PORT__#$WEB_PORT#g" -e "s#__SERVICE_USER__#$SERVICE_USER#g" \
+    deploy/solstice-web.service > /etc/systemd/system/solstice-web.service
+  sed -e "s#__APP_DIR__#$APP_DIR#g" \
+    deploy/solstice-tunnel.service > /etc/systemd/system/solstice-tunnel.service
+  sed -e "s#__APP_DIR__#$APP_DIR#g" scripts/tunnel.sh > /usr/local/bin/solstice-tunnel.sh
+  chmod +x /usr/local/bin/solstice-tunnel.sh
+  systemctl daemon-reload
+}
+
+start_api() {
+  systemctl enable --now solstice-api.service
+  local i
+  for i in $(seq 1 30); do
+    if curl -fsS "http://127.0.0.1:$API_PORT/api/health" >/dev/null 2>&1; then
+      log "api healthy"
+      return 0
+    fi
+    sleep 1
+  done
+  journalctl -u solstice-api.service -n 30 --no-pager >&2 || true
+  die "API did not become healthy on port $API_PORT"
+}
+
+# ---------------------------------------------------------------------------
+# Reverse proxy
+# ---------------------------------------------------------------------------
+setup_caddy() {
+  if ! command -v caddy >/dev/null; then
+    curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main" > /etc/apt/sources.list.d/caddy-stable.list
+    apt-get update -qq
+    apt-get install -y -qq caddy
+  fi
+
+  sed -e "s#__DOMAIN__#$DOMAIN#g" -e "s#__APP_DIR__#$APP_DIR#g" deploy/Caddyfile > /etc/caddy/Caddyfile
+
+  # Caddy runs as its own user: make sure it can actually read the build.
+  if ! sudo -u caddy test -r "$APP_DIR/apps/web/dist/index.html" 2>/dev/null; then
+    log "fixing read permissions for caddy"
+    chmod -R a+rX "$APP_DIR/apps/web/dist"
+    local d; d="$APP_DIR"
+    while [ "$d" != "/" ]; do chmod a+x "$d" 2>/dev/null || true; d="$(dirname "$d")"; done
+  fi
+
+  caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1 \
+    || { caddy validate --config /etc/caddy/Caddyfile; die "invalid Caddyfile"; }
+
+  systemctl enable caddy >/dev/null 2>&1 || true
+  systemctl restart caddy
+  systemctl is-active --quiet caddy || die "caddy failed to start (journalctl -u caddy)"
+}
+
+setup_tunnel() {
   if ! command -v cloudflared >/dev/null; then
     curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
     dpkg -i /tmp/cloudflared.deb || apt-get install -f -y -qq
   fi
-  sed "s#__APP_DIR__#$APP_DIR#g" deploy/solstice-web.service > /etc/systemd/system/solstice-web.service
-  sed "s#__APP_DIR__#$APP_DIR#g" deploy/solstice-tunnel.service > /etc/systemd/system/solstice-tunnel.service
-  sed "s#__APP_DIR__#$APP_DIR#g" scripts/tunnel.sh > /usr/local/bin/solstice-tunnel.sh
-  chmod +x /usr/local/bin/solstice-tunnel.sh
-  systemctl daemon-reload
   systemctl enable --now solstice-web.service
   systemctl enable --now solstice-tunnel.service
-  echo "[install] waiting for tunnel URL..."
   TUNNEL_URL=""
-  for _ in $(seq 1 30); do
-    TUNNEL_URL=$(journalctl -u solstice-tunnel.service --no-pager -n 50 2>/dev/null | grep -aoE "https://[a-z0-9-]+\.trycloudflare\.com" | head -1)
+  local i
+  for i in $(seq 1 30); do
+    TUNNEL_URL="$(journalctl -u solstice-tunnel.service --no-pager -n 80 2>/dev/null | grep -aoE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1)"
     [ -n "$TUNNEL_URL" ] && break
     sleep 2
   done
-  echo "TUNNEL_URL=$TUNNEL_URL"
-else
-  if [ -f /etc/caddy/Caddyfile ] && ! ui_confirm "Overwrite /etc/caddy/Caddyfile?"; then
-    echo "[install] keeping existing Caddyfile; make sure it proxies ${DOMAIN} (see deploy/Caddyfile)"
-  else
-    echo "[install] caddy ($DOMAIN)"
-    if ! command -v caddy >/dev/null; then
-      curl -fsSL https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-      echo "deb [signed-by=/usr/share/keyrings/caddy-stable-archive-keyring.gpg] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main" > /etc/apt/sources.list.d/caddy-stable.list
-      apt-get update -qq
-      apt-get install -y -qq caddy
+  [ -n "$TUNNEL_URL" ] || die "quick tunnel did not come up (journalctl -u solstice-tunnel)"
+  log "tunnel URL: $TUNNEL_URL"
+}
+
+# ---------------------------------------------------------------------------
+# Settings (public URL + mail)
+# ---------------------------------------------------------------------------
+sql_escape() { printf '%s' "$1" | sed "s/'/''/g"; }
+
+write_settings() {
+  local url="$1"
+  [ -n "$url" ] || return 0
+  local host="${url#https://}"
+  psql "$DB_URL" -q -c "INSERT INTO system_settings (key, value) VALUES
+    ('app_url', '$(sql_escape "$url")'),
+    ('webauthn_origin', '$(sql_escape "$url")'),
+    ('webauthn_rp_id', '$(sql_escape "$host")')
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value" \
+    || warn "could not write public URL to settings (set it in Settings → Application)"
+}
+
+write_mail_settings() {
+  local relay_domain="${DOMAIN:-$(echo "${TUNNEL_URL:-}" | sed -E 's#https://([^/]+).*#\1#')}"
+  if [ "$MAIL_MODE" = "relay" ]; then
+    log "registering with Solstice mail relay"
+    local token
+    token="$(curl -fsS -m 15 -X POST https://mail.solstice.host/v1/relay/register \
+      -H 'Content-Type: application/json' \
+      -d "{\"domain\": \"$(sql_escape "$relay_domain")\", \"adminEmail\": \"$(sql_escape "$ADMIN_EMAIL")\"}" 2>/dev/null \
+      | jq -r '.token // empty' 2>/dev/null || true)"
+    if [ -n "$token" ]; then
+      psql "$DB_URL" -q -c "INSERT INTO system_settings (key, value) VALUES
+        ('mail_provider', 'solstice'), ('mail_relay_token', '$(sql_escape "$token")')
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value" \
+        || warn "relay token not saved; set it in Settings → Mail"
+      log "mail relay configured"
+    else
+      warn "relay unreachable; configure Settings → Mail later"
     fi
-    sed -e "s#__DOMAIN__#$DOMAIN#g" -e "s#__APP_DIR__#$APP_DIR#g" deploy/Caddyfile > /etc/caddy/Caddyfile
-    systemctl enable --now caddy
-    systemctl reload caddy
+  elif [ "$MAIL_MODE" = "smtp" ]; then
+    psql "$DB_URL" -q -c "INSERT INTO system_settings (key, value) VALUES
+      ('mail_provider', 'smtp'),
+      ('mail_smtp_host', '$(sql_escape "$SMTP_HOST")'),
+      ('mail_smtp_port', '$(sql_escape "$SMTP_PORT")'),
+      ('mail_smtp_user', '$(sql_escape "$SMTP_USER")'),
+      ('mail_smtp_pass', '$(sql_escape "$SMTP_PASS")'),
+      ('mail_tls_mode', '$(sql_escape "$SMTP_TLS")')
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value" \
+      || warn "SMTP settings not saved; configure Settings → Mail"
+    log "SMTP configured"
   fi
-  TUNNEL_URL="https://$DOMAIN"
-fi
+}
 
-# --- Public URL into settings ----------------------------------------------
-if [ -n "${TUNNEL_URL:-}" ]; then
-  echo "[install] recording public URL"
-  PGPASSWORD="$(echo "$DB_URL" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')" \
-  psql "$DB_URL" -q -c "INSERT INTO system_settings (key, value) VALUES ('app_url', '$TUNNEL_URL'), ('webauthn_origin', '$TUNNEL_URL'), ('webauthn_rp_id', '${TUNNEL_URL#https://}') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value" 2>/dev/null \
-    || echo "[install] (settings update deferred: API seeds them on boot, set Application URL in Settings)"
-fi
+# ---------------------------------------------------------------------------
+# Verify + summary
+# ---------------------------------------------------------------------------
+verify() {
+  curl -fsS "http://127.0.0.1:$API_PORT/api/health" >/dev/null || die "local API health check failed"
+  systemctl is-active --quiet solstice-api.service || die "solstice-api is not active"
 
-# --- Mail provider into settings -------------------------------------------
-if [ "$MAIL_MODE" = "relay" ]; then
-  RELAY_DOMAIN="${DOMAIN:-$(echo "${TUNNEL_URL:-}" | sed -E 's#https://([^/]+).*#\1#')}"
-  echo "[install] registering with Solstice mail relay"
-  RELAY_TOKEN=$(curl -fsS -m 15 -X POST https://mail.solstice.host/v1/relay/register \
-    -H 'Content-Type: application/json' \
-    -d "{\"domain\": \"$RELAY_DOMAIN\", \"adminEmail\": \"$ADMIN_EMAIL\"}" 2>/dev/null \
-    | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d).token||"")}catch{console.log("")}})' 2>/dev/null || true)
-  if [ -n "$RELAY_TOKEN" ]; then
-    PGPASSWORD="$(echo "$DB_URL" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')" \
-    psql "$DB_URL" -q -c "INSERT INTO system_settings (key, value) VALUES ('mail_provider', 'solstice'), ('mail_relay_token', '$RELAY_TOKEN') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value" 2>/dev/null \
-      || echo "[install] (relay token deferred: set Provider = Solstice Cloud Relay in Settings > Mail)"
+  if [ "$TUNNEL" -eq 0 ] && [ "$INSTALL_CADDY" -eq 1 ]; then
+    local i
+    for i in $(seq 1 60); do
+      if curl -fsS "https://$DOMAIN/api/health" >/dev/null 2>&1; then
+        log "https://$DOMAIN is live"
+        return 0
+      fi
+      sleep 2
+    done
+    die "https://$DOMAIN/api/health is not reachable — check DNS, firewall and 'journalctl -u caddy'"
+  fi
+}
+
+summary() {
+  local url
+  if [ "$TUNNEL" -eq 1 ]; then url="${TUNNEL_URL:-quick tunnel}"; else url="https://${DOMAIN:-your domain}"; fi
+  echo
+  if [ "$HAVE_GUM" -eq 1 ]; then
+    gum style --border rounded --padding "0 2" --border-foreground 214 \
+      "Solstice is installed." \
+      "Panel:  $url" \
+      "Admin:  $ADMIN_EMAIL" \
+      "Mail:   $([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")" \
+      "Logs:   $LOG_FILE, journalctl -u solstice-api" \
+      "CLI:    solstice status"
   else
-    echo "[install] (relay unreachable: set Provider = Solstice Cloud Relay in Settings > Mail later)"
+    echo "Solstice is installed."
+    echo "  Panel:  $url"
+    echo "  Admin:  $ADMIN_EMAIL"
+    echo "  Mail:   $([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")"
+    echo "  Logs:   $LOG_FILE, journalctl -u solstice-api"
+    echo "  CLI:    solstice status"
+    echo
+    echo "Next: open $url and register with $ADMIN_EMAIL."
   fi
-elif [ "$MAIL_MODE" = "smtp" ]; then
-  echo "[install] writing SMTP settings"
-  PGPASSWORD="$(echo "$DB_URL" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')" \
-  psql "$DB_URL" -q -c "INSERT INTO system_settings (key, value) VALUES ('mail_provider', 'smtp'), ('mail_smtp_host', '$SMTP_HOST'), ('mail_smtp_port', '$SMTP_PORT'), ('mail_smtp_user', '$SMTP_USER'), ('mail_smtp_pass', '$SMTP_PASS'), ('mail_tls_mode', '$SMTP_TLS') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value" 2>/dev/null \
-    || echo "[install] (SMTP settings deferred: configure in Settings > Mail)"
-fi
+}
 
-echo
-if [ "$HAVE_GUM" -eq 1 ]; then
-  gum style --border rounded --padding "0 2" --border-foreground 82 \
-    "Done." \
-    "Open ${TUNNEL_URL:-your domain} and register with $ADMIN_EMAIL" \
-    "Mail: $([ "$MAIL_MODE" = "relay" ] && echo "Solstice relay (noreply@solstice.host)" || echo "your SMTP server")" \
-    "Review Settings (name, mail, captcha, legal URLs) as admin."
-else
-  echo "Done. Next steps:"
-  echo "  1. Open ${TUNNEL_URL:-your domain} and register with $ADMIN_EMAIL"
-  echo "  2. Mail: $([ "$MAIL_MODE" = "relay" ] && echo "Solstice relay (noreply@solstice.host)" || echo "your SMTP server")"
-  echo "  3. Review Settings (name, mail, captcha, legal URLs) as admin."
-fi
+install_cli() {
+  cat > /usr/local/bin/solstice <<'CLI'
+#!/usr/bin/env bash
+set -euo pipefail
+META=/etc/solstice/install.env
+[ -f "$META" ] || { echo "solstice is not installed" >&2; exit 1; }
+# shellcheck disable=SC1090
+. "$META"
+
+case "${1:-status}" in
+  status)
+    echo "Panel:  ${TUNNEL:+quick tunnel}${DOMAIN:+https://$DOMAIN}"
+    for u in solstice-api solstice-web solstice-tunnel caddy; do
+      if systemctl list-unit-files "$u.service" >/dev/null 2>&1 && systemctl cat "$u.service" >/dev/null 2>&1; then
+        printf '  %-18s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
+      fi
+    done
+    ;;
+  doctor)
+    echo "== services =="
+    systemctl --no-pager --lines=0 status solstice-api 2>/dev/null | head -5 || true
+    echo "== api =="
+    curl -fsS "http://127.0.0.1:${API_PORT:-8788}/api/health" && echo || echo "API not responding"
+    echo "== ports =="
+    ss -ltn | grep -E ':(80|443|8788|5173)\b' || true
+    ;;
+  logs) journalctl -u "solstice-${2:-api}" -f ;;
+  restart) systemctl restart solstice-api solstice-web 2>/dev/null || systemctl restart solstice-api; echo restarted ;;
+  upgrade)
+    bash "$APP_DIR/install.sh" --upgrade --yes --app-dir "$APP_DIR"
+    ;;
+  uninstall)
+    bash "$APP_DIR/install.sh" --uninstall "$@"
+    ;;
+  *) echo "usage: solstice {status|doctor|logs [api|web]|restart|upgrade|uninstall [--purge]}" >&2; exit 1 ;;
+esac
+CLI
+  chmod +x /usr/local/bin/solstice
+}
+
+# ---------------------------------------------------------------------------
+# Prompts
+# ---------------------------------------------------------------------------
+prompt_config() {
+  if [ "$TUNNEL" -eq 0 ] && [ -z "$DOMAIN" ]; then
+    if have_tty; then
+      while [ -z "$DOMAIN" ]; do
+        DOMAIN="$(ui_input "Public hostname" "panel.example.com")"
+        [ -n "$DOMAIN" ] || warn "a hostname is required (or pass --tunnel)"
+      done
+    else
+      die "pass --domain HOST or --tunnel"
+    fi
+  fi
+
+  if [ -z "$ADMIN_EMAIL" ]; then
+    if have_tty; then
+      while true; do
+        ADMIN_EMAIL="$(ui_input "Operator email" "you@example.com")"
+        [[ "$ADMIN_EMAIL" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]] && break
+        warn "that doesn't look like an email address"
+      done
+    else
+      die "pass --admin-email you@example.com"
+    fi
+  fi
+
+  # Mail delivery (only ask when the caller didn't pick).
+  if [ "$MAIL_MODE" = "ask" ]; then
+    if have_tty && [ "$ASSUME_YES" -eq 0 ]; then
+      MAIL_MODE="$(ui_choose "Email delivery" \
+        "Solstice Cloud Relay (recommended, free)" \
+        "Own SMTP server")"
+      case "$MAIL_MODE" in
+        Own*) MAIL_MODE="smtp" ;;
+        *) MAIL_MODE="relay" ;;
+      esac
+    else
+      MAIL_MODE="relay"
+    fi
+  fi
+  case "$MAIL_MODE" in
+    relay|smtp) : ;;
+    *) die "--mail must be relay or smtp" ;;
+  esac
+
+  if [ "$MAIL_MODE" = "smtp" ] && [ -z "$SMTP_HOST" ]; then
+    have_tty || die "pass --smtp-host (and --smtp-user/--smtp-pass) with --mail smtp"
+    SMTP_HOST="$(ui_input "SMTP host" "smtp.example.com")"
+    SMTP_PORT="$(ui_input "SMTP port" "587" "587")"
+    SMTP_TLS="$(ui_choose "TLS mode" "STARTTLS" "TLS" "None")"
+    SMTP_USER="$(ui_input "SMTP username (empty = no auth)" "user@example.com")"
+    if [ -n "$SMTP_USER" ]; then SMTP_PASS="$(ui_password "SMTP password")"; fi
+  fi
+
+  if ! ui_confirm "Install into $APP_DIR ${DOMAIN:+with domain $DOMAIN}${TUNNEL:+via quick tunnel}?"; then
+    echo "aborted" >&2; exit 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+main() {
+  if [ "$UNINSTALL" -eq 1 ]; then uninstall; exit 0; fi
+
+  log "Solstice installer starting (log: $LOG_FILE)"
+
+  if [ "$UPGRADE" -eq 1 ]; then
+    repo_present || die "no existing install at $APP_DIR"
+    ensure_service_user
+    run_step "update sources" fetch_app
+    run_step "build" build_app
+    run_step "restart api" systemctl restart solstice-api.service
+    run_step "health" verify
+    summary
+    exit 0
+  fi
+
+  run_step "preflight" preflight
+  run_step "dependencies" install_deps
+  prompt_config
+  run_step "database" setup_database
+  run_step "incus" setup_incus
+  run_step "service user" ensure_service_user
+  run_step "fetch sources" fetch_app
+  run_step "build" build_app
+  run_step "environment" write_env
+  run_step "meta" write_meta
+  run_step "systemd units" install_units
+  run_step "start api" start_api
+
+  if [ "$TUNNEL" -eq 1 ]; then
+    run_step "quick tunnel" setup_tunnel
+  elif [ "$INSTALL_CADDY" -eq 1 ]; then
+    run_step "caddy" setup_caddy
+  else
+    log "skipping Caddy (--no-caddy); point your proxy at 127.0.0.1:$API_PORT"
+  fi
+
+  run_step "settings" write_settings "${TUNNEL_URL:-https://$DOMAIN}"
+  run_step "mail" write_mail_settings
+  run_step "verify" verify
+  run_step "cli" install_cli
+
+  summary
+}
+
+main "$@"

@@ -4,7 +4,6 @@
 # passkeys and OAuth keep working across URL rotations. Managed by install.sh.
 set -euo pipefail
 
-APP_DIR="__APP_DIR__"
 LOG=/tmp/solstice-tunnel.log
 
 CF_BIN="$(command -v cloudflared || echo /usr/local/bin/cloudflared)"
@@ -22,10 +21,10 @@ for _ in $(seq 1 60); do
     if [ "$URL" != "$LAST_URL" ]; then
       echo "[tunnel] public URL: $URL"
       # shellcheck disable=SC1091
-      if [ -f "$APP_DIR/apps/api/.env" ]; then
+      if [ -f /etc/solstice/api.env ]; then
         set -a
         # shellcheck source=/dev/null
-        . "$APP_DIR/apps/api/.env"
+        . /etc/solstice/api.env
         set +a
         if [ -n "${DATABASE_URL:-}" ]; then
           HOST="${URL#https://}"

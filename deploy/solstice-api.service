@@ -1,16 +1,22 @@
 [Unit]
-Description=Panel API
-After=network.target postgresql.service
-Wants=network.target
+Description=Solstice Panel API
+After=network-online.target postgresql.service
+Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=__APP_DIR__
-ExecStart=/usr/bin/node --env-file=apps/api/.env apps/api/src/index.ts
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+WorkingDirectory=__APP_DIR__/apps/api
+EnvironmentFile=/etc/solstice/api.env
+Environment=HOME=/var/lib/solstice
+ExecStart=/usr/bin/node src/index.ts
 Restart=always
 RestartSec=3
-StandardOutput=append:__APP_DIR__/data/api.log
-StandardError=inherit
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+ReadWritePaths=/var/lib/solstice
 
 [Install]
 WantedBy=multi-user.target

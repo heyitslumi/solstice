@@ -156,5 +156,18 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    preview: {
+      host: '127.0.0.1',
+      port: Number(process.env.WEB_PORT) || 5173,
+      allowedHosts: true,
+      proxy: {
+        '/api': {
+          target: env.API_URL || process.env.API_URL || 'http://127.0.0.1:8788',
+          changeOrigin: true,
+          ws: true,
+          timeout: 600000,
+        },
+      },
+    },
   }
 })

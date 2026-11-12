@@ -1,16 +1,19 @@
 [Unit]
-Description=Panel web dev server (tunnel mode only)
-After=network.target
-Wants=network.target
+Description=Solstice Panel Web (tunnel mode, production build)
+After=network-online.target solstice-api.service
+Wants=network-online.target
 
 [Service]
 Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
 WorkingDirectory=__APP_DIR__
-ExecStart=/usr/bin/npm run dev --workspace @solstice/web
+Environment=HOME=/var/lib/solstice
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/npm run preview --workspace @solstice/web -- --host 127.0.0.1 --port __WEB_PORT__
 Restart=always
 RestartSec=3
-StandardOutput=append:__APP_DIR__/data/web.log
-StandardError=inherit
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
