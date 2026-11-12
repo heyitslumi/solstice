@@ -234,6 +234,7 @@ export interface PublicConfig {
   themeFont?: string
   themeCustomCss?: string
   themeDefaultMode?: string
+  demoMode?: boolean
 }
 
 export interface AdminThemeSettings {
@@ -620,6 +621,10 @@ export const api = {
 
   loginVerify(input: { email: string; code: string }) {
     return post<{ user: ApiUser }>('/api/auth/login/verify', input)
+  },
+
+  loginDemo() {
+    return post<{ user: ApiUser }>('/api/auth/demo')
   },
 
   loginLink(input: { token: string }) {

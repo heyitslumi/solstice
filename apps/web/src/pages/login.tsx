@@ -52,6 +52,7 @@ export function LoginPage() {
 
   const [oauthProviders, setOauthProviders] = useState<PublicOAuthProvider[]>([])
   const [oauthStarting, setOauthStarting] = useState<string | null>(null)
+  const [demoPending, setDemoPending] = useState(false)
 
   useEffect(() => {
     const oauthError = searchParams.get('oauth_error')
@@ -244,6 +245,24 @@ export function LoginPage() {
     }
   }
 
+  async function handleDemoSignIn() {
+    setDemoPending(true)
+    setFormError(null)
+    try {
+      const res = await api.loginDemo()
+      if (!res.ok) {
+        setFormError(res.error?.message || 'Demo access failed.')
+        return
+      }
+      await refresh()
+      navigate('/dashboard', { replace: true })
+    } catch {
+      setFormError('Demo access is currently unavailable.')
+    } finally {
+      setDemoPending(false)
+    }
+  }
+
   if (linking || (!sessionLoading && user)) {
     return (
       <div className="auth-stack flex flex-col gap-7">
@@ -363,6 +382,29 @@ export function LoginPage() {
         title={`Sign in to ${config.name || 'Solstice'}`}
         description="Access your servers, snapshots and network allocations."
       />
+
+      {config.demoMode ? (
+        <div className="rounded-control border border-sun-500/40 bg-gradient-to-br from-sun-500/15 via-[#101822] to-[#101822] p-4 text-center">
+          <p className="text-[13px] text-white/80">
+            Welcome to the public demo! Explore the panel with full admin permissions:
+          </p>
+          <Button
+            type="button"
+            className="mt-3 w-full bg-sun-400 font-medium text-[#241503] hover:bg-sun-300"
+            disabled={pending || demoPending}
+            onClick={() => void handleDemoSignIn()}
+          >
+            {demoPending ? (
+              <>
+                <CircleNotch size={16} weight="bold" className="animate-spin" aria-hidden />
+                Signing in as Demo Admin...
+              </>
+            ) : (
+              'Enter Demo as Admin'
+            )}
+          </Button>
+        </div>
+      ) : null}
 
       {!config.enableRegistration ? (
         <div className="rounded-control border border-sun-500/30 bg-sun-500/10 px-3.5 py-2.5 text-[12px] text-fg-muted">

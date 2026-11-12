@@ -1068,6 +1068,31 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     return c.json({ ok: true })
   })
 
+  app.post('/api/auth/demo', async (c) => {
+    const config = await getSystemSettings()
+    const isDemo = process.env.DEMO_MODE === 'true' || config['app_demo_mode'] === 'true'
+    if (!isDemo) {
+      return c.json({ message: 'Demo mode is not enabled.' }, 403)
+    }
+
+    const demoUser = await queryOne<UserRow>(
+      "SELECT * FROM users WHERE is_admin = true AND email_verified_at IS NOT NULL ORDER BY created_at ASC LIMIT 1"
+    )
+    if (!demoUser) {
+      return c.json({ message: 'No demo account available.' }, 500)
+    }
+
+    const session = await createSession(
+      demoUser.id,
+      SESSION_TTL_SHORT_MS,
+      c.req.header('user-agent'),
+    )
+    setSessionCookie(c, session.token, session.expiresAt, false)
+    await logActivity(demoUser.id, 'demo_login', 'User entered demo mode', clientKey(c))
+
+    return c.json({ user: toApiUser(demoUser) })
+  })
+
   app.post('/api/auth/login/verify', async (c) => {
     const limit = await store.hit(`login-verify:${clientKey(c)}`, 10, 15 * 60 * 1000)
     if (!limit.allowed) {
@@ -8971,6 +8996,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       themeFont: config['theme_font'] || 'geist',
       themeCustomCss: config['theme_custom_css'] || '',
       themeDefaultMode: config['theme_default_mode'] || 'dark',
+      demoMode: process.env.DEMO_MODE === 'true' || config['app_demo_mode'] === 'true',
       legalTermsUrl: config['legal_terms_url'] || '',
       legalPrivacyUrl: config['legal_privacy_url'] || '',
       legalAupUrl: config['legal_aup_url'] || '',
