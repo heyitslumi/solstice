@@ -50,13 +50,15 @@ UPGRADE=0
 UNINSTALL=0
 PURGE=0
 CURRENT_STEP=""
+# Original stderr, kept because steps redirect their own stderr into the log.
+exec 9>&2
 
 # ---------------------------------------------------------------------------
 # Output helpers
 # ---------------------------------------------------------------------------
 log() { printf '[solstice] %s\n' "$*"; printf '[%s] %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; }
 warn() { printf '[solstice] warning: %s\n' "$*" >&2; printf '[%s] WARN %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; }
-die() { printf '[solstice] error: %s\n' "$*" >&2; printf '[%s] ERROR %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; exit 1; }
+die() { printf '[solstice] error: %s\n' "$*" >&9; printf '[%s] ERROR %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; exit 1; }
 
 run_step() { # $1=label, rest=command
   local label="$1"; shift
@@ -193,9 +195,11 @@ chmod 600 "$LOG_FILE"
 on_exit() {
   local rc=$?
   if [ "$rc" -ne 0 ] && [ -n "$CURRENT_STEP" ]; then
-    printf -- '--- last 25 lines of %s ---\n' "$LOG_FILE" >&2
-    tail -n 25 "$LOG_FILE" >&2 || true
-    printf 'Full log: %s\n' "$LOG_FILE" >&2
+    {
+      printf -- '--- last 25 lines of %s ---\n' "$LOG_FILE"
+      tail -n 25 "$LOG_FILE" || true
+      printf 'Full log: %s\n' "$LOG_FILE"
+    } >&9 2>&9
   fi
   exit "$rc"
 }
