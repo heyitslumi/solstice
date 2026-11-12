@@ -173,22 +173,20 @@ while [ -z "$ADMIN_EMAIL" ]; do
 done
 
 # --- Email delivery --------------------------------------------------------
-MAIL_MODE="skip"   # relay | smtp | skip
+MAIL_MODE="relay"   # relay | smtp
 SMTP_HOST=""; SMTP_PORT="587"; SMTP_USER=""; SMTP_PASS=""; SMTP_TLS="STARTTLS"
 
 echo
 if [ "$HAVE_GUM" -eq 1 ]; then
   MAIL_MODE=$(gum choose --header "Email delivery — how should the panel send mail?" \
-    "relay" "smtp" "skip") || MAIL_MODE="skip"
+    "relay" "smtp") || MAIL_MODE="relay"
 else
   echo "Email delivery:"
   echo "  1) Solstice relay — instant, free, sends from noreply@solstice.host"
   echo "  2) Own SMTP server"
-  echo "  3) Skip (mails land in $APP_DIR/data/mail/)"
   read -rp "> [1] " pick
   case "${pick:-1}" in
     2) MAIL_MODE="smtp" ;;
-    3) MAIL_MODE="skip" ;;
     *) MAIL_MODE="relay" ;;
   esac
 fi
@@ -361,12 +359,11 @@ if [ "$HAVE_GUM" -eq 1 ]; then
   gum style --border rounded --padding "0 2" --border-foreground 82 \
     "Done." \
     "Open ${TUNNEL_URL:-your domain} and register with $ADMIN_EMAIL" \
-    $([ "$MAIL_MODE" = "relay" ] && echo "Emails send via Solstice relay (noreply@solstice.host)." || true) \
-    "No SMTP yet? The sign-in code lands in $APP_DIR/data/mail/ on the host." \
+    "Mail: $([ "$MAIL_MODE" = "relay" ] && echo "Solstice relay (noreply@solstice.host)" || echo "your SMTP server")" \
     "Review Settings (name, mail, captcha, legal URLs) as admin."
 else
   echo "Done. Next steps:"
   echo "  1. Open ${TUNNEL_URL:-your domain} and register with $ADMIN_EMAIL"
-  echo "  2. No SMTP yet? The sign-in code lands in $APP_DIR/data/mail/ on the host."
+  echo "  2. Mail: $([ "$MAIL_MODE" = "relay" ] && echo "Solstice relay (noreply@solstice.host)" || echo "your SMTP server")"
   echo "  3. Review Settings (name, mail, captcha, legal URLs) as admin."
 fi
