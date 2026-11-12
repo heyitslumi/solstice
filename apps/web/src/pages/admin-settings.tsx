@@ -1145,10 +1145,7 @@ export function AdminSettingsPage() {
                   className="h-10 rounded-control border border-border bg-surface px-3 text-[13px] text-fg focus:border-sun-500 focus:outline-none"
                 >
                   <option value="solstice">Solstice Cloud Relay (Recommended)</option>
-                  <option value="none">None</option>
                   <option value="smtp">SMTP</option>
-                  <option value="sendmail">Sendmail Command</option>
-                  <option value="filesystem">Filesystem</option>
                 </select>
               </div>
 
@@ -1340,90 +1337,6 @@ export function AdminSettingsPage() {
                 </div>
               )}
 
-              {mailProvider === 'sendmail' && (
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                  <div className="flex flex-col gap-1.5 md:col-span-2">
-                    <label className="text-[12px] font-medium text-fg">
-                      Sendmail Command Path <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      required
-                      type="text"
-                      value={sendmailPath}
-                      onChange={(e) => setSendmailPath(e.target.value)}
-                      placeholder="/usr/sbin/sendmail"
-                      className="h-10 rounded-control border border-border bg-surface px-3 font-mono text-[13px] text-fg focus:border-sun-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[12px] font-medium text-fg">
-                      From Address <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      required
-                      type="email"
-                      value={mailFrom}
-                      onChange={(e) => setMailFrom(e.target.value)}
-                      placeholder="no-reply@example.com"
-                      className="h-10 rounded-control border border-border bg-surface px-3 font-mono text-[13px] text-fg focus:border-sun-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[12px] font-medium text-fg">From Name</label>
-                    <input
-                      type="text"
-                      value={mailFromName}
-                      onChange={(e) => setMailFromName(e.target.value)}
-                      placeholder="VPS Panel"
-                      className="h-10 rounded-control border border-border bg-surface px-3 text-[13px] text-fg focus:border-sun-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {mailProvider === 'filesystem' && (
-                <div className="flex flex-col gap-4">
-                  <div className="rounded-control border border-border bg-surface-2/40 p-4 text-[12px] text-fg-subtle leading-relaxed">
-                    Filesystem driver writes all outgoing emails as standard <code>.eml</code> files into the local server directory (<code>./data/mail</code>).
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[12px] font-medium text-fg">
-                        From Address <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        required
-                        type="email"
-                        value={mailFrom}
-                        onChange={(e) => setMailFrom(e.target.value)}
-                        placeholder="no-reply@example.com"
-                        className="h-10 rounded-control border border-border bg-surface px-3 font-mono text-[13px] text-fg focus:border-sun-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[12px] font-medium text-fg">From Name</label>
-                      <input
-                        type="text"
-                        value={mailFromName}
-                        onChange={(e) => setMailFromName(e.target.value)}
-                        placeholder="VPS Panel"
-                        className="h-10 rounded-control border border-border bg-surface px-3 text-[13px] text-fg focus:border-sun-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {mailProvider === 'none' && (
-                <div className="rounded-control border border-border bg-surface-2/40 p-4 text-[12px] text-fg-subtle">
-                  Email delivery is disabled. No authentication or notification emails will be dispatched.
-                </div>
-              )}
-
               {testMailResult ? (
                 <div
                   className={cn(
@@ -1477,7 +1390,6 @@ export function AdminSettingsPage() {
                   onChange={(e) => setCaptchaProvider(e.target.value as any)}
                   className="h-10 rounded-control border border-border bg-surface px-3 text-[13px] text-fg focus:border-sun-500 focus:outline-none"
                 >
-                  <option value="none">None</option>
                   <option value="turnstile">Turnstile</option>
                   <option value="recaptcha_v2">reCAPTCHA v2</option>
                   <option value="recaptcha_v3">reCAPTCHA v3</option>
