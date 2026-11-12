@@ -241,6 +241,36 @@ const SCHEMA = `
   ALTER TABLE instance_metrics ALTER COLUMN cpu_pct DROP NOT NULL;
   ALTER TABLE instance_metrics ALTER COLUMN disk_pct DROP NOT NULL;
 
+  /* Infrastructure Locations */
+  CREATE TABLE IF NOT EXISTS locations (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    short_code   text NOT NULL UNIQUE,
+    name         text NOT NULL,
+    description  text NOT NULL DEFAULT '',
+    country_code text NOT NULL DEFAULT 'US',
+    city         text NOT NULL DEFAULT '',
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz NOT NULL DEFAULT now()
+  );
+
+  /* Infrastructure Nodes (created before node_metrics, which references it) */
+  CREATE TABLE IF NOT EXISTS nodes (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            text NOT NULL UNIQUE,
+    fqdn            text NOT NULL,
+    ip_address      text NOT NULL,
+    port            integer NOT NULL DEFAULT 8443,
+    location_id     uuid REFERENCES locations(id) ON DELETE SET NULL,
+    is_public       boolean NOT NULL DEFAULT true,
+    maintenance     boolean NOT NULL DEFAULT false,
+    memory_limit_mb integer NOT NULL DEFAULT 16384,
+    disk_limit_gb   integer NOT NULL DEFAULT 250,
+    cpu_cores       integer NOT NULL DEFAULT 8,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS nodes_location_idx ON nodes (location_id);
+
   CREATE TABLE IF NOT EXISTS node_metrics (
     node_id uuid NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
     ts timestamptz NOT NULL DEFAULT now(),
@@ -388,35 +418,6 @@ const SCHEMA = `
   ALTER TABLE os_templates ADD COLUMN IF NOT EXISTS slug text NOT NULL DEFAULT '';
   CREATE UNIQUE INDEX IF NOT EXISTS os_templates_alias_idx ON os_templates (image_alias, arch);
 
-  /* Infrastructure Locations */
-  CREATE TABLE IF NOT EXISTS locations (
-    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    short_code   text NOT NULL UNIQUE,
-    name         text NOT NULL,
-    description  text NOT NULL DEFAULT '',
-    country_code text NOT NULL DEFAULT 'US',
-    city         text NOT NULL DEFAULT '',
-    created_at   timestamptz NOT NULL DEFAULT now(),
-    updated_at   timestamptz NOT NULL DEFAULT now()
-  );
-
-  /* Infrastructure Nodes */
-  CREATE TABLE IF NOT EXISTS nodes (
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    name            text NOT NULL UNIQUE,
-    fqdn            text NOT NULL,
-    ip_address      text NOT NULL,
-    port            integer NOT NULL DEFAULT 8443,
-    location_id     uuid REFERENCES locations(id) ON DELETE SET NULL,
-    is_public       boolean NOT NULL DEFAULT true,
-    maintenance     boolean NOT NULL DEFAULT false,
-    memory_limit_mb integer NOT NULL DEFAULT 16384,
-    disk_limit_gb   integer NOT NULL DEFAULT 250,
-    cpu_cores       integer NOT NULL DEFAULT 8,
-    created_at      timestamptz NOT NULL DEFAULT now(),
-    updated_at      timestamptz NOT NULL DEFAULT now()
-  );
-  CREATE INDEX IF NOT EXISTS nodes_location_idx ON nodes (location_id);
   /* Public address users connect to (SSH forwards); panel metadata, not daemon config. */
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS public_ip text NOT NULL DEFAULT '';
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS primary_network text NOT NULL DEFAULT 'incusbr0';
