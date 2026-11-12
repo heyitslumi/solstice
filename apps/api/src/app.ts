@@ -1090,7 +1090,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     setSessionCookie(c, session.token, session.expiresAt, false)
     await logActivity(demoUser.id, 'demo_login', 'User entered demo mode', clientKey(c))
 
-    return c.json({ user: toApiUser(demoUser) })
+    return c.json({ user: publicUser(demoUser) })
   })
 
   app.post('/api/auth/login/verify', async (c) => {
