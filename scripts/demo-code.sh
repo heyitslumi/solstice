@@ -6,6 +6,6 @@ set -euo pipefail
 ssh -p "${SSH_PORT:-2250}" "${DEMO_HOST:-aria}" \
   "incus exec ${DEMO_CONTAINER:-solstice-demo} -- bash -s" <<'INNER'
 DB=$(sed -n 's/^DATABASE_URL=//p' /etc/solstice/api.env)
-psql "$DB" -tAc "select body_text from email_logs where recipient = 'demo@solstice.host' order by created_at desc limit 1" \
+psql "$DB" -tAc "select body_text from email_logs where recipient = '${DEMO_EMAIL:-hi@lumis.moe}' order by created_at desc limit 1" \
   | grep -oE '[0-9]{6}' | head -1
 INNER

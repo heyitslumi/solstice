@@ -9,7 +9,7 @@
 set -euo pipefail
 
 API="${API:-http://127.0.0.1:8788}"
-EMAIL="${DEMO_EMAIL:-demo@solstice.host}"
+EMAIL="${DEMO_EMAIL:-hi@lumis.moe}"
 NAME="${DEMO_NAME:-Demo User}"
 ENV_FILE=/etc/solstice/api.env
 
