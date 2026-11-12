@@ -1,0 +1,76 @@
+@import 'tailwindcss';
+
+/* Same brand constants as the panel: the logo gradient is gold -> orange ->
+   ember, neutrals are tinted toward the wordmark navy, and the page is a fixed
+   dark poster so the mark keeps its contrast. */
+@theme {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
+
+  --color-sun-200: #ffe3a3;
+  --color-sun-300: #ffd05e;
+  --color-sun-400: #ffc01b;
+  --color-sun-500: #fd9d1e;
+  --color-sun-600: #fe5c36;
+  --color-sun-700: #c2410c;
+
+  --color-navy-900: #1d273b;
+  --color-brand-surface: #0a1018;
+  --color-brand-ink: #eef1f7;
+
+  --radius-control: 0.625rem;
+  --radius-panel: 1.125rem;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-brand-surface);
+    color: var(--color-brand-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-sun-500) 35%, transparent);
+    color: #fff;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Hairline grid used behind the hero; static, so it costs nothing to paint. */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 35%, transparent 100%);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.text-pretty {
+  text-wrap: pretty;
+}
