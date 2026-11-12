@@ -49,6 +49,7 @@ SMTP_HOST=""; SMTP_PORT="587"; SMTP_USER=""; SMTP_PASS=""; SMTP_TLS="STARTTLS"
 UPGRADE=0
 UNINSTALL=0
 PURGE=0
+CURRENT_STEP=""
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -60,11 +61,14 @@ die() { printf '[solstice] error: %s\n' "$*" >&2; printf '[%s] ERROR %s\n' "$(da
 run_step() { # $1=label, rest=command
   local label="$1"; shift
   local start=$SECONDS
+  CURRENT_STEP="$label"
   log "→ $label"
   if "$@" >>"$LOG_FILE" 2>&1; then
+    CURRENT_STEP=""
     log "✓ $label ($((SECONDS - start))s)"
   else
     local rc=$?
+    CURRENT_STEP=""
     log "✗ $label failed (exit $rc)"
     echo "--- last 25 lines of $LOG_FILE ---" >&2
     tail -n 25 "$LOG_FILE" >&2 || true
@@ -184,6 +188,18 @@ done
 mkdir -p "$(dirname "$LOG_FILE")"
 touch "$LOG_FILE"
 chmod 600 "$LOG_FILE"
+
+# A step that calls die exits before run_step can report; show the log tail anyway.
+on_exit() {
+  local rc=$?
+  if [ "$rc" -ne 0 ] && [ -n "$CURRENT_STEP" ]; then
+    printf -- '--- last 25 lines of %s ---\n' "$LOG_FILE" >&2
+    tail -n 25 "$LOG_FILE" >&2 || true
+    printf 'Full log: %s\n' "$LOG_FILE" >&2
+  fi
+  exit "$rc"
+}
+trap on_exit EXIT
 
 # Piped installs consume stdin; hand the terminal back so prompts still work.
 if [ ! -t 0 ] && [ -c /dev/tty ] && { : </dev/tty; } 2>/dev/null; then
