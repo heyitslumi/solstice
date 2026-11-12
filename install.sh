@@ -229,8 +229,8 @@ INSTALL_META="$CONFIG_DIR/install.env"
 
 repo_present() { [ -f "$APP_DIR/package.json" ] && [ -d "$APP_DIR/apps/api" ]; }
 
-# An upgrade reuses the recorded install; explicit flags still win.
-if [ "$UPGRADE" -eq 1 ] && [ -f "$INSTALL_META" ]; then
+# An upgrade or a purge reuses the recorded install; explicit flags still win.
+if { [ "$UPGRADE" -eq 1 ] || [ "$PURGE" -eq 1 ]; } && [ -f "$INSTALL_META" ]; then
   _app_dir="$APP_DIR"
   # shellcheck source=/dev/null
   . "$INSTALL_META"
@@ -251,6 +251,11 @@ uninstall() {
   systemctl daemon-reload
   if [ "$PURGE" -eq 1 ]; then
     log "purging app + data"
+    if [ "${DB_LOCAL:-0}" = "1" ] && command -v psql >/dev/null 2>&1; then
+      log "dropping local database and role"
+      su postgres -c "dropdb --if-exists panel" 2>/dev/null || true
+      su postgres -c "psql -q -c 'DROP ROLE IF EXISTS panel'" 2>/dev/null || true
+    fi
     rm -rf "$APP_DIR" "$DATA_DIR" "$CONFIG_DIR"
     userdel "$SERVICE_USER" 2>/dev/null || true
   else
@@ -343,6 +348,7 @@ install_deps() {
 setup_database() {
   if [ -z "$DB_URL" ]; then
     apt-get install -y -qq postgresql
+    DB_LOCAL=1
     local pass; pass="$(openssl rand -hex 24)"
     su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='panel'\"" | grep -q 1 \
       || su postgres -c "psql -c \"CREATE USER panel WITH PASSWORD '$pass'\""
@@ -451,6 +457,7 @@ BRANCH=$BRANCH
 MAIL_MODE=$MAIL_MODE
 ADMIN_EMAIL=$ADMIN_EMAIL
 SMTP_HOST=$SMTP_HOST
+DB_LOCAL=${DB_LOCAL:-0}
 EOF
   chmod 600 "$INSTALL_META"
 }
