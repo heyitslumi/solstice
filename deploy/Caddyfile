@@ -5,7 +5,7 @@ __DOMAIN__ {
 
 	# API (REST + console websockets + uploads).
 	handle /api/* {
-		reverse_proxy 127.0.0.1:8788
+		reverse_proxy 127.0.0.1:__API_PORT__
 	}
 
 	# Built SPA with client-side routing.

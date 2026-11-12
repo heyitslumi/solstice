@@ -454,6 +454,8 @@ APP_DIR=$APP_DIR
 DOMAIN=$DOMAIN
 TUNNEL=$TUNNEL
 BRANCH=$BRANCH
+API_PORT=$API_PORT
+WEB_PORT=$WEB_PORT
 MAIL_MODE=$MAIL_MODE
 ADMIN_EMAIL=$ADMIN_EMAIL
 SMTP_HOST=$SMTP_HOST
@@ -500,10 +502,10 @@ setup_caddy() {
     apt-get install -y -qq caddy
   fi
 
-  sed -e "s#__DOMAIN__#$DOMAIN#g" -e "s#__APP_DIR__#$APP_DIR#g" deploy/Caddyfile > /etc/caddy/Caddyfile
+  sed -e "s#__DOMAIN__#$DOMAIN#g" -e "s#__APP_DIR__#$APP_DIR#g" -e "s#__API_PORT__#$API_PORT#g" deploy/Caddyfile > /etc/caddy/Caddyfile
 
   # Caddy runs as its own user: make sure it can actually read the build.
-  if ! sudo -u caddy test -r "$APP_DIR/apps/web/dist/index.html" 2>/dev/null; then
+  if ! runuser -u caddy -- test -r "$APP_DIR/apps/web/dist/index.html" 2>/dev/null; then
     log "fixing read permissions for caddy"
     chmod -R a+rX "$APP_DIR/apps/web/dist"
     local d; d="$APP_DIR"
@@ -520,7 +522,8 @@ setup_caddy() {
 
 setup_tunnel() {
   if ! command -v cloudflared >/dev/null; then
-    curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
+    local arch; arch="$(dpkg --print-architecture)"
+    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$arch.deb" -o /tmp/cloudflared.deb
     dpkg -i /tmp/cloudflared.deb || apt-get install -f -y -qq
   fi
   systemctl enable --now solstice-web.service
@@ -666,6 +669,7 @@ case "${1:-status}" in
     bash "$APP_DIR/install.sh" --upgrade --yes --app-dir "$APP_DIR"
     ;;
   uninstall)
+    shift
     bash "$APP_DIR/install.sh" --uninstall "$@"
     ;;
   *) echo "usage: solstice {status|doctor|logs [api|web]|restart|upgrade|uninstall [--purge]}" >&2; exit 1 ;;
