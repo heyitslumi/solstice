@@ -602,7 +602,7 @@ META=/etc/solstice/install.env
 
 case "${1:-status}" in
   status)
-    echo "Panel:  ${TUNNEL:+quick tunnel}${DOMAIN:+https://$DOMAIN}"
+    if [ "${TUNNEL:-0}" = "1" ]; then echo "Panel:  quick tunnel (see journalctl -u solstice-tunnel)"; else echo "Panel:  https://${DOMAIN:-localhost}"; fi
     for u in solstice-api solstice-web solstice-tunnel caddy; do
       if systemctl list-unit-files "$u.service" >/dev/null 2>&1 && systemctl cat "$u.service" >/dev/null 2>&1; then
         printf '  %-18s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
