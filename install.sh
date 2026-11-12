@@ -560,12 +560,16 @@ write_mail_settings() {
 # Verify + summary
 # ---------------------------------------------------------------------------
 verify() { # $1=public (default 1) also proves the HTTPS front door
-  curl -fsS "http://127.0.0.1:$API_PORT/api/health" >/dev/null || die "local API health check failed"
+  local i
+  for i in $(seq 1 30); do
+    curl -fsS "http://127.0.0.1:$API_PORT/api/health" >/dev/null 2>&1 && break
+    [ "$i" = 30 ] && die "local API health check failed"
+    sleep 1
+  done
   systemctl is-active --quiet solstice-api.service || die "solstice-api is not active"
 
   [ "${1:-1}" = "1" ] || return 0
   if [ "$TUNNEL" -eq 0 ] && [ "$INSTALL_CADDY" -eq 1 ]; then
-    local i
     for i in $(seq 1 60); do
       if curl -fsS "https://$DOMAIN/api/health" >/dev/null 2>&1; then
         log "https://$DOMAIN is live"
@@ -716,6 +720,9 @@ main() {
     run_step "build" build_app
     run_step "systemd units" install_units
     run_step "restart api" systemctl restart solstice-api.service
+    if systemctl is-enabled --quiet solstice-web.service 2>/dev/null; then
+      run_step "restart web" systemctl restart solstice-web.service
+    fi
     run_step "health" verify 0
     run_step "cli" install_cli
     summary
