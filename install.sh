@@ -42,6 +42,7 @@ DB_URL=""
 INSTALL_INCUS=1
 INSTALL_CADDY=1
 APP_DIR=""
+APP_DIR_FLAG=0
 ASSUME_YES=0
 MAIL_MODE="ask"
 SMTP_HOST=""; SMTP_PORT="587"; SMTP_USER=""; SMTP_PASS=""; SMTP_TLS="STARTTLS"
@@ -167,7 +168,7 @@ while [ $# -gt 0 ]; do
     --db-url) DB_URL="${2:-}"; shift 2 ;;
     --no-incus) INSTALL_INCUS=0; shift ;;
     --no-caddy) INSTALL_CADDY=0; shift ;;
-    --app-dir) APP_DIR="${2:-}"; shift 2 ;;
+    --app-dir) APP_DIR="${2:-}"; APP_DIR_FLAG=1; shift 2 ;;
     --branch) BRANCH="${2:-main}"; shift 2 ;;
     --yes) ASSUME_YES=1; shift ;;
     --upgrade) UPGRADE=1; shift ;;
@@ -207,6 +208,14 @@ ENV_FILE="$CONFIG_DIR/api.env"
 INSTALL_META="$CONFIG_DIR/install.env"
 
 repo_present() { [ -f "$APP_DIR/package.json" ] && [ -d "$APP_DIR/apps/api" ]; }
+
+# An upgrade reuses the recorded install; explicit flags still win.
+if [ "$UPGRADE" -eq 1 ] && [ -f "$INSTALL_META" ]; then
+  _app_dir="$APP_DIR"
+  # shellcheck source=/dev/null
+  . "$INSTALL_META"
+  [ "$APP_DIR_FLAG" -eq 1 ] && APP_DIR="$_app_dir"
+fi
 
 # ---------------------------------------------------------------------------
 # Uninstall
@@ -550,10 +559,11 @@ write_mail_settings() {
 # ---------------------------------------------------------------------------
 # Verify + summary
 # ---------------------------------------------------------------------------
-verify() {
+verify() { # $1=public (default 1) also proves the HTTPS front door
   curl -fsS "http://127.0.0.1:$API_PORT/api/health" >/dev/null || die "local API health check failed"
   systemctl is-active --quiet solstice-api.service || die "solstice-api is not active"
 
+  [ "${1:-1}" = "1" ] || return 0
   if [ "$TUNNEL" -eq 0 ] && [ "$INSTALL_CADDY" -eq 1 ]; then
     local i
     for i in $(seq 1 60); do
@@ -704,8 +714,10 @@ main() {
     ensure_service_user
     run_step "update sources" fetch_app
     run_step "build" build_app
+    run_step "systemd units" install_units
     run_step "restart api" systemctl restart solstice-api.service
-    run_step "health" verify
+    run_step "health" verify 0
+    run_step "cli" install_cli
     summary
     exit 0
   fi
