@@ -217,25 +217,25 @@ have_tty() { [ "$HAVE_TTY" -eq 1 ]; }
 
 ui_confirm() { # $1=question -> 0=yes
   [ "$ASSUME_YES" -eq 1 ] && return 0
-  local ans; read -rp "$1 [Y/n] " ans </dev/tty
+  local ans; read -rp "  $1 [Y/n] " ans </dev/tty
   [[ "${ans:-Y}" =~ ^[Yy]$ ]]
 }
 
 ui_input() { # $1=prompt $2=placeholder $3=default
   local prompt="$1" default="${3:-}" val
-  if [ -n "$default" ]; then read -rp "$prompt [$default]: " val </dev/tty; echo "${val:-$default}"
-  else read -rp "$prompt: " val </dev/tty; echo "$val"; fi
+  if [ -n "$default" ]; then read -rp "  $prompt [$default]: " val </dev/tty; echo "${val:-$default}"
+  else read -rp "  $prompt: " val </dev/tty; echo "$val"; fi
 }
 
 ui_password() { # $1=prompt
-  local val; read -rsp "$1: " val </dev/tty; echo; echo "$val"
+  local val; read -rsp "  $1: " val </dev/tty; echo; echo "$val"
 }
 
 ui_choose() { # $1=header, rest=options -> prints choice
   local header="$1"; shift
-  printf '\n  %s\n' "$header" >&3
+  printf '\n  %s%s%s\n' "$C_ACCENT" "$header" "$C_RESET" >&3
   local i=1 opt
-  for opt in "$@"; do printf '  %s) %s\n' "$i" "$opt" >&3; i=$((i + 1)); done
+  for opt in "$@"; do printf '    %s) %s\n' "$i" "$opt" >&3; i=$((i + 1)); done
   local pick; read -rp "  > [1] " pick </dev/tty; pick="${pick:-1}"
   i=1
   for opt in "$@"; do [ "$i" = "$pick" ] && { echo "$opt"; return; }; i=$((i + 1)); done
@@ -1023,8 +1023,9 @@ prompt_config() {
   fi
 
   if ! ui_confirm "Install into $APP_DIR ${DOMAIN:+with domain $DOMAIN}${TUNNEL:+via quick tunnel}?"; then
-    echo "aborted" >&2; exit 1
+    printf '\n  aborted.\n\n' >&3; exit 1
   fi
+  printf '\n' >&3
 }
 
 # ---------------------------------------------------------------------------
