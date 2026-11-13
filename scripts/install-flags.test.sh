@@ -24,6 +24,24 @@ t_err "--tunnel-token without value rejected" "unknown tunnel token" bash instal
 bash install.sh --help 2>&1 | grep -q -- '--proxy' \
   && echo "ok - help text mentions --proxy" || { echo "FAIL - help text mentions --proxy"; fails=$((fails + 1)); }
 
+# `curl ... | bash` feeds the script in on stdin, so the script must never
+# replace fd 0 — bash reads the remaining script from it and hangs mid-file.
+if grep -qE 'exec[[:space:]]*<[[:space:]]*/dev/tty' install.sh; then
+  echo "FAIL - install.sh reuses fd 0 (exec </dev/tty) and will hang when piped"
+  fails=$((fails + 1))
+else
+  echo "ok - install.sh never replaces stdin (safe to pipe)"
+fi
+# Interactive detection must not depend on stdin, or piped runs lose all prompts.
+grep -q 'have_tty() { \[ -t 1 \]' install.sh \
+  && echo "ok - have_tty keys off the terminal, not stdin" \
+  || { echo "FAIL - have_tty still requires stdin to be a tty"; fails=$((fails + 1)); }
+# A piped 40 KB script is the size that used to break; prove the real thing runs.
+out="$(cat install.sh | bash -s -- --help 2>&1 | head -1)"
+[[ "$out" == "Solstice panel installer" ]] \
+  && echo "ok - piped run reaches usage without hanging" \
+  || { echo "FAIL - piped run did not reach usage (got: $out)"; fails=$((fails + 1)); }
+
 # Templates exist and carry the directives the panel needs
 for f in deploy/nginx-vhost.conf.template deploy/apache-vhost.conf.template; do
   [ -f "$f" ] && echo "ok - $f exists" || { echo "FAIL - $f exists"; fails=$((fails + 1)); }

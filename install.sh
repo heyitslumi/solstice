@@ -193,7 +193,7 @@ run_step() { # $1=label, rest=command
   STEP_N=$((STEP_N + 1))
   CURRENT_STEP="$label"
   ui_step_start "$label"
-  if "$@" >>"$LOG_FILE" 2>&1; then
+  if "$@" </dev/null >>"$LOG_FILE" 2>&1; then
     ui_step_done
     CURRENT_STEP=""
     return 0
@@ -208,12 +208,12 @@ run_step() { # $1=label, rest=command
 # Prompt helpers (gum when interactive, plain read otherwise)
 # ---------------------------------------------------------------------------
 HAVE_GUM=0
-have_tty() { [ -t 0 ] && [ -t 1 ]; }
+have_tty() { [ -t 1 ] && [ -c /dev/tty ]; }
 
 ui_confirm() { # $1=question -> 0=yes
   [ "$ASSUME_YES" -eq 1 ] && return 0
-  if [ "$HAVE_GUM" -eq 1 ]; then gum confirm "$1"; else
-    local ans; read -rp "$1 [Y/n] " ans
+  if [ "$HAVE_GUM" -eq 1 ]; then gum confirm "$1" </dev/tty; else
+    local ans; read -rp "$1 [Y/n] " ans </dev/tty
     [[ "${ans:-Y}" =~ ^[Yy]$ ]]
   fi
 }
@@ -222,31 +222,31 @@ ui_input() { # $1=prompt $2=placeholder $3=default
   local prompt="$1" placeholder="${2:-}" default="${3:-}"
   if [ "$HAVE_GUM" -eq 1 ]; then
     if [ -n "$default" ]; then
-      gum input --prompt "$prompt " --placeholder "$placeholder" --value "$default"
+      gum input --prompt "$prompt " --placeholder "$placeholder" --value "$default" </dev/tty
     else
-      gum input --prompt "$prompt " --placeholder "$placeholder"
+      gum input --prompt "$prompt " --placeholder "$placeholder" </dev/tty
     fi
   else
     local val
-    if [ -n "$default" ]; then read -rp "$prompt [$default]: " val; echo "${val:-$default}"
-    else read -rp "$prompt: " val; echo "$val"; fi
+    if [ -n "$default" ]; then read -rp "$prompt [$default]: " val </dev/tty; echo "${val:-$default}"
+    else read -rp "$prompt: " val </dev/tty; echo "$val"; fi
   fi
 }
 
 ui_password() { # $1=prompt
-  if [ "$HAVE_GUM" -eq 1 ]; then gum input --password --prompt "$1 "
-  else local val; read -rsp "$1: " val; echo; echo "$val"; fi
+  if [ "$HAVE_GUM" -eq 1 ]; then gum input --password --prompt "$1 " </dev/tty
+  else local val; read -rsp "$1: " val </dev/tty; echo; echo "$val"; fi
 }
 
 ui_choose() { # $1=header, rest=options -> prints choice
   local header="$1"; shift
   if [ "$HAVE_GUM" -eq 1 ]; then
-    gum choose --header "$header" "$@"
+    gum choose --header "$header" "$@" </dev/tty
   else
     echo "$header" >&2
     local i=1 opt
     for opt in "$@"; do echo "  $i) $opt" >&2; i=$((i + 1)); done
-    local pick; read -rp "> [1] " pick; pick="${pick:-1}"
+    local pick; read -rp "> [1] " pick </dev/tty; pick="${pick:-1}"
     i=1
     for opt in "$@"; do [ "$i" = "$pick" ] && { echo "$opt"; return; }; i=$((i + 1)); done
     echo "$1"
@@ -349,10 +349,9 @@ on_exit() {
 }
 trap on_exit EXIT
 
-# Piped installs consume stdin; hand the terminal back so prompts still work.
-if [ ! -t 0 ] && [ -c /dev/tty ] && { : </dev/tty; } 2>/dev/null; then
-  exec </dev/tty
-fi
+# `curl ... | bash` feeds this script in on stdin. Never replace fd 0 — bash
+# reads the rest of the script from it — so prompts open /dev/tty directly and
+# every command a step runs gets /dev/null for stdin.
 
 # ---------------------------------------------------------------------------
 # Resolve install directory
@@ -961,18 +960,9 @@ CLI
 # Prompts
 # ---------------------------------------------------------------------------
 prompt_config() {
-  # Tunnel type: quick tunnel (no account) or the user's own domain via a
-  # named-tunnel token. Non-interactive default stays quick tunnel.
-  if [ "$TUNNEL" -eq 1 ] && [ -z "$TUNNEL_TOKEN" ] && have_tty && [ "$ASSUME_YES" -eq 0 ]; then
-    local tunnel_pick
-    tunnel_pick="$(ui_choose "Tunnel type" \
-      "Quick tunnel (no account, random URL)" \
-      "Own domain (paste a Cloudflare tunnel token)")"
-    if [[ "$tunnel_pick" == Own* ]]; then
-      TUNNEL_TOKEN="$(ui_password "Tunnel token (from your Cloudflare dashboard)")"
-      if [ -n "$TUNNEL_TOKEN" ]; then TUNNEL_MODE="token"; else TUNNEL_TOKEN=""; warn "no token entered; using a quick tunnel"; fi
-    fi
-  elif [ -n "$TUNNEL_TOKEN" ]; then
+  # --tunnel means a quick tunnel; --tunnel-token means the user's own domain.
+  # Both are explicit, so there is nothing to ask here.
+  if [ -n "$TUNNEL_TOKEN" ]; then
     TUNNEL_MODE="token"
   fi
 
