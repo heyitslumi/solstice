@@ -248,8 +248,8 @@ INSTALL_META="$CONFIG_DIR/install.env"
 
 repo_present() { [ -f "$APP_DIR/package.json" ] && [ -d "$APP_DIR/apps/api" ]; }
 
-# An upgrade or a purge reuses the recorded install; explicit flags still win.
-if { [ "$UPGRADE" -eq 1 ] || [ "$PURGE" -eq 1 ]; } && [ -f "$INSTALL_META" ]; then
+# An upgrade, uninstall, or purge reuses the recorded install; explicit flags still win.
+if { [ "$UPGRADE" -eq 1 ] || [ "$UNINSTALL" -eq 1 ] || [ "$PURGE" -eq 1 ]; } && [ -f "$INSTALL_META" ]; then
   _app_dir="$APP_DIR"
   # shellcheck source=/dev/null
   . "$INSTALL_META"
