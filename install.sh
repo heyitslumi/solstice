@@ -8,8 +8,11 @@
 #   sudo ./install.sh --domain panel.example.com --admin-email you@example.com
 #
 # Flags (all optional; interactive prompts fill the gaps):
-#   --domain HOST          public hostname served by Caddy with automatic TLS
-#   --tunnel               skip Caddy; expose via a Cloudflare quick tunnel
+#   --domain HOST          public hostname (Caddy/nginx/Apache + automatic TLS)
+#   --proxy NAME           reverse proxy: caddy (default) | nginx | apache | none
+#   --tunnel               skip the proxy; expose via a Cloudflare quick tunnel
+#   --tunnel-token TOKEN   Cloudflare named tunnel token (your own domain; create
+#                          the tunnel in your CF dashboard pointing at localhost)
 #   --admin-email EMAIL    operator email; becomes admin on first registration
 #   --mail relay|smtp      email delivery (default: relay = Solstice Cloud Relay)
 #   --smtp-host HOST       SMTP server hostname (with --mail smtp)
@@ -19,7 +22,7 @@
 #   --smtp-tls MODE        STARTTLS | TLS | None (default STARTTLS)
 #   --db-url URL           reuse an existing Postgres (default: install local)
 #   --no-incus             skip Incus install/init (panel only, no workloads)
-#   --no-caddy             do not touch Caddy; you run your own proxy
+#   --no-caddy             do not touch any proxy (alias of --proxy none)
 #   --app-dir DIR          install target (default /opt/solstice, or the clone)
 #   --branch NAME          git branch to install (default main)
 #   --yes                  answer yes to every confirmation
@@ -37,10 +40,12 @@ LOG_FILE="${SOLSTICE_LOG:-/var/log/solstice-install.log}"
 
 DOMAIN=""
 TUNNEL=0
+TUNNEL_TOKEN=""
 ADMIN_EMAIL=""
 DB_URL=""
 INSTALL_INCUS=1
-INSTALL_CADDY=1
+PROXY="" # resolved to caddy|nginx|apache|none after arg parsing
+PROXY_EXPLICIT=0
 APP_DIR=""
 APP_DIR_FLAG=0
 ASSUME_YES=0
@@ -139,8 +144,11 @@ Solstice panel installer
   sudo ./install.sh --domain panel.example.com --admin-email you@example.com
 
 Flags:
-  --domain HOST          public hostname served by Caddy with automatic TLS
-  --tunnel               skip Caddy; expose via a Cloudflare quick tunnel
+  --domain HOST          public hostname (Caddy/nginx/Apache + automatic TLS)
+  --proxy NAME           reverse proxy: caddy (default) | nginx | apache | none
+  --tunnel               skip the proxy; expose via a Cloudflare quick tunnel
+  --tunnel-token TOKEN   Cloudflare named tunnel token (own domain; create the
+                         tunnel in your CF dashboard pointing at localhost)
   --admin-email EMAIL    operator email; becomes admin on first registration
   --mail relay|smtp      email delivery (default: ask, relay when non-interactive)
   --smtp-host HOST       SMTP server hostname (with --mail smtp)
@@ -150,7 +158,7 @@ Flags:
   --smtp-tls MODE        STARTTLS | TLS | None (default STARTTLS)
   --db-url URL           reuse an existing Postgres (default: install local)
   --no-incus             skip Incus install/init (panel only, no workloads)
-  --no-caddy             do not touch Caddy; you run your own proxy
+  --no-caddy             do not touch any proxy (alias of --proxy none)
   --app-dir DIR          install target (default /opt/solstice, or the clone)
   --branch NAME          git branch to install (default main)
   --yes                  answer yes to every confirmation
@@ -164,6 +172,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN="${2:-}"; shift 2 ;;
     --tunnel) TUNNEL=1; shift ;;
+    --tunnel-token) [ $# -ge 2 ] || die "unknown tunnel token: missing value (--tunnel-token TOKEN)"; TUNNEL_TOKEN="$2"; TUNNEL=1; shift 2 ;;
+    --proxy) [ $# -ge 2 ] || die "unknown proxy: missing value (--proxy caddy|nginx|apache|none)"; PROXY="$2"; PROXY_EXPLICIT=1; shift 2 ;;
     --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
     --mail) MAIL_MODE="${2:-}"; shift 2 ;;
     --smtp-host) SMTP_HOST="${2:-}"; shift 2 ;;
@@ -173,7 +183,7 @@ while [ $# -gt 0 ]; do
     --smtp-tls) SMTP_TLS="${2:-STARTTLS}"; shift 2 ;;
     --db-url) DB_URL="${2:-}"; shift 2 ;;
     --no-incus) INSTALL_INCUS=0; shift ;;
-    --no-caddy) INSTALL_CADDY=0; shift ;;
+    --no-caddy) PROXY="none"; PROXY_EXPLICIT=1; shift ;;
     --app-dir) APP_DIR="${2:-}"; APP_DIR_FLAG=1; shift 2 ;;
     --branch) BRANCH="${2:-main}"; shift 2 ;;
     --yes) ASSUME_YES=1; shift ;;
@@ -184,6 +194,13 @@ while [ $# -gt 0 ]; do
     *) die "unknown flag: $1 (see --help)" ;;
   esac
 done
+
+# Resolve the reverse proxy choice (default caddy; --no-caddy = none).
+case "${PROXY:-}" in
+  "") PROXY="caddy" ;;
+  caddy|nginx|apache|none) : ;;
+  *) die "unknown proxy: '$PROXY' (expected caddy, nginx, apache or none)" ;;
+esac
 
 [ "$(id -u)" -eq 0 ] || die "run as root (or with sudo)"
 
@@ -248,6 +265,16 @@ uninstall() {
         /etc/systemd/system/solstice-tunnel.service \
         /usr/local/bin/solstice-tunnel.sh \
         /usr/local/bin/solstice
+  # Our proxy site files only; packages and other sites are left alone.
+  if [ -f /etc/nginx/sites-available/solstice.conf ]; then
+    rm -f /etc/nginx/sites-enabled/solstice.conf /etc/nginx/sites-available/solstice.conf
+    if command -v nginx >/dev/null && nginx -t >/dev/null 2>&1; then systemctl reload nginx 2>/dev/null || true; fi
+  fi
+  if [ -f /etc/apache2/sites-available/solstice.conf ]; then
+    a2dissite solstice.conf >/dev/null 2>&1 || true
+    rm -f /etc/apache2/sites-available/solstice.conf
+    if command -v apache2ctl >/dev/null; then systemctl reload apache2 2>/dev/null || true; fi
+  fi
   systemctl daemon-reload
   if [ "$PURGE" -eq 1 ]; then
     log "purging app + data"
@@ -295,14 +322,14 @@ preflight() {
     warn "no /dev/kvm — KVM instances will not work (containers still will)"
   fi
 
-  if [ "$TUNNEL" -eq 0 ] && [ "$INSTALL_CADDY" -eq 1 ]; then
+  if [ "$TUNNEL" -eq 0 ] && [ "$PROXY" != "none" ]; then
     local p
     for p in 80 443; do
       if ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$p$"; then
         local owner
         owner="$(ss -ltnp 2>/dev/null | grep -E "[:.]$p\s" | sed -n 's/.*users:(("\([^"]*\)".*/\1/p' | head -1)"
         if [ "$owner" != "caddy" ]; then
-          die "port $p is already in use${owner:+ by $owner}; stop it or pass --no-caddy"
+          die "port $p is already in use${owner:+ by $owner}; stop it or pass --proxy none"
         fi
       fi
     done
@@ -460,6 +487,7 @@ MAIL_MODE=$MAIL_MODE
 ADMIN_EMAIL=$ADMIN_EMAIL
 SMTP_HOST=$SMTP_HOST
 DB_LOCAL=${DB_LOCAL:-0}
+PROXY=$PROXY
 EOF
   chmod 600 "$INSTALL_META"
 }
@@ -518,6 +546,65 @@ setup_caddy() {
   systemctl enable caddy >/dev/null 2>&1 || true
   systemctl restart caddy
   systemctl is-active --quiet caddy || die "caddy failed to start (journalctl -u caddy)"
+}
+
+# Make the static build readable by the proxy user (www-data), like setup_caddy
+# does for the caddy user.
+fix_dist_permissions() {
+  if runuser -u www-data -- test -r "$APP_DIR/apps/web/dist/index.html" 2>/dev/null; then return 0; fi
+  log "fixing read permissions for www-data"
+  chmod -R a+rX "$APP_DIR/apps/web/dist"
+  local d; d="$APP_DIR"
+  while [ "$d" != "/" ]; do chmod a+x "$d" 2>/dev/null || true; d="$(dirname "$d")"; done
+}
+
+# Issue a certificate via certbot; failure never kills the install — the vhost
+# stays on HTTP and the manual command is printed.
+certbot_issue() { # $1=plugin (nginx|apache)
+  [ -n "$DOMAIN" ] || return 0
+  if ! command -v certbot >/dev/null 2>&1; then
+    apt-get update -qq
+    apt-get install -y -qq certbot "python3-certbot-$1" \
+      || { warn "certbot install failed; enable TLS manually (see below)"; return 0; }
+  fi
+  [ -d "/etc/letsencrypt/live/$DOMAIN" ] && { log "certificate for $DOMAIN already exists"; return 0; }
+  if ! certbot "$1" -d "$DOMAIN" --non-interactive --agree-tos -m "${ADMIN_EMAIL:-admin@$DOMAIN}" --redirect; then
+    warn "TLS issuance failed (is DNS pointed at this server?)"
+    warn "run later: certbot $1 -d $DOMAIN --non-interactive --agree-tos -m $ADMIN_EMAIL --redirect"
+  fi
+}
+
+setup_nginx() {
+  [ -n "$DOMAIN" ] || die "nginx needs a hostname (--domain HOST)"
+  if ! command -v nginx >/dev/null; then
+    apt-get install -y -qq nginx
+  fi
+  sed -e "s#__DOMAIN__#$DOMAIN#g" -e "s#__API_PORT__#$API_PORT#g" -e "s#__APP_DIR__#$APP_DIR#g" \
+    deploy/nginx-vhost.conf.template > /etc/nginx/sites-available/solstice.conf
+  ln -sf /etc/nginx/sites-available/solstice.conf /etc/nginx/sites-enabled/solstice.conf
+  nginx -t || die "nginx config invalid (nginx -t)"
+  systemctl enable nginx >/dev/null 2>&1 || true
+  systemctl reload nginx 2>/dev/null || systemctl restart nginx
+  systemctl is-active --quiet nginx || die "nginx failed to start (journalctl -u nginx)"
+  fix_dist_permissions
+  certbot_issue nginx
+}
+
+setup_apache() {
+  [ -n "$DOMAIN" ] || die "apache needs a hostname (--domain HOST)"
+  if ! command -v apache2ctl >/dev/null; then
+    apt-get install -y -qq apache2
+  fi
+  sed -e "s#__DOMAIN__#$DOMAIN#g" -e "s#__API_PORT__#$API_PORT#g" -e "s#__APP_DIR__#$APP_DIR#g" \
+    deploy/apache-vhost.conf.template > /etc/apache2/sites-available/solstice.conf
+  a2enmod proxy proxy_http proxy_wstunnel rewrite >/dev/null
+  a2ensite solstice.conf >/dev/null
+  apache2ctl configtest || die "apache config invalid (apachectl configtest)"
+  systemctl enable apache2 >/dev/null 2>&1 || true
+  systemctl reload apache2 2>/dev/null || systemctl restart apache2
+  systemctl is-active --quiet apache2 || die "apache failed to start (journalctl -u apache2)"
+  fix_dist_permissions
+  certbot_issue apache
 }
 
 setup_tunnel() {
@@ -601,7 +688,7 @@ verify() { # $1=public (default 1) also proves the HTTPS front door
   systemctl is-active --quiet solstice-api.service || die "solstice-api is not active"
 
   [ "${1:-1}" = "1" ] || return 0
-  if [ "$TUNNEL" -eq 0 ] && [ "$INSTALL_CADDY" -eq 1 ]; then
+  if [ "$TUNNEL" -eq 0 ] && [ "$PROXY" != "none" ]; then
     for i in $(seq 1 60); do
       if curl -fsS "https://$DOMAIN/api/health" >/dev/null 2>&1; then
         log "https://$DOMAIN is live"
@@ -609,18 +696,21 @@ verify() { # $1=public (default 1) also proves the HTTPS front door
       fi
       sleep 2
     done
-    die "https://$DOMAIN/api/health is not reachable — check DNS, firewall and 'journalctl -u caddy'"
+    die "https://$DOMAIN/api/health is not reachable — check DNS, firewall and journalctl -u ${PROXY}"
   fi
 }
 
 summary() {
   local url
   if [ "$TUNNEL" -eq 1 ]; then url="${TUNNEL_URL:-quick tunnel}"; else url="https://${DOMAIN:-your domain}"; fi
+  local proxy_line="Proxy:  $PROXY"
+  [ "$PROXY" = "none" ] && proxy_line="Proxy:  none (your own setup)"
   echo
   if [ "$HAVE_GUM" -eq 1 ]; then
     gum style --border rounded --padding "0 2" --border-foreground 214 \
       "Solstice is installed." \
       "Panel:  $url" \
+      "$proxy_line" \
       "Admin:  $ADMIN_EMAIL" \
       "Mail:   $([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")" \
       "Logs:   $LOG_FILE, journalctl -u solstice-api" \
@@ -628,6 +718,7 @@ summary() {
   else
     echo "Solstice is installed."
     echo "  Panel:  $url"
+    echo "  $proxy_line"
     echo "  Admin:  $ADMIN_EMAIL"
     echo "  Mail:   $([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")"
     echo "  Logs:   $LOG_FILE, journalctl -u solstice-api"
@@ -649,7 +740,7 @@ META=/etc/solstice/install.env
 case "${1:-status}" in
   status)
     if [ "${TUNNEL:-0}" = "1" ]; then echo "Panel:  quick tunnel (see journalctl -u solstice-tunnel)"; else echo "Panel:  https://${DOMAIN:-localhost}"; fi
-    for u in solstice-api solstice-web solstice-tunnel caddy; do
+    for u in solstice-api solstice-web solstice-tunnel caddy nginx apache2; do
       if systemctl list-unit-files "$u.service" >/dev/null 2>&1 && systemctl cat "$u.service" >/dev/null 2>&1; then
         printf '  %-18s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
       fi
@@ -682,7 +773,23 @@ CLI
 # Prompts
 # ---------------------------------------------------------------------------
 prompt_config() {
-  if [ "$TUNNEL" -eq 0 ] && [ -z "$DOMAIN" ]; then
+  # Web server choice (skipped when tunneling or the flag already picked one).
+  if [ "$TUNNEL" -eq 0 ] && [ "$PROXY_EXPLICIT" -eq 0 ] && have_tty && [ "$ASSUME_YES" -eq 0 ]; then
+    local proxy_pick
+    proxy_pick="$(ui_choose "Web server" \
+      "Caddy (recommended, automatic TLS)" \
+      "Nginx" \
+      "Apache" \
+      "None - my own setup")"
+    case "$proxy_pick" in
+      Nginx*) PROXY="nginx" ;;
+      Apache*) PROXY="apache" ;;
+      None*) PROXY="none" ;;
+      *) PROXY="caddy" ;;
+    esac
+  fi
+
+  if [ "$TUNNEL" -eq 0 ] && [ "$PROXY" != "none" ] && [ -z "$DOMAIN" ]; then
     if have_tty; then
       while [ -z "$DOMAIN" ]; do
         DOMAIN="$(ui_input "Public hostname" "panel.example.com")"
@@ -777,10 +884,13 @@ main() {
 
   if [ "$TUNNEL" -eq 1 ]; then
     run_step "quick tunnel" setup_tunnel
-  elif [ "$INSTALL_CADDY" -eq 1 ]; then
-    run_step "caddy" setup_caddy
   else
-    log "skipping Caddy (--no-caddy); point your proxy at 127.0.0.1:$API_PORT"
+    case "$PROXY" in
+      caddy) run_step "caddy" setup_caddy ;;
+      nginx) run_step "nginx" setup_nginx ;;
+      apache) run_step "apache" setup_apache ;;
+      none) log "skipping proxy (--proxy none); point your proxy at 127.0.0.1:$API_PORT" ;;
+    esac
   fi
 
   run_step "settings" write_settings "${TUNNEL_URL:-https://$DOMAIN}"

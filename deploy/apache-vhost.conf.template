@@ -1,0 +1,20 @@
+# Managed by install.sh --proxy apache; do not edit by hand.
+# HTTP vhost; certbot adds the TLS vhost + redirect.
+<VirtualHost *:80>
+	ServerName __DOMAIN__
+
+	ProxyPreserveHost On
+	AllowEncodedSlashes NoDecode
+	ProxyTimeout 600
+
+	# Console websockets first (first match wins), then the API over HTTP.
+	ProxyPassMatch "^/(api/instances/[^/]+/console)" "ws://127.0.0.1:__API_PORT__/$1" retry=0 nocanon
+	ProxyPass /api/ http://127.0.0.1:__API_PORT__/api/ nocanon
+	ProxyPassReverse /api/ http://127.0.0.1:__API_PORT__/api/
+
+	# Built SPA with client-side routing.
+	DocumentRoot __APP_DIR__/apps/web/dist
+	RewriteEngine On
+	RewriteCond %{REQUEST_FILENAME} !-f
+	RewriteRule ^ /index.html [L]
+</VirtualHost>
