@@ -2,6 +2,13 @@ name = "solstice-landing"
 main = "worker.js"
 compatibility_date = "2024-10-22"
 
+# Served on solstice.host through the zone route; no workers.dev alias or
+# preview URLs, so the site has exactly one public address.
+workers_dev = false
+preview_urls = false
+
+routes = [{ pattern = "solstice.host/*", zone_name = "solstice.host" }]
+
 # Deploy with: CLOUDFLARE_API_TOKEN=<token> npx wrangler deploy
 # Account: "Lumi domains" (e40783cbc98e269ecad290eac0daf4b6) — zone solstice.host
 # Token needs: Workers Scripts:Edit + zone Workers Routes:Edit for solstice.host
