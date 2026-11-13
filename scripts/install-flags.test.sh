@@ -32,10 +32,17 @@ if grep -qE 'exec[[:space:]]*<[[:space:]]*/dev/tty' install.sh; then
 else
   echo "ok - install.sh never replaces stdin (safe to pipe)"
 fi
-# Interactive detection must not depend on stdin, or piped runs lose all prompts.
-grep -q 'have_tty() { \[ -t 1 \]' install.sh \
-  && echo "ok - have_tty keys off the terminal, not stdin" \
-  || { echo "FAIL - have_tty still requires stdin to be a tty"; fails=$((fails + 1)); }
+# Interactive detection must not depend on stdin (piped runs) nor be evaluated
+# inside a step (stdout is the log there, so it always says "no tty").
+if awk '/^have_tty\(\)/,/^}/' install.sh | grep -q -- '-t 0'; then
+  echo "FAIL - have_tty requires stdin to be a tty"
+  fails=$((fails + 1))
+elif ! grep -q 'HAVE_TTY=1' install.sh; then
+  echo "FAIL - terminal capability is never captured at startup"
+  fails=$((fails + 1))
+else
+  echo "ok - have_tty is decided at startup, not per step"
+fi
 # A piped 40 KB script is the size that used to break; prove the real thing runs.
 out="$(cat install.sh | bash -s -- --help 2>&1 | head -1)"
 [[ "$out" == "Solstice panel installer" ]] \

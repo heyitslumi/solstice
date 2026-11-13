@@ -208,52 +208,38 @@ run_step() { # $1=label, rest=command
 }
 
 # ---------------------------------------------------------------------------
-# Prompt helpers (gum when interactive, plain read otherwise)
+# Prompt helpers (plain read, always through /dev/tty)
 # ---------------------------------------------------------------------------
-HAVE_GUM=0
-have_tty() { [ -t 1 ] && [ -c /dev/tty ]; }
+# Decided once, before any step redirects stdout into the log.
+HAVE_TTY=0
+if [ -t 1 ] && [ -c /dev/tty ]; then HAVE_TTY=1; fi
+have_tty() { [ "$HAVE_TTY" -eq 1 ]; }
 
 ui_confirm() { # $1=question -> 0=yes
   [ "$ASSUME_YES" -eq 1 ] && return 0
-  if [ "$HAVE_GUM" -eq 1 ]; then gum confirm "$1" </dev/tty; else
-    local ans; read -rp "$1 [Y/n] " ans </dev/tty
-    [[ "${ans:-Y}" =~ ^[Yy]$ ]]
-  fi
+  local ans; read -rp "$1 [Y/n] " ans </dev/tty
+  [[ "${ans:-Y}" =~ ^[Yy]$ ]]
 }
 
 ui_input() { # $1=prompt $2=placeholder $3=default
-  local prompt="$1" placeholder="${2:-}" default="${3:-}"
-  if [ "$HAVE_GUM" -eq 1 ]; then
-    if [ -n "$default" ]; then
-      gum input --prompt "$prompt " --placeholder "$placeholder" --value "$default" </dev/tty
-    else
-      gum input --prompt "$prompt " --placeholder "$placeholder" </dev/tty
-    fi
-  else
-    local val
-    if [ -n "$default" ]; then read -rp "$prompt [$default]: " val </dev/tty; echo "${val:-$default}"
-    else read -rp "$prompt: " val </dev/tty; echo "$val"; fi
-  fi
+  local prompt="$1" default="${3:-}" val
+  if [ -n "$default" ]; then read -rp "$prompt [$default]: " val </dev/tty; echo "${val:-$default}"
+  else read -rp "$prompt: " val </dev/tty; echo "$val"; fi
 }
 
 ui_password() { # $1=prompt
-  if [ "$HAVE_GUM" -eq 1 ]; then gum input --password --prompt "$1 " </dev/tty
-  else local val; read -rsp "$1: " val </dev/tty; echo; echo "$val"; fi
+  local val; read -rsp "$1: " val </dev/tty; echo; echo "$val"
 }
 
 ui_choose() { # $1=header, rest=options -> prints choice
   local header="$1"; shift
-  if [ "$HAVE_GUM" -eq 1 ]; then
-    gum choose --header "$header" "$@" </dev/tty
-  else
-    echo "$header" >&2
-    local i=1 opt
-    for opt in "$@"; do echo "  $i) $opt" >&2; i=$((i + 1)); done
-    local pick; read -rp "> [1] " pick </dev/tty; pick="${pick:-1}"
-    i=1
-    for opt in "$@"; do [ "$i" = "$pick" ] && { echo "$opt"; return; }; i=$((i + 1)); done
-    echo "$1"
-  fi
+  printf '\n  %s\n' "$header" >&3
+  local i=1 opt
+  for opt in "$@"; do printf '  %s) %s\n' "$i" "$opt" >&3; i=$((i + 1)); done
+  local pick; read -rp "  > [1] " pick </dev/tty; pick="${pick:-1}"
+  i=1
+  for opt in "$@"; do [ "$i" = "$pick" ] && { echo "$opt"; return; }; i=$((i + 1)); done
+  echo "$1"
 }
 
 # ---------------------------------------------------------------------------
@@ -490,15 +476,6 @@ install_deps() {
   apt-get update -qq
   apt-get install -y -qq curl ca-certificates git gnupg lsb-release openssl jq postgresql-client
 
-  if have_tty && ! command -v gum >/dev/null 2>&1; then
-    mkdir -p /etc/apt/keyrings
-    curl -fsSL https://repo.charm.sh/apt/gpg.key | gpg --dearmor -o /etc/apt/keyrings/charm.gpg
-    echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" > /etc/apt/sources.list.d/charm.list
-    apt-get update -qq
-    apt-get install -y -qq gum || warn "gum unavailable, using plain prompts"
-  fi
-  have_tty && command -v gum >/dev/null 2>&1 && HAVE_GUM=1
-
   if ! command -v node >/dev/null || ! node --version | grep -qE "^v(24|[3-9][0-9])"; then
     curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
     apt-get install -y -qq nodejs
@@ -560,9 +537,13 @@ EOF
   # init --auto can half-fail (esp. nested); ensure pool + network + profile exist.
   incus storage show default >/dev/null 2>&1 || incus storage create default dir
   incus network show incusbr0 >/dev/null 2>&1 || incus network create incusbr0
-  incus profile device show default root >/dev/null 2>&1 \
+  # `incus profile device show` takes no device name, so check the list instead —
+  # otherwise the guard never passes and re-running the installer dies here.
+  local devices
+  devices="$(incus profile device list default 2>/dev/null || true)"
+  grep -qx 'root' <<<"$devices" \
     || incus profile device add default root disk path=/ pool=default
-  incus profile device show default eth0 >/dev/null 2>&1 \
+  grep -qx 'eth0' <<<"$devices" \
     || incus profile device add default eth0 nic network=incusbr0 name=eth0
 }
 
@@ -898,24 +879,13 @@ summary() {
   elapsed=" in $(ui_duration $((SECONDS - INSTALL_STARTED)))"
 
   printf '\n' >&3
-  if [ "$HAVE_GUM" -eq 1 ]; then
-    gum style --border rounded --padding "0 2" --border-foreground 214 \
-      "Solstice is installed${elapsed}." \
-      "Panel:  $url" \
-      "$proxy_line" \
-      "Admin:  $ADMIN_EMAIL" \
-      "Mail:   $([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")" \
-      "Logs:   $LOG_LINK, journalctl -u solstice-api" \
-      "CLI:    solstice status" >&3
-  else
-    printf '  %sSolstice is installed%s%s.\n\n' "$C_BOLD" "$C_RESET" "$elapsed" >&3
-    printf '  %-8s %s\n' "Panel" "$url" >&3
-    printf '  %-8s %s\n' "Admin" "$ADMIN_EMAIL" >&3
-    printf '  %-8s %s\n' "Mail" "$([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")" >&3
-    printf '  %-8s %s\n' "Proxy" "${proxy_line#*:  }" >&3
-    printf '  %-8s %s\n' "Logs" "$LOG_LINK, journalctl -u solstice-api" >&3
-    printf '  %-8s %s\n' "CLI" "solstice status" >&3
-  fi
+  printf '  %sSolstice is installed%s%s.\n\n' "$C_BOLD" "$C_RESET" "$elapsed" >&3
+  printf '  %-8s %s\n' "Panel" "$url" >&3
+  printf '  %-8s %s\n' "Admin" "$ADMIN_EMAIL" >&3
+  printf '  %-8s %s\n' "Mail" "$([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")" >&3
+  printf '  %-8s %s\n' "Proxy" "${proxy_line#*:  }" >&3
+  printf '  %-8s %s\n' "Logs" "$LOG_LINK, journalctl -u solstice-api" >&3
+  printf '  %-8s %s\n' "CLI" "solstice status" >&3
   printf '\n  Next: open %s and register with %s.\n\n' "$url" "$ADMIN_EMAIL" >&3
 }
 
