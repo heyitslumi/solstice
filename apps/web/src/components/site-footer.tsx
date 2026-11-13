@@ -2,7 +2,7 @@ import { useAppConfig } from '@/lib/config'
 import { LegalLinks } from '@/components/legal-links'
 
 /* Persistent site footer: copyright + powered-by on the left, legal links
-   on the right. Hidden on small screens (no room). */
+   on the right. Wraps on small screens. */
 export function SiteFooter() {
   const { config } = useAppConfig()
   const name = config.name || 'Solstice'
@@ -10,8 +10,8 @@ export function SiteFooter() {
     config.legalTermsUrl?.trim() || config.legalPrivacyUrl?.trim() || config.legalAupUrl?.trim(),
   )
   return (
-    <footer className="hidden shrink-0 border-t border-border px-5 py-3 sm:block sm:px-8">
-      <div className="flex items-center justify-between gap-4">
+    <footer className="shrink-0 border-t border-border px-5 py-3 sm:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <p className="text-[11px] text-fg-subtle">
           © {new Date().getFullYear()} {name} — powered by{' '}
           <a
