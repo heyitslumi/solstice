@@ -41,6 +41,7 @@ export function AdminTemplatesPage() {
     updates: any[]
     hidden: OsTemplate[]
     installedCount: number
+    catalogSize: number
   } | null>(null)
   const [, setManagerLoading] = useState(false)
   const [installingSlug, setInstallingSlug] = useState<string | null>(null)
@@ -617,7 +618,9 @@ export function AdminTemplatesPage() {
                     ))}
                   {managerData?.available.length === 0 && (
                     <div className="p-8 text-center text-xs text-fg-subtle">
-                      All upstream templates are already installed.
+                      {managerData.catalogSize === 0
+                        ? 'The template catalogue is not available in this build.'
+                        : 'Every template in this catalogue is already installed.'}
                     </div>
                   )}
                 </div>

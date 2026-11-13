@@ -1300,6 +1300,8 @@ export const api = {
       }>
       hidden: OsTemplate[]
       installedCount: number
+      /** 0 when the bundled catalogue failed to load. */
+      catalogSize: number
     }>('/api/admin/os-templates/manager')
   },
 

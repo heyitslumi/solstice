@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { readFileSync, statfsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import os from 'node:os'
 
 import { getConnInfo } from '@hono/node-server/conninfo'
@@ -7611,18 +7612,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const admin = await requireAdmin(c)
     if (!admin) return c.json({ message: 'Forbidden.' }, 403)
 
-    // Load upstream registry (from local repo or fallback to GitHub raw)
+    // The catalogue ships with the panel: no network, no separate repo to keep
+    // in sync, and it works on a host with no outbound access.
     let upstreamTemplates: any[] = []
     try {
-      const localRegistryPath = '/root/solstice-images-repo/templates/index.json'
-      if (fs.existsSync(localRegistryPath)) {
-        upstreamTemplates = JSON.parse(fs.readFileSync(localRegistryPath, 'utf8'))
-      } else {
-        const ghRes = await fetch('https://raw.githubusercontent.com/heyitslumi/solstice-images/main/templates/index.json', { signal: AbortSignal.timeout(5000) })
-        if (ghRes.ok) upstreamTemplates = await ghRes.json()
-      }
+      const registryPath = fileURLToPath(new URL('./registry/templates.json', import.meta.url))
+      upstreamTemplates = JSON.parse(readFileSync(registryPath, 'utf8'))
     } catch (err) {
-      console.warn('Failed to load upstream template registry:', err)
+      console.warn('Failed to load the bundled template registry:', err)
     }
 
     // Local installed templates
@@ -7666,6 +7663,9 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       updates,
       hidden,
       installedCount: installed.length,
+      // 0 means the bundled catalogue did not load — the UI must not claim
+      // "everything is installed" in that case.
+      catalogSize: upstreamTemplates.length,
     })
   })
 
