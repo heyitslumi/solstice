@@ -384,13 +384,13 @@ export function LoginPage() {
       />
 
       {config.demoMode ? (
-        <div className="rounded-control border border-sun-500/40 bg-gradient-to-br from-sun-500/15 via-[#101822] to-[#101822] p-4 text-center">
-          <p className="text-[13px] text-white/80">
+        <div className="rounded-control border border-sun-500/40 bg-sun-500/10 dark:bg-gradient-to-br dark:from-sun-500/15 dark:via-[#101822] dark:to-[#101822] p-4 text-center">
+          <p className="text-[13px] text-fg-muted dark:text-white/80">
             Welcome to the public demo! Explore the panel with full admin permissions:
           </p>
           <Button
             type="button"
-            className="mt-3 w-full bg-sun-400 font-medium text-[#241503] hover:bg-sun-300"
+            className="mt-3 w-full bg-sun-400 font-medium text-[#241503] hover:bg-sun-300 shadow-sm"
             disabled={pending || demoPending}
             onClick={() => void handleDemoSignIn()}
           >

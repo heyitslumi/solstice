@@ -109,6 +109,26 @@ function publicOrigin(config?: Record<string, string>) {
   return (process.env.PUBLIC_ORIGIN ?? 'http://localhost:5173').replace(/\/+$/, '')
 }
 
+async function checkIsDemo(): Promise<boolean> {
+  if (process.env.DEMO_MODE === 'true') return true
+  const config = await getSystemSettings()
+  return config['app_demo_mode'] === 'true'
+}
+
+function mockDemoIp4(seed: string): string {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) & 0xffffffff
+  const lastOctet = (Math.abs(hash) % 240) + 10
+  return `198.51.100.${lastOctet}`
+}
+
+function mockDemoIp6(seed: string): string {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) hash = (hash * 33 + seed.charCodeAt(i)) & 0xffffffff
+  const suffix = (Math.abs(hash) % 65535).toString(16).padStart(4, '0')
+  return `2001:db8:85a3::${suffix}`
+}
+
 /*
  * Rate limits are per client, so the key has to actually identify a client.
  * `x-forwarded-for` is only trustworthy when a proxy we control overwrites it,
@@ -2546,13 +2566,14 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       [user.id, limit, offset],
     )
 
+    const isDemo = await checkIsDemo()
     return c.json({
       total: Number(countRow?.total ?? 0),
       activities: rows.map((r) => ({
         id: r.id,
         action: r.action,
         details: r.details,
-        ipAddress: r.ip_address,
+        ipAddress: isDemo && r.ip_address ? '198.51.100.1' : r.ip_address,
         createdAt: toIso(r.created_at),
       })),
     })
@@ -2735,6 +2756,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       console.error('Failed to list Incus instances:', err)
     }
 
+    const isDemo = await checkIsDemo()
+
     const instances = dbRows.map((row) => {
       const live = incusMap.get(row.name)
       const liveStatus = live?.status?.toLowerCase() || ''
@@ -2762,6 +2785,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
             }
           }
         }
+      }
+
+      if (isDemo) {
+        if (ip4 !== '—') ip4 = mockDemoIp4(row.name || row.id)
+        if (ip6 !== '—') ip6 = mockDemoIp6(row.name || row.id)
       }
 
       const memBytes = live?.state?.memory?.usage || 0
@@ -3857,6 +3885,9 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
      panel origin — SSH cannot traverse the HTTP tunnel. Admins should keep
      node records pointed at reachable addresses. */
   async function sshHostFor(instance: InstanceRow): Promise<string> {
+    if (await checkIsDemo()) {
+      return mockDemoIp4(instance.name || instance.id || 'demo-host')
+    }
     const node = instance.node_id
       ? await queryOne<{ fqdn: string; ip_address: string; public_ip: string }>(
           'SELECT fqdn, ip_address, public_ip FROM nodes WHERE id = $1',
@@ -4986,7 +5017,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         LIMIT 50`,
       [instance.id, `%"${instance.name}"%`, !!me?.is_admin, session.user_id],
     )
-    return c.json({ tasks: rows })
+    const isDemo = await checkIsDemo()
+    return c.json({
+      tasks: rows.map((r) => ({
+        ...r,
+        ip_address: isDemo && r.ip_address ? '198.51.100.1' : r.ip_address,
+      })),
+    })
   })
 
   app.get('/api/instances/:id', async (c) => {
@@ -5029,6 +5066,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const isRunning = liveStatusRaw === 'running'
     const liveStatusOut = isRunning ? 'running' : liveStatusRaw === 'frozen' || liveStatusRaw === 'freezing' ? 'frozen' : 'stopped'
 
+    const isDemo = await checkIsDemo()
+
     let ip4 = '—'
     let ip6 = '—'
     let totalBytes = 0
@@ -5041,19 +5080,22 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         const tx = iface.counters?.bytes_sent || 0
         totalBytes += rx + tx
 
-        const ifaceIpv4 =
+        const rawIpv4 =
           iface.addresses?.find((a: any) => a.family === 'inet' && a.scope === 'global')?.address ||
           '—'
-        const ifaceIpv6 =
+        const rawIpv6 =
           iface.addresses?.find((a: any) => a.family === 'inet6' && a.scope === 'global')?.address ||
           '—'
+
+        const ifaceIpv4 = isDemo && rawIpv4 !== '—' ? mockDemoIp4((row.name || row.id) + name) : rawIpv4
+        const ifaceIpv6 = isDemo && rawIpv6 !== '—' ? mockDemoIp6((row.name || row.id) + name) : rawIpv6
 
         if (ip4 === '—' && ifaceIpv4 !== '—') ip4 = ifaceIpv4
         if (ip6 === '—' && ifaceIpv6 !== '—') ip6 = ifaceIpv6
 
         networkInterfaces.push({
           interface: name,
-          hwaddr: iface.hwaddr,
+          hwaddr: isDemo ? '52:54:00:12:34:56' : iface.hwaddr,
           state: iface.state,
           ip4: ifaceIpv4,
           ip6: ifaceIpv6,
@@ -5552,13 +5594,15 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       [...values, limit, offset],
     )
 
+    const isDemo = await checkIsDemo()
+
     return c.json({
       total: Number(countRow?.total ?? 0),
       activities: rows.map((r) => ({
         id: r.id,
         action: r.action,
         details: r.details,
-        ipAddress: r.ip_address,
+        ipAddress: isDemo && r.ip_address ? '198.51.100.1' : r.ip_address,
         createdAt: toIso(r.created_at),
         user: r.user_id
           ? {
@@ -6356,6 +6400,19 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         ORDER BY name ASC`,
     )
 
+    if (await checkIsDemo()) {
+      for (const loc of locations) {
+        if (Array.isArray(loc.nodes)) {
+          for (const node of loc.nodes) {
+            if (node.ipAddress) node.ipAddress = mockDemoIp4(node.name || 'node-ip')
+          }
+        }
+      }
+      for (const node of unassignedNodes) {
+        if (node.ipAddress) node.ipAddress = mockDemoIp4(node.name || 'node-ip')
+      }
+    }
+
     return c.json({ locations, unassignedNodes })
   })
 
@@ -6535,6 +6592,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       systemDefaults.diskLimitGb = Math.round((stats.blocks * stats.bsize) / (1024 * 1024 * 1024)) || 100
     } catch {
       // fallback
+    }
+
+    if (await checkIsDemo()) {
+      for (const n of nodes) {
+        if (n.ipAddress) n.ipAddress = mockDemoIp4(n.name || 'node-ip')
+        if (n.publicIp) n.publicIp = mockDemoIp4((n.name || 'node') + '-pub')
+      }
     }
 
     return c.json({ nodes, systemDefaults })
@@ -6755,13 +6819,15 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const usedPorts = Number(pfRow?.used_ports || 0)
     const availablePorts = Math.max(0, totalPorts - usedPorts)
 
+    const isDemo = await checkIsDemo()
+
     return c.json({
       node: {
         id: node.id,
         name: node.name,
         fqdn: node.fqdn,
-        ipAddress: node.ip_address,
-        publicIp: node.public_ip,
+        ipAddress: isDemo && node.ip_address ? mockDemoIp4(node.name || 'node-ip') : node.ip_address,
+        publicIp: isDemo && node.public_ip ? mockDemoIp4((node.name || 'node') + '-pub') : node.public_ip,
         primaryNetwork: node.primary_network || 'incusbr0',
       },
       stats: {
@@ -7986,6 +8052,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       console.error('[admin] Failed to list Incus instances:', err)
     }
 
+    const isDemo = await checkIsDemo()
+
     const instances = rows.map((row) => {
       const live = incusMap.get(row.name)
       const isRunning = live?.status?.toLowerCase() === 'running'
@@ -8002,6 +8070,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
             }
           }
         }
+      }
+
+      if (isDemo && ip4 !== '—') {
+        ip4 = mockDemoIp4(row.name || row.id)
       }
 
       const memBytes = live?.state?.memory?.usage || 0
@@ -8311,6 +8383,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const isRunning = liveStatusRaw === 'running'
     const liveStatusOut = isRunning ? 'running' : liveStatusRaw === 'frozen' || liveStatusRaw === 'freezing' ? 'frozen' : 'stopped'
 
+    const isDemo = await checkIsDemo()
+
     let ip4 = '—'
     let ip6 = '—'
     const networkInterfaces: Array<{
@@ -8323,15 +8397,17 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (state?.network) {
       for (const [name, iface] of Object.entries(state.network)) {
         if (name === 'lo') continue
-        const v4 =
+        const rawV4 =
           iface.addresses?.find((a) => a.family === 'inet' && a.scope === 'global')?.address || '—'
-        const v6 =
+        const rawV6 =
           iface.addresses?.find((a) => a.family === 'inet6' && a.scope === 'global')?.address || '—'
+        const v4 = isDemo && rawV4 !== '—' ? mockDemoIp4((row.name || row.id) + name) : rawV4
+        const v6 = isDemo && rawV6 !== '—' ? mockDemoIp6((row.name || row.id) + name) : rawV6
         if (ip4 === '—' && v4 !== '—') ip4 = v4
         if (ip6 === '—' && v6 !== '—') ip6 = v6
         networkInterfaces.push({
           interface: name,
-          hwaddr: iface.hwaddr,
+          hwaddr: isDemo ? '52:54:00:12:34:56' : iface.hwaddr,
           state: iface.state,
           ip4: v4,
           ip6: v6,
