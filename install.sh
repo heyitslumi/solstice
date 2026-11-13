@@ -36,7 +36,10 @@ BRANCH="main"
 SERVICE_USER="solstice"
 API_PORT="${SOLSTICE_API_PORT:-8788}"
 WEB_PORT="${SOLSTICE_WEB_PORT:-5173}"
-LOG_FILE="${SOLSTICE_LOG:-/var/log/solstice-install.log}"
+# One log per run, with a stable symlink so docs and `solstice doctor` keep working.
+LOG_STAMP="$(date -u +%Y%m%d-%H%M%S)"
+LOG_FILE="${SOLSTICE_LOG:-/var/log/solstice-install-${LOG_STAMP}.log}"
+LOG_LINK="/var/log/solstice-install.log"
 
 DOMAIN=""
 TUNNEL=0
@@ -57,31 +60,144 @@ UPGRADE=0
 UNINSTALL=0
 PURGE=0
 CURRENT_STEP=""
-# Original stderr, kept because steps redirect their own stderr into the log.
+INSTALL_STARTED=0
+STEP_N=0
+STEP_TOTAL=0
+STEP_LABEL=""
+STEP_STARTED=0
+SPINNER_PID=""
+# fd 3 is the terminal, fd 9 the original stderr. Steps redirect their own
+# stdout/stderr into the log, so UI output has to bypass that redirect — which
+# is what makes a failed step still show up on screen instead of only in the log.
+exec 3>&1
 exec 9>&2
 
 # ---------------------------------------------------------------------------
 # Output helpers
+#
+# Commands run by a step are noisy (apt, npm, psql) and go to the log; the
+# terminal only ever gets the curated UI below. Everything user-facing goes
+# through ui(), so a piped or redirected run stays a readable text log.
 # ---------------------------------------------------------------------------
-log() { printf '[solstice] %s\n' "$*"; printf '[%s] %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; }
-warn() { printf '[solstice] warning: %s\n' "$*" >&2; printf '[%s] WARN %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; }
-die() { printf '[solstice] error: %s\n' "$*" >&9; printf '[%s] ERROR %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; exit 1; }
+log_file() { printf '[%s] %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; }
+log() { printf '  %s\n' "$*" >&3; log_file "$*"; }
+# Warnings are held until the current step finishes, so they never cut into the
+# spinner line. Outside a step they print straight away.
+UI_WARNINGS=()
+warn() {
+  log_file "WARN $*"
+  UI_WARNINGS+=("$*")
+  if [ -z "$CURRENT_STEP" ]; then ui_flush_warnings; fi
+}
+ui_flush_warnings() {
+  local w
+  for w in ${UI_WARNINGS[@]+"${UI_WARNINGS[@]}"}; do
+    printf '  %s! %s%s\n' "$C_YELLOW" "$w" "$C_RESET" >&3
+  done
+  UI_WARNINGS=()
+}
+die() {
+  ui_step_fail
+  printf '\n  %s%serror%s %s\n' "$C_BOLD" "$C_RED" "$C_RESET" "$*" >&3
+  log_file "ERROR $*"
+  exit 1
+}
+
+# --- terminal capabilities -------------------------------------------------
+UI_TTY=0
+if [ -t 1 ]; then UI_TTY=1; fi
+if [ "$UI_TTY" -eq 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_RESET=$'\033[0m' C_BOLD=$'\033[1m' C_DIM=$'\033[2m'
+  C_ACCENT=$'\033[38;5;214m' C_GREEN=$'\033[32m' C_RED=$'\033[31m' C_YELLOW=$'\033[33m'
+else
+  C_RESET="" C_BOLD="" C_DIM="" C_ACCENT="" C_GREEN="" C_RED="" C_YELLOW=""
+fi
+
+UI_WIDTH="$(tput cols 2>/dev/null || echo 80)"
+case "$UI_WIDTH" in ''|*[!0-9]*) UI_WIDTH=80 ;; esac
+if [ "$UI_WIDTH" -gt 100 ]; then UI_WIDTH=100; fi
+if [ "$UI_WIDTH" -lt 60 ]; then UI_WIDTH=60; fi
+UI_WIDTH=$((UI_WIDTH - 1))
+
+ui_duration() { # $1=seconds
+  local s=$1
+  if [ "$s" -lt 60 ]; then printf '%ds' "$s"; else printf '%dm %02ds' "$((s / 60))" "$((s % 60))"; fi
+}
+
+ui_step_line() { # $1=trailing glyph ('' hides it)
+  local tail="$1" dots pad num tot
+  printf -v tot '%d' "$STEP_TOTAL"
+  printf -v num "%${#tot}d" "$STEP_N"
+  # 2 spaces + "[" + num + "/" + tot + "]" + space + label
+  local plain_left=$((2 + 1 + ${#num} + 1 + ${#tot} + 1 + 1 + ${#STEP_LABEL}))
+  pad=$((UI_WIDTH - plain_left - ${#tail} - 2))
+  if [ "$pad" -lt 3 ]; then pad=3; fi
+  printf -v dots '%*s' "$pad" ''
+  dots="${dots// /.}"
+  printf '  %s[%s/%s]%s %s%s%s %s%s%s%s' \
+    "$C_DIM" "$num" "$tot" "$C_RESET" "$C_BOLD" "$STEP_LABEL" "$C_RESET" \
+    "$C_DIM" "$dots" "$C_RESET" "$tail"
+}
+
+ui_spinner() {
+  local frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏) i=0
+  trap 'exit 0' TERM
+  while :; do
+    printf '\r\033[2K%s %s' "$(ui_step_line '')" "${C_ACCENT}${frames[i]}${C_RESET}" >&3
+    i=$(( (i + 1) % ${#frames[@]} ))
+    sleep 0.12
+  done
+}
+
+ui_step_start() {
+  STEP_LABEL="$1"
+  STEP_STARTED=$SECONDS
+  log_file "--- step $STEP_N/$STEP_TOTAL: $1"
+  [ "$UI_TTY" -eq 1 ] || return 0
+  ui_spinner &
+  SPINNER_PID=$!
+}
+
+ui_stop_spinner() {
+  if [ -n "$SPINNER_PID" ]; then
+    kill "$SPINNER_PID" 2>/dev/null || true
+    wait "$SPINNER_PID" 2>/dev/null || true
+    SPINNER_PID=""
+    if [ "$UI_TTY" -eq 1 ]; then printf '\r\033[2K' >&3; fi
+  fi
+}
+
+ui_step_done() {
+  local elapsed=$((SECONDS - STEP_STARTED))
+  ui_stop_spinner
+  if [ "$UI_TTY" -eq 1 ]; then printf '\r\033[2K' >&3; fi
+  printf '%s %s✓%s\n' "$(ui_step_line '')" "$C_GREEN" "$C_RESET" >&3
+  ui_flush_warnings
+  log_file "--- step $STEP_N/$STEP_TOTAL: $STEP_LABEL done in $(ui_duration "$elapsed")"
+}
+
+ui_step_fail() {
+  [ -n "$CURRENT_STEP" ] || return 0
+  ui_stop_spinner
+  if [ "$UI_TTY" -eq 1 ]; then printf '\r\033[2K' >&3; fi
+  printf '%s %s✗%s\n' "$(ui_step_line '')" "$C_RED" "$C_RESET" >&3
+  ui_flush_warnings
+  log_file "--- step $STEP_N/$STEP_TOTAL: $STEP_LABEL FAILED"
+  CURRENT_STEP=""
+}
 
 run_step() { # $1=label, rest=command
   local label="$1"; shift
-  local start=$SECONDS
+  STEP_N=$((STEP_N + 1))
   CURRENT_STEP="$label"
-  log "→ $label"
+  ui_step_start "$label"
   if "$@" >>"$LOG_FILE" 2>&1; then
+    ui_step_done
     CURRENT_STEP=""
-    log "✓ $label ($((SECONDS - start))s)"
+    return 0
   else
     local rc=$?
-    CURRENT_STEP=""
-    log "✗ $label failed (exit $rc)"
-    echo "--- last 25 lines of $LOG_FILE ---" >&2
-    tail -n 25 "$LOG_FILE" >&2 || true
-    echo "Full log: $LOG_FILE" >&2
+    ui_step_fail
     exit "$rc"
   fi
 }
@@ -207,18 +323,25 @@ esac
 [ "$(id -u)" -eq 0 ] || die "run as root (or with sudo)"
 
 mkdir -p "$(dirname "$LOG_FILE")"
-touch "$LOG_FILE"
+: > "$LOG_FILE"
 chmod 600 "$LOG_FILE"
+# Stable path for docs and `solstice doctor`; the dated file keeps history.
+ln -sfn "$LOG_FILE" "$LOG_LINK" 2>/dev/null || true
 
-# A step that calls die exits before run_step can report; show the log tail anyway.
+# Every failure ends here: draw the failed step, then the only log tail the user sees.
 on_exit() {
   local rc=$?
-  if [ "$rc" -ne 0 ] && [ -n "$CURRENT_STEP" ]; then
+  ui_step_fail
+  ui_flush_warnings
+  ui_stop_spinner
+  if [ "$rc" -ne 0 ] && [ "$STEP_N" -gt 0 ]; then
     {
-      printf -- '--- last 25 lines of %s ---\n' "$LOG_FILE"
-      tail -n 25 "$LOG_FILE" || true
-      printf 'Full log: %s\n' "$LOG_FILE"
-    } >&9 2>&9
+      printf '\n  %sInstallation failed in step %d/%d (%s).%s\n\n' \
+        "$C_BOLD$C_RED" "$STEP_N" "$STEP_TOTAL" "${STEP_LABEL:-setup}" "$C_RESET"
+      printf '  Last 25 lines of the log:\n\n'
+      tail -n 25 "$LOG_FILE" 2>/dev/null | sed 's/^/    /' || true
+      printf '\n  %sFull log: %s%s\n\n' "$C_DIM" "$LOG_FILE" "$C_RESET"
+    } >&3 2>&3
   fi
   exit "$rc"
 }
@@ -398,7 +521,9 @@ setup_database() {
       DB_URL="postgres://panel:${pass}@127.0.0.1:5432/panel"
     fi
   fi
-  psql "$DB_URL" -tAc 'SELECT 1' >/dev/null || die "cannot connect to $DB_URL"
+  # Never echo the password half of the URL into scrollback or a ticket.
+  psql "$DB_URL" -tAc 'SELECT 1' >/dev/null \
+    || die "cannot connect to ${DB_URL%%:*}://${DB_URL#*://*@}"
 }
 
 # ---------------------------------------------------------------------------
@@ -762,27 +887,29 @@ summary() {
   else
     proxy_line="Proxy:  $PROXY"
   fi
-  echo
+  local elapsed
+  elapsed=" in $(ui_duration $((SECONDS - INSTALL_STARTED)))"
+
+  printf '\n' >&3
   if [ "$HAVE_GUM" -eq 1 ]; then
     gum style --border rounded --padding "0 2" --border-foreground 214 \
-      "Solstice is installed." \
+      "Solstice is installed${elapsed}." \
       "Panel:  $url" \
       "$proxy_line" \
       "Admin:  $ADMIN_EMAIL" \
       "Mail:   $([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")" \
-      "Logs:   $LOG_FILE, journalctl -u solstice-api" \
-      "CLI:    solstice status"
+      "Logs:   $LOG_LINK, journalctl -u solstice-api" \
+      "CLI:    solstice status" >&3
   else
-    echo "Solstice is installed."
-    echo "  Panel:  $url"
-    echo "  $proxy_line"
-    echo "  Admin:  $ADMIN_EMAIL"
-    echo "  Mail:   $([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")"
-    echo "  Logs:   $LOG_FILE, journalctl -u solstice-api"
-    echo "  CLI:    solstice status"
-    echo
-    echo "Next: open $url and register with $ADMIN_EMAIL."
+    printf '  %sSolstice is installed%s%s.\n\n' "$C_BOLD" "$C_RESET" "$elapsed" >&3
+    printf '  %-8s %s\n' "Panel" "$url" >&3
+    printf '  %-8s %s\n' "Admin" "$ADMIN_EMAIL" >&3
+    printf '  %-8s %s\n' "Mail" "$([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")" >&3
+    printf '  %-8s %s\n' "Proxy" "${proxy_line#*:  }" >&3
+    printf '  %-8s %s\n' "Logs" "$LOG_LINK, journalctl -u solstice-api" >&3
+    printf '  %-8s %s\n' "CLI" "solstice status" >&3
   fi
+  printf '\n  Next: open %s and register with %s.\n\n' "$url" "$ADMIN_EMAIL" >&3
 }
 
 install_cli() {
@@ -935,13 +1062,23 @@ prompt_config() {
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+banner() {
+  printf '\n  %sSolstice installer%s  %s·  %s%s\n' \
+    "$C_BOLD" "$C_RESET" "$C_DIM" "${1:-}" "$C_RESET" >&3
+  printf '  %sLog: %s%s\n\n' "$C_DIM" "$LOG_FILE" "$C_RESET" >&3
+}
+
 main() {
   if [ "$UNINSTALL" -eq 1 ]; then uninstall; exit 0; fi
 
-  log "Solstice installer starting (log: $LOG_FILE)"
+  INSTALL_STARTED=$SECONDS
 
   if [ "$UPGRADE" -eq 1 ]; then
     repo_present || die "no existing install at $APP_DIR"
+    # 6 fixed steps, plus "restart web" when the web unit is enabled.
+    STEP_TOTAL=6
+    if systemctl is-enabled --quiet solstice-web.service 2>/dev/null; then STEP_TOTAL=7; fi
+    banner "upgrade"
     ensure_service_user
     run_step "update sources" fetch_app
     run_step "build" build_app
@@ -955,6 +1092,11 @@ main() {
     summary
     exit 0
   fi
+
+  # 11 setup steps + the proxy/tunnel step (skipped by --proxy none) + 3 + cli.
+  STEP_TOTAL=15
+  if [ "$TUNNEL" -eq 1 ] || [ "$PROXY" != "none" ]; then STEP_TOTAL=16; fi
+  banner "$( [ "$TUNNEL" -eq 1 ] && echo "tunnel" || echo "$PROXY") · $(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-linux}") · $(dpkg --print-architecture 2>/dev/null || uname -m)"
 
   run_step "preflight" preflight
   run_step "dependencies" install_deps
