@@ -98,7 +98,9 @@ ui_flush_warnings() {
 }
 die() {
   ui_step_fail
-  printf '\n  %s%serror%s %s\n' "$C_BOLD" "$C_RED" "$C_RESET" "$*" >&3
+  # fd 9, not fd 3: errors keep going to stderr like any other CLI, while the
+  # step line itself lives on the UI fd.
+  printf '\n  %s%serror%s %s\n' "$C_BOLD" "$C_RED" "$C_RESET" "$*" >&9
   log_file "ERROR $*"
   exit 1
 }
