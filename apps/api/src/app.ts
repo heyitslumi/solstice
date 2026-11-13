@@ -2740,7 +2740,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       const liveStatus = live?.status?.toLowerCase() || ''
       const isRunning = liveStatus === 'running'
       const liveFrozen = liveStatus === 'frozen' || liveStatus === 'freezing'
-      const displayStatus = isRunning ? 'running' : liveFrozen ? 'frozen' : 'stopped'
+      // Bare servers (no OS installed yet) have no Incus instance — don't let
+      // them masquerade as "stopped" servers.
+      const displayStatus = !row.os
+        ? 'awaiting_os'
+        : isRunning ? 'running' : liveFrozen ? 'frozen' : 'stopped'
 
       let ip4 = '—'
       let ip6 = '—'
@@ -2787,7 +2791,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         name: row.name,
         type: row.type as 'kvm' | 'lxc',
         os: row.os,
-        status: displayStatus as 'running' | 'stopped' | 'frozen',
+        status: displayStatus as 'running' | 'stopped' | 'frozen' | 'awaiting_os',
         ip4,
         ip6,
         cores: row.cores,
@@ -2798,7 +2802,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         nodeName: row.node_name,
         uptime: isRunning
           ? `Since ${new Date(toIso(live?.last_used_at ?? row.created_at)).toLocaleDateString()}`
-          : 'Stopped',
+          : !row.os ? 'Not set up' : 'Stopped',
         region,
         cpuUsage,
         ramUsage,

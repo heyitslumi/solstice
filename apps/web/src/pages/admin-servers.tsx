@@ -249,7 +249,9 @@ export function AdminServersPage() {
                             'size-2.5 rounded-full',
                             s.status === 'running'
                               ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
-                              : 'bg-zinc-600',
+                              : s.status === 'awaiting_os'
+                                ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]'
+                                : 'bg-zinc-600',
                           )}
                         />
                         <div>
@@ -279,10 +281,12 @@ export function AdminServersPage() {
                           'inline-flex items-center rounded-control border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider',
                           s.status === 'running'
                             ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-                            : 'border-border bg-surface-2/60 text-fg-subtle',
+                            : s.status === 'awaiting_os'
+                              ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                              : 'border-border bg-surface-2/60 text-fg-subtle',
                         )}
                       >
-                        {s.status}
+                        {s.status === 'awaiting_os' ? 'awaiting setup' : s.status}
                       </span>
                     </td>
                     <td className="px-4 py-4 font-mono text-[12px] text-fg">{s.ip4}</td>
@@ -314,7 +318,7 @@ export function AdminServersPage() {
                               <Square size={13} weight="fill" />
                             </Button>
                           </>
-                        ) : (
+                        ) : s.status === 'awaiting_os' ? null : (
                           <Button
                             variant="ghost"
                             size="sm"

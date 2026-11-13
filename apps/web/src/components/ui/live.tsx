@@ -42,7 +42,7 @@ export function AnimatedNumber({
 }
 
 /** Status dot that emits a one-shot ping when the status flips. */
-export function StatusDot({ status }: { status: 'running' | 'stopped' | 'frozen' }) {
+export function StatusDot({ status }: { status: 'running' | 'stopped' | 'frozen' | 'awaiting_os' }) {
   const reduce = useReducedMotion()
   const [pinging, setPinging] = useState(false)
   const prevRef = useRef(status)
@@ -59,6 +59,7 @@ export function StatusDot({ status }: { status: 'running' | 'stopped' | 'frozen'
 
   const running = status === 'running'
   const frozen = status === 'frozen'
+  const awaiting = status === 'awaiting_os'
 
   return (
     <span className="relative flex size-2.5 shrink-0" aria-hidden>
@@ -66,7 +67,7 @@ export function StatusDot({ status }: { status: 'running' | 'stopped' | 'frozen'
         <span
           className={cn(
             'absolute inline-flex h-full w-full animate-ping rounded-full opacity-60',
-            running ? 'bg-emerald-400' : frozen ? 'bg-sky-400' : 'bg-zinc-500',
+            running ? 'bg-emerald-400' : frozen ? 'bg-sky-400' : awaiting ? 'bg-amber-400' : 'bg-zinc-500',
           )}
         />
       )}
@@ -77,7 +78,9 @@ export function StatusDot({ status }: { status: 'running' | 'stopped' | 'frozen'
             ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
             : frozen
               ? 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.6)]'
-              : 'bg-zinc-600',
+              : awaiting
+                ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]'
+                : 'bg-zinc-600',
         )}
       />
     </span>

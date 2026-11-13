@@ -340,6 +340,7 @@ export function DashboardPage() {
                     {servers.map((srv, index) => {
                       const isRunning = srv.status === 'running'
                       const isFrozen = srv.status === 'frozen'
+                      const isAwaiting = srv.status === 'awaiting_os'
                       const isBusy = !!actionLoading[srv.id]
                       return (
                         <motion.tr
@@ -378,11 +379,13 @@ export function DashboardPage() {
                                 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                                 : isFrozen
                                   ? 'border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400'
-                                  : 'border-border bg-surface-2/60 text-fg-subtle',
+                                  : isAwaiting
+                                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                    : 'border-border bg-surface-2/60 text-fg-subtle',
                             )}
                           >
                             <StatusDot status={srv.status} />
-                            {isRunning ? 'Running' : isFrozen ? 'Suspended' : 'Stopped'}
+                            {isRunning ? 'Running' : isFrozen ? 'Suspended' : isAwaiting ? 'Awaiting setup' : 'Stopped'}
                           </span>
                         </td>
                         <td className="px-4 py-3.5">
@@ -453,7 +456,7 @@ export function DashboardPage() {
                         </td>
                         <td className="px-5 py-3.5">
                           <div className="flex items-center justify-end gap-1">
-                            {isRunning ? (
+                            {isAwaiting ? null : isRunning ? (
                               <>
                                 <Button
                                   size="icon"

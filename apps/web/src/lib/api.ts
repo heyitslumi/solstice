@@ -447,7 +447,7 @@ export interface ApiInstance {
   owner: { id: string; email: string; name: string }
   type: 'kvm' | 'lxc'
   os: string
-  status: 'running' | 'stopped' | 'frozen'
+  status: 'running' | 'stopped' | 'frozen' | 'awaiting_os'
   ip4: string
   ip6: string
   cores: number
