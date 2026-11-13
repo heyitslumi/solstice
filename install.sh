@@ -383,13 +383,20 @@ setup_database() {
   if [ -z "$DB_URL" ]; then
     apt-get install -y -qq postgresql
     DB_LOCAL=1
-    local pass; pass="$(openssl rand -hex 24)"
-    su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='panel'\"" | grep -q 1 \
-      || su postgres -c "psql -c \"CREATE USER panel WITH PASSWORD '$pass'\""
-    su postgres -c "psql -c \"ALTER USER panel WITH PASSWORD '$pass'\""
-    su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='panel'\"" | grep -q 1 \
-      || su postgres -c "createdb -O panel panel"
-    DB_URL="postgres://panel:${pass}@127.0.0.1:5432/panel"
+    # A re-run must not rotate the password out from under a kept env file
+    # (write_env keeps the existing one) — reuse the recorded credentials.
+    if su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='panel'\"" | grep -q 1 && [ -f "$ENV_FILE" ]; then
+      DB_URL="$(sed -n 's/^DATABASE_URL=//p' "$ENV_FILE")"
+      log "reusing database credentials from $ENV_FILE"
+    else
+      local pass; pass="$(openssl rand -hex 24)"
+      su postgres -c "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='panel'\"" | grep -q 1 \
+        || su postgres -c "psql -c \"CREATE USER panel WITH PASSWORD '$pass'\""
+      su postgres -c "psql -c \"ALTER USER panel WITH PASSWORD '$pass'\""
+      su postgres -c "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='panel'\"" | grep -q 1 \
+        || su postgres -c "createdb -O panel panel"
+      DB_URL="postgres://panel:${pass}@127.0.0.1:5432/panel"
+    fi
   fi
   psql "$DB_URL" -tAc 'SELECT 1' >/dev/null || die "cannot connect to $DB_URL"
 }
