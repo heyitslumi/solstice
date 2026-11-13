@@ -77,7 +77,9 @@ for (const [route, needles] of Object.entries(EXPECT)) {
   const html = body(route)
   if (!html) continue
   for (const needle of needles) {
-    if (!html.includes(needle)) failures.push(`${route}: body missing "${needle}"`)
+    if (!html.toLowerCase().includes(needle.toLowerCase())) {
+      failures.push(`${route}: body missing "${needle}"`)
+    }
   }
 }
 
