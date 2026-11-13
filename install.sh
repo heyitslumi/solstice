@@ -335,7 +335,7 @@ preflight() {
       if ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$p$"; then
         local owner
         owner="$(ss -ltnp 2>/dev/null | grep -E "[:.]$p\s" | sed -n 's/.*users:(("\([^"]*\)".*/\1/p' | head -1)"
-        if [ "$owner" != "caddy" ]; then
+        if [ "$owner" != "caddy" ] && [ "$owner" != "nginx" ] && [ "$owner" != "apache2" ]; then
           die "port $p is already in use${owner:+ by $owner}; stop it or pass --proxy none"
         fi
       fi
