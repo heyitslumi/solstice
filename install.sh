@@ -41,6 +41,7 @@ LOG_FILE="${SOLSTICE_LOG:-/var/log/solstice-install.log}"
 DOMAIN=""
 TUNNEL=0
 TUNNEL_TOKEN=""
+TUNNEL_MODE="quick"
 ADMIN_EMAIL=""
 DB_URL=""
 INSTALL_INCUS=1
@@ -275,6 +276,11 @@ uninstall() {
     rm -f /etc/apache2/sites-available/solstice.conf
     if command -v apache2ctl >/dev/null; then systemctl reload apache2 2>/dev/null || true; fi
   fi
+  # A token tunnel's cloudflared service is ours; quick tunnels don't use it.
+  if [ "${TUNNEL_MODE:-quick}" = "token" ]; then
+    systemctl disable --now cloudflared 2>/dev/null || true
+    if command -v cloudflared >/dev/null; then cloudflared service uninstall >/dev/null 2>&1 || true; fi
+  fi
   systemctl daemon-reload
   if [ "$PURGE" -eq 1 ]; then
     log "purging app + data"
@@ -488,6 +494,7 @@ ADMIN_EMAIL=$ADMIN_EMAIL
 SMTP_HOST=$SMTP_HOST
 DB_LOCAL=${DB_LOCAL:-0}
 PROXY=$PROXY
+TUNNEL_MODE=$TUNNEL_MODE
 EOF
   chmod 600 "$INSTALL_META"
 }
@@ -614,6 +621,23 @@ setup_tunnel() {
     dpkg -i /tmp/cloudflared.deb || apt-get install -f -y -qq
   fi
   systemctl enable --now solstice-web.service
+
+  if [ "$TUNNEL_MODE" = "token" ]; then
+    # Named tunnel: the token already carries the tunnel + ingress config the
+    # user made in their dashboard (pointed at this panel's local port).
+    cloudflared service install "$TUNNEL_TOKEN"
+    systemctl enable --now cloudflared
+    local i
+    for i in $(seq 1 30); do
+      systemctl is-active --quiet cloudflared && break
+      sleep 2
+    done
+    systemctl is-active --quiet cloudflared || die "cloudflared did not come up (journalctl -u cloudflared)"
+    log "tunnel registered for https://$DOMAIN"
+    TUNNEL_URL="https://$DOMAIN"
+    return 0
+  fi
+
   systemctl enable --now solstice-tunnel.service
   TUNNEL_URL=""
   local i
@@ -704,7 +728,11 @@ summary() {
   local url
   if [ "$TUNNEL" -eq 1 ]; then url="${TUNNEL_URL:-quick tunnel}"; else url="https://${DOMAIN:-your domain}"; fi
   local proxy_line="Proxy:  $PROXY"
-  [ "$PROXY" = "none" ] && proxy_line="Proxy:  none (your own setup)"
+  if [ "$TUNNEL_MODE" = "token" ]; then
+    proxy_line="Tunnel: Cloudflare (own domain)"
+  elif [ "$PROXY" = "none" ]; then
+    proxy_line="Proxy:  none (your own setup)"
+  fi
   echo
   if [ "$HAVE_GUM" -eq 1 ]; then
     gum style --border rounded --padding "0 2" --border-foreground 214 \
@@ -739,8 +767,10 @@ META=/etc/solstice/install.env
 
 case "${1:-status}" in
   status)
-    if [ "${TUNNEL:-0}" = "1" ]; then echo "Panel:  quick tunnel (see journalctl -u solstice-tunnel)"; else echo "Panel:  https://${DOMAIN:-localhost}"; fi
-    for u in solstice-api solstice-web solstice-tunnel caddy nginx apache2; do
+    if [ "${TUNNEL:-0}" = "1" ]; then
+      if [ "${TUNNEL_MODE:-quick}" = "token" ]; then echo "Panel:  https://${DOMAIN:-localhost} (Cloudflare tunnel)"; else echo "Panel:  quick tunnel (see journalctl -u solstice-tunnel)"; fi
+    else echo "Panel:  https://${DOMAIN:-localhost}"; fi
+    for u in solstice-api solstice-web solstice-tunnel caddy nginx apache2 cloudflared; do
       if systemctl list-unit-files "$u.service" >/dev/null 2>&1 && systemctl cat "$u.service" >/dev/null 2>&1; then
         printf '  %-18s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || true)"
       fi
@@ -773,6 +803,34 @@ CLI
 # Prompts
 # ---------------------------------------------------------------------------
 prompt_config() {
+  # Tunnel type: quick tunnel (no account) or the user's own domain via a
+  # named-tunnel token. Non-interactive default stays quick tunnel.
+  if [ "$TUNNEL" -eq 1 ] && [ -z "$TUNNEL_TOKEN" ] && have_tty && [ "$ASSUME_YES" -eq 0 ]; then
+    local tunnel_pick
+    tunnel_pick="$(ui_choose "Tunnel type" \
+      "Quick tunnel (no account, random URL)" \
+      "Own domain (paste a Cloudflare tunnel token)")"
+    if [[ "$tunnel_pick" == Own* ]]; then
+      TUNNEL_TOKEN="$(ui_password "Tunnel token (from your Cloudflare dashboard)")"
+      if [ -n "$TUNNEL_TOKEN" ]; then TUNNEL_MODE="token"; else TUNNEL_TOKEN=""; warn "no token entered; using a quick tunnel"; fi
+    fi
+  elif [ -n "$TUNNEL_TOKEN" ]; then
+    TUNNEL_MODE="token"
+  fi
+
+  # Token tunnels are named for a specific hostname — the panel needs it for
+  # app_url / webauthn / mail, so ask (or require the flag) even in tunnel mode.
+  if [ -n "$TUNNEL_TOKEN" ] && [ -z "$DOMAIN" ]; then
+    if have_tty; then
+      while [ -z "$DOMAIN" ]; do
+        DOMAIN="$(ui_input "Public hostname (your tunnel's domain)" "panel.example.com")"
+        [ -n "$DOMAIN" ] || warn "the tunnel's hostname is required"
+      done
+    else
+      die "pass --domain HOST with --tunnel-token (it names your own domain)"
+    fi
+  fi
+
   # Web server choice (skipped when tunneling or the flag already picked one).
   if [ "$TUNNEL" -eq 0 ] && [ "$PROXY_EXPLICIT" -eq 0 ] && have_tty && [ "$ASSUME_YES" -eq 0 ]; then
     local proxy_pick
