@@ -123,4 +123,10 @@ sudo ./install.sh --tunnel --admin-email admin@example.com
 
 ## License
 
-Private / All Rights Reserved.
+MIT — see [LICENSE](LICENSE).
+
+Self-host it, fork it, run it for customers, ship it inside your own product. The only
+condition is that the copyright notice and permission text travel with the copy.
+
+The Solstice name and logo are not part of the grant: a fork is welcome, but it has to
+carry its own name.

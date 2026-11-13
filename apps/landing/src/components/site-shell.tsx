@@ -124,7 +124,12 @@ function Footer() {
           <a href="https://demo.solstice.host" className="hover:text-white">
             Live demo
           </a>
-          <span className="font-mono text-[11.5px] text-white/25">Built on Incus · no telemetry</span>
+          <a
+            href="https://github.com/heyitslumi/solstice/blob/main/LICENSE"
+            className="font-mono text-[11.5px] text-white/25 hover:text-white/50"
+          >
+            MIT licensed · no telemetry
+          </a>
         </nav>
       </div>
     </footer>

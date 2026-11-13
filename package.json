@@ -19,5 +19,6 @@
   },
   "devDependencies": {
     "agentation-mcp": "^1.2.0"
-  }
+  },
+  "license": "MIT"
 }
