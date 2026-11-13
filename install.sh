@@ -80,21 +80,24 @@ exec 9>&2
 # through ui(), so a piped or redirected run stays a readable text log.
 # ---------------------------------------------------------------------------
 log_file() { printf '[%s] %s\n' "$(date -u +%FT%TZ)" "$*" >>"$LOG_FILE"; }
-log() { printf '  %s\n' "$*" >&3; log_file "$*"; }
-# Warnings are held until the current step finishes, so they never cut into the
-# spinner line. Outside a step they print straight away.
-UI_WARNINGS=()
-warn() {
-  log_file "WARN $*"
-  UI_WARNINGS+=("$*")
-  if [ -z "$CURRENT_STEP" ]; then ui_flush_warnings; fi
+# Anything printed while a step is running is held back and flushed under that
+# step's own line — otherwise it lands in the middle of the spinner redraw.
+UI_PENDING=()
+log() { log_file "$*"; ui_pending "i:$*"; }
+warn() { log_file "WARN $*"; ui_pending "w:$*"; }
+ui_pending() {
+  UI_PENDING+=("$1")
+  if [ -z "$CURRENT_STEP" ]; then ui_flush_pending; fi
 }
-ui_flush_warnings() {
-  local w
-  for w in ${UI_WARNINGS[@]+"${UI_WARNINGS[@]}"}; do
-    printf '  %s! %s%s\n' "$C_YELLOW" "$w" "$C_RESET" >&3
+ui_flush_pending() {
+  local item
+  for item in ${UI_PENDING[@]+"${UI_PENDING[@]}"}; do
+    case "$item" in
+      w:*) printf '  %s! %s%s\n' "$C_YELLOW" "${item#w:}" "$C_RESET" >&3 ;;
+      *)   printf '  %s\n' "${item#i:}" >&3 ;;
+    esac
   done
-  UI_WARNINGS=()
+  UI_PENDING=()
 }
 die() {
   ui_step_fail
@@ -174,7 +177,7 @@ ui_step_done() {
   ui_stop_spinner
   if [ "$UI_TTY" -eq 1 ]; then printf '\r\033[2K' >&3; fi
   printf '%s %s✓%s\n' "$(ui_step_line '')" "$C_GREEN" "$C_RESET" >&3
-  ui_flush_warnings
+  ui_flush_pending
   log_file "--- step $STEP_N/$STEP_TOTAL: $STEP_LABEL done in $(ui_duration "$elapsed")"
 }
 
@@ -183,7 +186,7 @@ ui_step_fail() {
   ui_stop_spinner
   if [ "$UI_TTY" -eq 1 ]; then printf '\r\033[2K' >&3; fi
   printf '%s %s✗%s\n' "$(ui_step_line '')" "$C_RED" "$C_RESET" >&3
-  ui_flush_warnings
+  ui_flush_pending
   log_file "--- step $STEP_N/$STEP_TOTAL: $STEP_LABEL FAILED"
   CURRENT_STEP=""
 }
@@ -334,9 +337,9 @@ ln -sfn "$LOG_FILE" "$LOG_LINK" 2>/dev/null || true
 on_exit() {
   local rc=$?
   ui_step_fail
-  ui_flush_warnings
+  ui_flush_pending
   ui_stop_spinner
-  if [ "$rc" -ne 0 ] && [ "$STEP_N" -gt 0 ]; then
+  if [ "$rc" -ne 0 ] && [ "$STEP_N" -gt 0 ] && [ "$ABORTED" -eq 0 ]; then
     {
       printf '\n  %sInstallation failed in step %d/%d (%s).%s\n\n' \
         "$C_BOLD$C_RED" "$STEP_N" "$STEP_TOTAL" "${STEP_LABEL:-setup}" "$C_RESET"
@@ -348,6 +351,9 @@ on_exit() {
   exit "$rc"
 }
 trap on_exit EXIT
+# Ctrl-C during a long apt/npm step: stop the animation, say so, leave a clean prompt.
+ABORTED=0
+trap 'ABORTED=1; ui_step_fail; ui_stop_spinner; printf "\n  %saborted%s — nothing was rolled back; rerun to continue.\n\n" "$C_DIM" "$C_RESET" >&3; exit 130' INT TERM
 
 # `curl ... | bash` feeds this script in on stdin. Never replace fd 0 — bash
 # reads the rest of the script from it — so prompts open /dev/tty directly and
