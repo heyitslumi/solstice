@@ -42,6 +42,7 @@ DOMAIN=""
 TUNNEL=0
 TUNNEL_TOKEN=""
 TUNNEL_MODE="quick"
+CERTBOT_OK=1 # set 0 when the nginx/apache TLS fallback stays on HTTP
 ADMIN_EMAIL=""
 DB_URL=""
 INSTALL_INCUS=1
@@ -575,9 +576,11 @@ certbot_issue() { # $1=plugin (nginx|apache)
       || { warn "certbot install failed; enable TLS manually (see below)"; return 0; }
   fi
   [ -d "/etc/letsencrypt/live/$DOMAIN" ] && { log "certificate for $DOMAIN already exists"; return 0; }
-  if ! certbot "$1" -d "$DOMAIN" --non-interactive --agree-tos -m "${ADMIN_EMAIL:-admin@$DOMAIN}" --redirect; then
+  if certbot "--$1" -d "$DOMAIN" --non-interactive --agree-tos -m "${ADMIN_EMAIL:-admin@$DOMAIN}" --redirect; then
+    CERTBOT_OK=1
+  else
     warn "TLS issuance failed (is DNS pointed at this server?)"
-    warn "run later: certbot $1 -d $DOMAIN --non-interactive --agree-tos -m $ADMIN_EMAIL --redirect"
+    warn "run later: certbot --$1 -d $DOMAIN --non-interactive --agree-tos -m $ADMIN_EMAIL --redirect"
   fi
 }
 
@@ -713,6 +716,12 @@ verify() { # $1=public (default 1) also proves the HTTPS front door
 
   [ "${1:-1}" = "1" ] || return 0
   if [ "$TUNNEL" -eq 0 ] && [ "$PROXY" != "none" ]; then
+    # TLS fallback left the vhost on HTTP: the panel is up — don't fail the
+    # install over a certificate that needs DNS pointed first.
+    if [ "$CERTBOT_OK" != "1" ]; then
+      warn "panel is live on http://$DOMAIN; run the certbot command above once DNS points here"
+      return 0
+    fi
     for i in $(seq 1 60); do
       if curl -fsS "https://$DOMAIN/api/health" >/dev/null 2>&1; then
         log "https://$DOMAIN is live"
