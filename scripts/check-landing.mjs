@@ -102,6 +102,8 @@ if (existsSync(installModule)) {
     ['caddy default', { proxy: 'caddy', tunnel: 'none' }, [base], ['--proxy', '--tunnel']],
     ['nginx proxy', { proxy: 'nginx', tunnel: 'none' }, ['--proxy nginx'], ['--tunnel']],
     ['quick tunnel drops proxy', { proxy: 'nginx', tunnel: 'quick' }, ['--tunnel'], ['--proxy', '--tunnel-token']],
+    // A quick tunnel supplies its own hostname; a stale field must not leak in.
+    ['quick tunnel ignores hostname', { proxy: 'caddy', tunnel: 'quick', domain: 'p.example.com' }, ['--tunnel'], ['--domain']],
     [
       'token tunnel drops proxy',
       { proxy: 'apache', tunnel: 'token', token: 'abc', domain: 'p.example.com' },

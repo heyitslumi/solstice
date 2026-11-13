@@ -53,7 +53,9 @@ export function buildCommand(options: {
   if (options.tunnel === 'token') {
     flags.push('--tunnel-token', options.token?.trim() || '<TOKEN>')
   }
-  if (domain) flags.push('--domain', domain)
+  // A quick tunnel already has a hostname; passing one would point the mail
+  // relay at a domain that does not answer.
+  if (domain && needsDomain(options)) flags.push('--domain', domain)
   if (email) flags.push('--admin-email', email)
 
   // `bash` needs -s -- so the flags reach the script on stdin, not bash itself.
@@ -203,13 +205,15 @@ export function InstallPage() {
                     placeholder="eyJhIjoi…"
                   />
                 ) : null}
-                <Field
-                  id="domain"
-                  label={needsDomain({ tunnel, proxy }) ? 'Public hostname (required)' : 'Public hostname'}
-                  value={domain}
-                  onChange={setDomain}
-                  placeholder="panel.example.com"
-                />
+                {needsDomain({ tunnel, proxy }) ? (
+                  <Field
+                    id="domain"
+                    label="Public hostname (required)"
+                    value={domain}
+                    onChange={setDomain}
+                    placeholder="panel.example.com"
+                  />
+                ) : null}
                 <Field
                   id="email"
                   label="Operator email"
