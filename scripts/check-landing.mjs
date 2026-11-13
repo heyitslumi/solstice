@@ -2,9 +2,11 @@
 // Static self-check for the landing site build: every route is a real document
 // with its own metadata, and every internal link points at something that exists.
 import { existsSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const DIST = resolve('apps/landing/dist')
+const LANDING = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'apps/landing')
+const DIST = join(LANDING, 'dist')
 const ORIGIN = 'https://solstice.host'
 const ROUTES = ['/', '/features/', '/architecture/', '/install/', '/docs/']
 
@@ -81,6 +83,50 @@ for (const [route, needles] of Object.entries(EXPECT)) {
       failures.push(`${route}: body missing "${needle}"`)
     }
   }
+}
+
+// The install command builder: a tunnel replaces the proxy, so the two must
+// never appear together, and token mode always needs a hostname.
+const installModule = join(LANDING, 'dist-ssr/install.js')
+if (existsSync(installModule)) {
+  const { buildCommand, needsDomain } = await import(pathToFileURL(installModule).href)
+  const base = 'curl -fsSL https://solstice.host/install.sh | sudo bash'
+  const cases = [
+    ['caddy default', { proxy: 'caddy', tunnel: 'none' }, [base], ['--proxy', '--tunnel']],
+    ['nginx proxy', { proxy: 'nginx', tunnel: 'none' }, ['--proxy nginx'], ['--tunnel']],
+    ['quick tunnel drops proxy', { proxy: 'nginx', tunnel: 'quick' }, ['--tunnel'], ['--proxy', '--tunnel-token']],
+    [
+      'token tunnel drops proxy',
+      { proxy: 'apache', tunnel: 'token', token: 'abc', domain: 'p.example.com' },
+      ['--tunnel-token abc', '--domain p.example.com'],
+      ['--proxy', '--tunnel '],
+    ],
+    [
+      'flags appended',
+      { proxy: 'caddy', tunnel: 'none', domain: 'p.example.com', email: 'a@b.co' },
+      ['--domain p.example.com', '--admin-email a@b.co'],
+      [],
+    ],
+  ]
+  for (const [name, options, wanted, forbidden] of cases) {
+    const command = buildCommand(options)
+    for (const needle of wanted) {
+      if (!command.includes(needle)) failures.push(`install builder (${name}): missing "${needle}" in ${command}`)
+    }
+    for (const needle of forbidden) {
+      if (command.includes(needle)) failures.push(`install builder (${name}): unexpected "${needle}" in ${command}`)
+    }
+  }
+  for (const [name, options, want] of [
+    ['token needs domain', { tunnel: 'token', proxy: 'caddy' }, true],
+    ['quick needs none', { tunnel: 'quick', proxy: 'caddy' }, false],
+    ['own proxy needs none', { tunnel: 'none', proxy: 'none' }, false],
+    ['direct needs domain', { tunnel: 'none', proxy: 'caddy' }, true],
+  ]) {
+    if (needsDomain(options) !== want) failures.push(`needsDomain (${name}): expected ${want}`)
+  }
+} else {
+  failures.push('missing dist-ssr/install.js (build the SSR bundle first)')
 }
 
 for (const file of ['robots.txt', 'sitemap.xml']) {

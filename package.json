@@ -14,7 +14,7 @@
     "lint": "npm run lint --workspace @solstice/web",
     "test": "npm run test --workspace @solstice/api",
     "typecheck": "npm run build --workspace @solstice/web && tsc -p apps/api/tsconfig.json",
-    "build:landing": "npm run build --workspace @solstice/landing"
+    "build:landing": "npm run build --workspace @solstice/landing && node scripts/check-landing.mjs"
   },
   "devDependencies": {
     "agentation-mcp": "^1.2.0"
