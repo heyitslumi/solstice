@@ -221,6 +221,12 @@ ui_confirm() { # $1=question -> 0=yes
   [[ "${ans:-Y}" =~ ^[Yy]$ ]]
 }
 
+ui_confirm_no() { # $1=question -> 0=yes, defaults to no
+  [ "$ASSUME_YES" -eq 1 ] && return 1
+  local ans; read -rp "  $1 [y/N] " ans </dev/tty
+  [[ "${ans:-N}" =~ ^[Yy]$ ]]
+}
+
 ui_input() { # $1=prompt $2=placeholder $3=default
   local prompt="$1" default="${3:-}" val
   if [ -n "$default" ]; then read -rp "  $prompt [$default]: " val </dev/tty; echo "${val:-$default}"
@@ -228,7 +234,8 @@ ui_input() { # $1=prompt $2=placeholder $3=default
 }
 
 ui_password() { # $1=prompt
-  local val; read -rsp "  $1: " val </dev/tty; echo; echo "$val"
+  # The newline has to reach the terminal, not the captured value.
+  local val; read -rsp "  $1: " val </dev/tty; printf '\n' >&3; echo "$val"
 }
 
 ui_choose() { # $1=header, rest=options -> prints choice
@@ -936,8 +943,25 @@ CLI
 # Prompts
 # ---------------------------------------------------------------------------
 prompt_config() {
-  # --tunnel means a quick tunnel; --tunnel-token means the user's own domain.
-  # Both are explicit, so there is nothing to ask here.
+  # Nothing was specified on the command line: ask how the panel should be
+  # reachable, then only ask the questions that choice implies.
+  if [ "$TUNNEL" -eq 0 ] && [ "$PROXY_EXPLICIT" -eq 0 ] && [ -z "$DOMAIN" ] \
+     && have_tty && [ "$ASSUME_YES" -eq 0 ]; then
+    if ui_confirm_no "Expose the panel through a Cloudflare Tunnel?"; then
+      TUNNEL=1
+      if ui_confirm_no "Use your own domain? (needs a tunnel token, no open ports)"; then
+        TUNNEL_MODE="token"
+        while [ -z "$TUNNEL_TOKEN" ]; do
+          TUNNEL_TOKEN="$(ui_password "Cloudflare tunnel token")"
+          [ -n "$TUNNEL_TOKEN" ] || warn "a token is required for your own domain"
+        done
+      else
+        TUNNEL_MODE="quick"
+      fi
+    fi
+  fi
+
+  # --tunnel-token (flag or answer above) means the user's own domain.
   if [ -n "$TUNNEL_TOKEN" ]; then
     TUNNEL_MODE="token"
   fi
@@ -1022,7 +1046,7 @@ prompt_config() {
     if [ -n "$SMTP_USER" ]; then SMTP_PASS="$(ui_password "SMTP password")"; fi
   fi
 
-  if ! ui_confirm "Install into $APP_DIR ${DOMAIN:+with domain $DOMAIN}${TUNNEL:+via quick tunnel}?"; then
+  if ! ui_confirm "Start the install?"; then
     printf '\n  aborted.\n\n' >&3; exit 1
   fi
   printf '\n' >&3
@@ -1035,6 +1059,17 @@ banner() {
   printf '\n  %sSolstice installer%s  %s·  %s%s\n' \
     "$C_BOLD" "$C_RESET" "$C_DIM" "${1:-}" "$C_RESET" >&3
   printf '  %sLog: %s%s\n\n' "$C_DIM" "$LOG_FILE" "$C_RESET" >&3
+}
+
+config_summary() {
+  local where
+  if [ "$TUNNEL" -eq 1 ]; then
+    if [ "$TUNNEL_MODE" = "token" ]; then where="Cloudflare tunnel · $DOMAIN"
+    else where="Cloudflare quick tunnel"; fi
+  elif [ "$PROXY" = "none" ]; then where="no proxy · bring your own"
+  else where="$(printf '%s' "$PROXY") · $DOMAIN"; fi
+  printf '  %s→ %s · %s mail · %s%s\n\n' \
+    "$C_DIM" "$where" "$([ "$MAIL_MODE" = relay ] && echo relay || echo smtp)" "$APP_DIR" "$C_RESET" >&3
 }
 
 main() {
@@ -1062,14 +1097,16 @@ main() {
     exit 0
   fi
 
+  banner "$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-linux}") · $(dpkg --print-architecture 2>/dev/null || uname -m)"
+  prompt_config
+  config_summary
+
   # 11 setup steps + the proxy/tunnel step (skipped by --proxy none) + 3 + cli.
   STEP_TOTAL=15
   if [ "$TUNNEL" -eq 1 ] || [ "$PROXY" != "none" ]; then STEP_TOTAL=16; fi
-  banner "$( [ "$TUNNEL" -eq 1 ] && echo "tunnel" || echo "$PROXY") · $(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-linux}") · $(dpkg --print-architecture 2>/dev/null || uname -m)"
 
   run_step "preflight" preflight
   run_step "dependencies" install_deps
-  prompt_config
   run_step "database" setup_database
   run_step "incus" setup_incus
   run_step "service user" ensure_service_user
