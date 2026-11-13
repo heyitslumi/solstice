@@ -41,6 +41,13 @@ for (const route of ROUTES) {
   else if (canonical !== want) failures.push(`${route}: canonical is ${canonical}, expected ${want}`)
 
   if (!html.includes('<div id="root"')) failures.push(`${route}: no #root mount point`)
+  // A page without its own CSS or entry script renders as unstyled prerendered HTML.
+  if (!/<link rel="stylesheet"[^>]*href="\/assets\/[^"]+\.css"/.test(html)) {
+    failures.push(`${route}: no built CSS link (page entry is not mounted)`)
+  }
+  if (!/<script type="module"[^>]*src="\/assets\/[^"]+\.js"/.test(html)) {
+    failures.push(`${route}: no built JS entry (page will not hydrate)`)
+  }
 }
 
 // Every internal href must resolve: a page route, a file in dist, or a worker path.
@@ -115,6 +122,13 @@ if (existsSync(installModule)) {
     }
     for (const needle of forbidden) {
       if (command.includes(needle)) failures.push(`install builder (${name}): unexpected "${needle}" in ${command}`)
+    }
+    // Flags belong to the piped script, never to bash's own argv.
+    if (command.includes(' --') && !command.includes('bash -s -- ')) {
+      failures.push(`install builder (${name}): flags not passed via "bash -s --": ${command}`)
+    }
+    if (command.includes('bash --')) {
+      failures.push(`install builder (${name}): flags handed to bash: ${command}`)
     }
   }
   for (const [name, options, want] of [

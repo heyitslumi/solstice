@@ -112,7 +112,7 @@ function Group_({ group, index }: { group: Group; index: number }) {
   return (
     <section className="border-t border-white/5 py-16 lg:py-20">
       <div className="mx-auto grid max-w-[1200px] gap-10 px-5 sm:px-8 lg:grid-cols-12 lg:gap-14">
-        <Reveal className={flip ? 'lg:col-span-6 lg:order-2' : 'lg:col-span-6'}>
+        <Reveal className={`min-w-0 ${flip ? 'lg:order-2 lg:col-span-6' : 'lg:col-span-6'}`}>
           <Icon size={24} weight="duotone" className="text-sun-300" aria-hidden />
           <h2 className="mt-4 text-balance text-2xl font-semibold tracking-[-0.02em] sm:text-[2rem]">
             {group.title}
@@ -133,7 +133,7 @@ function Group_({ group, index }: { group: Group; index: number }) {
 
         <Reveal
           delay={0.08}
-          className={flip ? 'lg:col-span-6 lg:order-1' : 'lg:col-span-6'}
+          className={`min-w-0 ${flip ? 'lg:order-1 lg:col-span-6' : 'lg:col-span-6'}`}
         >
           {group.shot ? (
             <figure>

@@ -41,21 +41,24 @@ export function buildCommand(options: {
   domain?: string
   email?: string
 }): string {
-  const parts = ['curl -fsSL https://solstice.host/install.sh | sudo bash']
+  const flags: string[] = []
   const domain = options.domain?.trim()
   const email = options.email?.trim()
 
   // A tunnel replaces the proxy: install.sh treats --tunnel as "no Caddy".
   if (options.tunnel === 'none' && options.proxy !== 'caddy') {
-    parts.push('--proxy', options.proxy)
+    flags.push('--proxy', options.proxy)
   }
-  if (options.tunnel === 'quick') parts.push('--tunnel')
+  if (options.tunnel === 'quick') flags.push('--tunnel')
   if (options.tunnel === 'token') {
-    parts.push('--tunnel-token', options.token?.trim() || '<TOKEN>')
+    flags.push('--tunnel-token', options.token?.trim() || '<TOKEN>')
   }
-  if (domain) parts.push('--domain', domain)
-  if (email) parts.push('--admin-email', email)
-  return parts.join(' ')
+  if (domain) flags.push('--domain', domain)
+  if (email) flags.push('--admin-email', email)
+
+  // `bash` needs -s -- so the flags reach the script on stdin, not bash itself.
+  const tail = flags.length > 0 ? ` -s -- ${flags.join(' ')}` : ''
+  return `curl -fsSL https://solstice.host/install.sh | sudo bash${tail}`
 }
 
 export function needsDomain(options: { tunnel: Tunnel; proxy: Proxy }): boolean {
@@ -149,7 +152,7 @@ export function InstallPage() {
 
       <section className="mx-auto max-w-[1200px] px-5 pb-20 sm:px-8">
         <div className="grid gap-10 lg:grid-cols-12">
-          <Reveal className="lg:col-span-7">
+          <Reveal className="min-w-0 lg:col-span-7">
             <div>
               <fieldset>
                 <legend className="text-[12px] tracking-[0.14em] text-white/35 uppercase">
@@ -227,7 +230,7 @@ export function InstallPage() {
             </div>
           </Reveal>
 
-          <Reveal delay={0.08} className="lg:col-span-5">
+          <Reveal delay={0.08} className="min-w-0 lg:col-span-5">
             <div className="sticky top-24">
               <div className="rounded-panel border border-white/10 bg-[#0d141d] p-4">
                 <div className="flex items-center justify-between">
@@ -294,7 +297,7 @@ export function InstallPage() {
         </Reveal>
 
         <div className="mt-16 grid gap-10 lg:grid-cols-12">
-          <Reveal className="lg:col-span-5">
+          <Reveal className="min-w-0 lg:col-span-5">
             <h2 className="text-2xl font-semibold tracking-[-0.02em]">Requirements</h2>
             <dl className="mt-6 space-y-4">
               {[
@@ -315,7 +318,7 @@ export function InstallPage() {
             </dl>
           </Reveal>
 
-          <Reveal delay={0.08} className="lg:col-span-7">
+          <Reveal delay={0.08} className="min-w-0 lg:col-span-7">
             <h2 className="text-2xl font-semibold tracking-[-0.02em]">Flags</h2>
             <div className="mt-6 overflow-hidden rounded-panel border border-white/8">
               <table className="w-full text-left text-[13px]">
