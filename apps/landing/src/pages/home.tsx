@@ -10,16 +10,10 @@ import {
   TerminalWindow,
 } from '@phosphor-icons/react'
 import { motion, useReducedMotion } from 'motion/react'
-import { useEffect, useState } from 'react'
 
-const INSTALL = 'curl -fsSL https://solstice.host/install.sh | sudo bash'
-
-const NAV = [
-  { label: 'Features', href: '#features' },
-  { label: 'Screenshots', href: '#screenshots' },
-  { label: 'Install', href: '#install' },
-  { label: 'Requirements', href: '#requirements' },
-]
+import { Reveal } from '@/components/reveal'
+import { INSTALL, SiteShell } from '@/components/site-shell'
+import { useCopy } from '@/components/use-copy'
 
 const SHOTS = [
   {
@@ -97,136 +91,12 @@ const FEATURES: Feature[] = [
   },
 ]
 
-const STEPS = [
-  {
-    title: 'Run the command',
-    body: 'On a fresh Debian or Ubuntu box. It asks for your hostname and operator email, then installs Node, Postgres, Incus and Caddy.',
-  },
-  {
-    title: 'Point DNS at it',
-    body: 'An A record is enough. Caddy issues and renews the certificate on first request.',
-  },
-  {
-    title: 'Register your admin',
-    body: 'Open the panel and sign up with the email you gave the installer. That account is the administrator.',
-  },
-]
-
-const REQUIREMENTS = [
-  ['OS', 'Debian 12 or 13, Ubuntu 22.04 or 24.04'],
-  ['Architecture', 'amd64 or arm64'],
-  ['Memory', '1 GB minimum, 2 GB or more recommended'],
-  ['Disk', '4 GB free, more for instances'],
-  ['Ports', '80 and 443 for automatic TLS'],
-  ['KVM', 'Optional. Without /dev/kvm you get containers only.'],
-]
-
-function useCopy() {
-  const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (!copied) return
-    const id = setTimeout(() => setCopied(false), 2000)
-    return () => clearTimeout(id)
-  }, [copied])
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(INSTALL)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
-  }
-
-  return { copied, copy }
-}
-
-function Reveal({
-  children,
-  delay = 0,
-  className = '',
-}: {
-  children: React.ReactNode
-  delay?: number
-  className?: string
-}) {
-  const reduce = useReducedMotion()
-  return (
-    <motion.div
-      className={className}
-      initial={reduce ? false : { opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.15, margin: '0px 0px -8% 0px' }}
-      transition={{ duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
-function Mark({ className = 'size-7' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <defs>
-        <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffd05e" />
-          <stop offset="55%" stopColor="#fd9d1e" />
-          <stop offset="100%" stopColor="#fe5c36" />
-        </linearGradient>
-      </defs>
-      <circle cx="16" cy="16" r="7" fill="url(#sun)" />
-      <g stroke="url(#sun)" strokeWidth="2.2" strokeLinecap="round">
-        <path d="M16 2v4M16 26v4M2 16h4M26 16h4" />
-        <path d="M6.2 6.2l2.8 2.8M23 23l2.8 2.8M25.8 6.2L23 9M9 23l-2.8 2.8" opacity="0.75" />
-      </g>
-    </svg>
-  )
-}
-
-function Nav() {
-  return (
-    <header className="fixed inset-x-0 top-0 z-40 border-b border-white/5 bg-brand-surface/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[1200px] items-center gap-8 px-5 sm:px-8">
-        <a href="#top" className="flex items-center gap-2.5">
-          <Mark />
-          <span className="text-[15px] font-semibold tracking-tight">Solstice</span>
-        </a>
-
-        <nav className="hidden items-center gap-7 text-[13.5px] text-white/55 lg:flex">
-          {NAV.map((item) => (
-            <a key={item.href} href={item.href} className="transition-colors hover:text-white">
-              {item.label}
-            </a>
-          ))}
-        </nav>
-
-        <div className="ml-auto flex items-center gap-2">
-          <a
-            href="https://github.com/heyitslumi/solstice"
-            className="flex items-center gap-2 rounded-control border border-white/10 px-3 py-2 text-[13px] text-white/70 transition-colors hover:border-white/20 hover:text-white"
-          >
-            <GithubLogo size={16} weight="fill" aria-hidden />
-            <span className="hidden sm:inline">GitHub</span>
-          </a>
-          <a
-            href="#install"
-            className="rounded-control bg-sun-400 px-3.5 py-2 text-[13px] font-medium text-[#241503] transition-transform hover:bg-sun-300 active:translate-y-px"
-          >
-            Install
-          </a>
-        </div>
-      </div>
-    </header>
-  )
-}
-
 function Hero() {
   const { copied, copy } = useCopy()
   const reduce = useReducedMotion()
 
   return (
-    <section id="top" className="relative overflow-hidden pt-32 pb-20 sm:pt-36 lg:pb-28">
+    <section className="relative overflow-hidden pt-32 pb-20 sm:pt-36 lg:pb-28">
       <div className="pointer-events-none absolute inset-0 bg-grid" aria-hidden />
       <div
         className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[820px] -translate-x-1/2 rounded-full opacity-40 blur-[120px]"
@@ -265,11 +135,17 @@ function Hero() {
               {copied ? 'Copied' : 'Copy install command'}
             </button>
             <a
+              href="https://demo.solstice.host"
+              className="flex items-center gap-2 rounded-control border border-white/12 px-4 py-3 text-[14px] text-white/75 transition-colors hover:border-white/25 hover:text-white"
+            >
+              Try the live demo
+            </a>
+            <a
               href="https://github.com/heyitslumi/solstice"
               className="flex items-center gap-2 rounded-control border border-white/12 px-4 py-3 text-[14px] text-white/75 transition-colors hover:border-white/25 hover:text-white"
             >
               <GithubLogo size={17} weight="fill" aria-hidden />
-              Read the source
+              Source
             </a>
           </div>
 
@@ -321,14 +197,17 @@ function Hero() {
 
 function Screenshots() {
   return (
-    <section id="screenshots" className="mx-auto max-w-[1200px] px-5 py-20 sm:px-8 lg:py-28">
+    <section className="mx-auto max-w-[1200px] px-5 py-20 sm:px-8 lg:py-28">
       <Reveal>
         <h2 className="max-w-[22ch] text-balance text-3xl font-semibold tracking-[-0.02em] sm:text-[2.5rem]">
           The whole panel, not a teaser.
         </h2>
         <p className="mt-4 max-w-[60ch] text-pretty text-[15.5px] leading-relaxed text-white/55">
-          These are screenshots of a running install, taken from the demo instance linked in the
-          footer.
+          These are screenshots of a running install, taken from the{' '}
+          <a href="https://demo.solstice.host" className="text-sun-300 hover:text-sun-200">
+            live demo instance
+          </a>
+          .
         </p>
       </Reveal>
 
@@ -361,7 +240,7 @@ function Screenshots() {
 
 function Features() {
   return (
-    <section id="features" className="border-t border-white/5 bg-[#0c131b] py-20 lg:py-28">
+    <section className="border-t border-white/5 bg-[#0c131b] py-20 lg:py-28">
       <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
         <Reveal>
           <h2 className="max-w-[24ch] text-balance text-3xl font-semibold tracking-[-0.02em] sm:text-[2.5rem]">
@@ -417,153 +296,66 @@ function Features() {
             )
           })}
         </div>
-      </div>
-    </section>
-  )
-}
 
-function Install() {
-  const { copied, copy } = useCopy()
-  const reduce = useReducedMotion()
-
-  return (
-    <section id="install" className="mx-auto max-w-[1200px] px-5 py-20 sm:px-8 lg:py-28">
-      <div className="grid gap-12 lg:grid-cols-12">
-        <Reveal className="lg:col-span-5">
-          <div>
-            <h2 className="max-w-[18ch] text-balance text-3xl font-semibold tracking-[-0.02em] sm:text-[2.5rem]">
-              Three steps, one of them is typing.
-            </h2>
-            <p className="mt-4 max-w-[48ch] text-pretty text-[15.5px] leading-relaxed text-white/55">
-              The installer is a single shell script. It asks before it touches anything, logs every
-              step to /var/log/solstice-install.log, and refuses to report success until the API
-              answers over HTTPS.
-            </p>
-
-            <button
-              type="button"
-              onClick={copy}
-              className="mt-8 flex w-full items-center justify-between gap-4 rounded-panel border border-white/10 bg-[#0d141d] px-4 py-3.5 text-left transition-colors hover:border-white/20"
-            >
-              <code className="truncate font-mono text-[12.5px] text-white/70">{INSTALL}</code>
-              <span className="shrink-0 text-sun-300">
-                {copied ? <Check size={17} weight="bold" /> : <Copy size={17} />}
-              </span>
-            </button>
-          </div>
+        <Reveal delay={0.1}>
+          <a
+            href="/features/"
+            className="mt-10 inline-flex items-center gap-2 text-[14px] text-sun-300 transition-colors hover:text-sun-200"
+          >
+            Every feature, in detail →
+          </a>
         </Reveal>
-
-        <div className="lg:col-span-7">
-          <ol className="divide-y divide-white/6 border-y border-white/6">
-            {STEPS.map((step, i) => (
-              <motion.li
-                key={step.title}
-                className="flex gap-5 py-6"
-                initial={reduce ? false : { opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.4 }}
-                transition={{ duration: 0.5, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
-              >
-                <span className="mt-0.5 font-mono text-[12px] text-sun-400/80">0{i + 1}</span>
-                <div>
-                  <h3 className="text-[15.5px] font-medium">{step.title}</h3>
-                  <p className="mt-1.5 max-w-[58ch] text-[14px] leading-relaxed text-white/50">
-                    {step.body}
-                  </p>
-                </div>
-              </motion.li>
-            ))}
-          </ol>
-
-          <Reveal delay={0.2}>
-            <p className="mt-6 text-[13px] leading-relaxed text-white/40">
-              Already installed? <code className="font-mono text-white/65">solstice upgrade</code>{' '}
-              pulls, rebuilds and restarts, and{' '}
-              <code className="font-mono text-white/65">solstice doctor</code> reports what is
-              broken.
-            </p>
-          </Reveal>
-        </div>
       </div>
     </section>
   )
 }
 
-function Requirements() {
+function Cta() {
+  const { copied, copy } = useCopy()
   return (
-    <section id="requirements" className="border-t border-white/5 bg-[#0c131b] py-20 lg:py-24">
-      <div className="mx-auto max-w-[1200px] px-5 sm:px-8">
-        <div className="grid gap-10 lg:grid-cols-12">
-          <Reveal className="lg:col-span-4">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
-                What you need
-              </h2>
-              <p className="mt-3 max-w-[36ch] text-[14.5px] leading-relaxed text-white/50">
-                A machine you can SSH into and a hostname pointed at it. That is the whole list.
-              </p>
-            </div>
-          </Reveal>
+    <section className="mx-auto max-w-[1200px] px-5 py-20 sm:px-8 lg:py-28">
+      <Reveal>
+        <div className="rounded-panel border border-white/8 bg-[#101822] p-8 sm:p-12">
+          <h2 className="max-w-[20ch] text-balance text-3xl font-semibold tracking-[-0.02em] sm:text-[2.5rem]">
+            Three steps, one of them is typing.
+          </h2>
+          <p className="mt-4 max-w-[60ch] text-pretty text-[15.5px] leading-relaxed text-white/55">
+            Run the installer on a fresh Debian or Ubuntu box, point DNS at it, register with the
+            email you gave it. That account is the administrator.
+          </p>
 
-          <Reveal delay={0.08} className="lg:col-span-8">
-            <dl className="grid gap-x-10 gap-y-5 sm:grid-cols-2">
-              {REQUIREMENTS.map(([term, value]) => (
-                <div key={term} className="border-t border-white/8 pt-3">
-                  <dt className="font-mono text-[11px] tracking-[0.14em] text-white/35 uppercase">
-                    {term}
-                  </dt>
-                  <dd className="mt-1.5 text-[14px] leading-relaxed text-white/70">{value}</dd>
-                </div>
-              ))}
-            </dl>
-          </Reveal>
+          <button
+            type="button"
+            onClick={copy}
+            className="mt-8 flex w-full items-center justify-between gap-4 rounded-control border border-white/10 bg-[#0d141d] px-4 py-3.5 text-left transition-colors hover:border-white/20"
+          >
+            <code className="truncate font-mono text-[12.5px] text-white/70">{INSTALL}</code>
+            <span className="shrink-0 text-sun-300">
+              {copied ? <Check size={17} weight="bold" /> : <Copy size={17} />}
+            </span>
+          </button>
+
+          <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[13.5px]">
+            <a href="/install/" className="text-sun-300 hover:text-sun-200">
+              Install options and requirements →
+            </a>
+            <a href="/architecture/" className="text-white/55 hover:text-white">
+              How it fits together →
+            </a>
+          </div>
         </div>
-      </div>
+      </Reveal>
     </section>
   )
 }
 
-function Footer() {
+export function HomePage() {
   return (
-    <footer className="border-t border-white/5">
-      <div className="mx-auto flex max-w-[1200px] flex-col gap-6 px-5 py-10 sm:px-8 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2.5">
-          <Mark className="size-6" />
-          <span className="text-[14px] font-medium">Solstice</span>
-          <span className="text-[13px] text-white/35">Self-hosted VPS panel</span>
-        </div>
-
-        <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-white/45">
-          <a href="https://github.com/heyitslumi/solstice" className="hover:text-white">
-            GitHub
-          </a>
-          <a href="#install" className="hover:text-white">
-            Install
-          </a>
-          <a href="https://demo.solstice.host" className="hover:text-white">
-            Live demo
-          </a>
-          <span className="font-mono text-[11.5px] text-white/25">
-            Built on Incus · no telemetry
-          </span>
-        </nav>
-      </div>
-    </footer>
-  )
-}
-
-export default function App() {
-  return (
-    <>
-      <Nav />
-      <main>
-        <Hero />
-        <Screenshots />
-        <Features />
-        <Install />
-        <Requirements />
-      </main>
-      <Footer />
-    </>
+    <SiteShell path="/">
+      <Hero />
+      <Screenshots />
+      <Features />
+      <Cta />
+    </SiteShell>
   )
 }
