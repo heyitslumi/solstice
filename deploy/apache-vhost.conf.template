@@ -14,7 +14,13 @@
 
 	# Built SPA with client-side routing.
 	DocumentRoot __APP_DIR__/apps/web/dist
-	RewriteEngine On
-	RewriteCond %{REQUEST_FILENAME} !-f
-	RewriteRule ^ /index.html [L]
+	<Directory __APP_DIR__/apps/web/dist>
+		Options FollowSymLinks
+		AllowOverride None
+		Require all granted
+		RewriteEngine On
+		RewriteCond %{REQUEST_FILENAME} !-f
+		RewriteCond %{REQUEST_URI} !^/api/
+		RewriteRule ^ /index.html [L]
+	</Directory>
 </VirtualHost>

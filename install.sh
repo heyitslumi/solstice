@@ -750,11 +750,17 @@ summary() {
   else
     url="https://${DOMAIN:-your domain}"
   fi
-  local proxy_line="Proxy:  $PROXY"
-  if [ "$TUNNEL_MODE" = "token" ]; then
-    proxy_line="Tunnel: Cloudflare (own domain)"
+  local proxy_line=""
+  if [ "$TUNNEL" -eq 1 ]; then
+    if [ "$TUNNEL_MODE" = "token" ]; then
+      proxy_line="Tunnel: Cloudflare (own domain)"
+    else
+      proxy_line="Tunnel: Cloudflare quick tunnel"
+    fi
   elif [ "$PROXY" = "none" ]; then
     proxy_line="Proxy:  none (your own setup)"
+  else
+    proxy_line="Proxy:  $PROXY"
   fi
   echo
   if [ "$HAVE_GUM" -eq 1 ]; then

@@ -34,6 +34,7 @@ t "nginx template: no unrendered placeholders" env grep -vq '__' <<<"$nginx"
 t "nginx template: API proxy with websockets" env grep -Eq 'proxy_pass http://127.0.0.1:8788|Upgrade' <<<"$nginx"
 t "nginx template: SPA fallback" env grep -q 'index.html' <<<"$nginx"
 t "apache template: no unrendered placeholders" env grep -vq '__' <<<"$apache"
+t "apache template: directory permissions" env grep -q 'Require all granted' <<<"$apache"
 t "apache template: websocket proxy modules" env grep -Eq 'proxy_wstunnel|ws://' <<<"$apache"
 
 echo "$fails failures"
