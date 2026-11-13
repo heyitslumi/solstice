@@ -586,6 +586,7 @@ certbot_issue() { # $1=plugin (nginx|apache)
   if certbot "--$1" -d "$DOMAIN" --non-interactive --agree-tos -m "${ADMIN_EMAIL:-admin@$DOMAIN}" --redirect; then
     CERTBOT_OK=1
   else
+    CERTBOT_OK=0
     warn "TLS issuance failed (is DNS pointed at this server?)"
     warn "run later: certbot --$1 -d $DOMAIN --non-interactive --agree-tos -m $ADMIN_EMAIL --redirect"
   fi
@@ -742,7 +743,13 @@ verify() { # $1=public (default 1) also proves the HTTPS front door
 
 summary() {
   local url
-  if [ "$TUNNEL" -eq 1 ]; then url="${TUNNEL_URL:-quick tunnel}"; else url="https://${DOMAIN:-your domain}"; fi
+  if [ "$TUNNEL" -eq 1 ]; then
+    url="${TUNNEL_URL:-quick tunnel}"
+  elif [ "$CERTBOT_OK" = "0" ]; then
+    url="http://${DOMAIN:-your domain}"
+  else
+    url="https://${DOMAIN:-your domain}"
+  fi
   local proxy_line="Proxy:  $PROXY"
   if [ "$TUNNEL_MODE" = "token" ]; then
     proxy_line="Tunnel: Cloudflare (own domain)"
