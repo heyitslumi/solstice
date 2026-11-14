@@ -6572,6 +6572,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
               n.disk_limit_gb AS "diskLimitGb",
               n.server_limit AS "serverLimit",
               n.storage_enabled AS "storageEnabled",
+              n.direct_ssh AS "directSsh",
               n.cpu_cores AS "cpuCores",
               n.created_at AS "createdAt",
               l.short_code AS "locationShortCode",
@@ -6616,8 +6617,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     try {
       const row = await queryOne<{ id: string }>(
-        `INSERT INTO nodes (name, display_name, cpu_model, cpu_display, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores, server_limit)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        `INSERT INTO nodes (name, display_name, cpu_model, cpu_display, fqdn, ip_address, public_ip, port, location_id, is_public, maintenance, memory_limit_mb, disk_limit_gb, cpu_cores, server_limit, direct_ssh)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
          RETURNING id`,
         [
           String(body.name).trim(),
@@ -6635,6 +6636,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
           Number(body.diskLimitGb) || 250,
           Number(body.cpuCores) || 8,
           Number(body.serverLimit) || 0,
+          body.directSsh !== false,
         ],
       )
 
@@ -6730,6 +6732,10 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (body.storageEnabled !== undefined) {
       fields.push(`storage_enabled = $${idx++}`)
       values.push(Boolean(body.storageEnabled))
+    }
+    if (body.directSsh !== undefined) {
+      fields.push(`direct_ssh = $${idx++}`)
+      values.push(Boolean(body.directSsh))
     }
     if (body.cpuCores !== undefined) {
       fields.push(`cpu_cores = $${idx++}`)

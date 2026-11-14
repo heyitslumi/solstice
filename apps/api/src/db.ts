@@ -426,6 +426,8 @@ const SCHEMA = `
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS cpu_display text NOT NULL DEFAULT '';
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS server_limit integer NOT NULL DEFAULT 0;
   ALTER TABLE nodes ADD COLUMN IF NOT EXISTS storage_enabled boolean NOT NULL DEFAULT true;
+  /* NAT'ed hypervisors cannot serve SSH forwards; this hides and blocks them. */
+  ALTER TABLE nodes ADD COLUMN IF NOT EXISTS direct_ssh boolean NOT NULL DEFAULT true;
   /* Task audit fields on activity_logs */
   ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS node_id uuid REFERENCES nodes(id) ON DELETE SET NULL;
   ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS instance_id uuid REFERENCES instances(id) ON DELETE SET NULL;

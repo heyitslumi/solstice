@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { after, describe, it } from 'node:test'
 
 import { createApp } from './app.ts'
-import { closePool, migrate } from './db.ts'
+import { closePool, migrate, query } from './db.ts'
 import { incus } from './incus/client.ts'
 
 await migrate()
@@ -49,5 +49,12 @@ describe('incus instance endpoints', () => {
       body: JSON.stringify({ name: 'Key 1', publicKey: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG... key' }),
     })
     assert.equal(res.status, 401)
+  })
+
+  it('defaults the seeded node to direct SSH enabled', async () => {
+    const rows = await query<{ direct_ssh: boolean }>(
+      `SELECT direct_ssh FROM nodes WHERE name = 'local-incus'`,
+    )
+    assert.equal(rows[0]?.direct_ssh, true)
   })
 })
