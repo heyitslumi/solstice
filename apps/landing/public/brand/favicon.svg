@@ -1,11 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#151a24"/>
-  <g fill="none" stroke="#c7d0e0" stroke-width="4" stroke-linecap="round">
-    <rect x="15" y="13" width="34" height="10" rx="3"/>
-    <rect x="15" y="27" width="34" height="10" rx="3"/>
-    <rect x="15" y="41" width="34" height="10" rx="3"/>
+  <defs>
+    <linearGradient id="sun-fav" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd05e" />
+      <stop offset="55%" stop-color="#fd9d1e" />
+      <stop offset="100%" stop-color="#fe5c36" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0c0e12"/>
+  <circle cx="32" cy="32" r="14" fill="url(#sun-fav)" />
+  <g stroke="url(#sun-fav)" stroke-width="4.4" stroke-linecap="round">
+    <path d="M32 4v8M32 52v8M4 32h8M52 32h8" />
+    <path d="M12.4 12.4l5.6 5.6M46 46l5.6 5.6M51.6 12.4L46 18M18 46l-5.6 5.6" opacity="0.75" />
   </g>
-  <circle cx="22" cy="18" r="2.2" fill="#5eeaa8"/>
-  <circle cx="22" cy="32" r="2.2" fill="#5eeaa8"/>
-  <circle cx="22" cy="46" r="2.2" fill="#f5b04c"/>
 </svg>
