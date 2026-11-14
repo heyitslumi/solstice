@@ -836,7 +836,7 @@ export function AdminNodeFormPage() {
                     onClick={() => handleToggleSystem('directSsh', !directSsh)}
                     className={cn(
                       'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                      directSsh ? 'bg-emerald-500' : 'bg-rose-500',
+                      directSsh ? 'bg-emerald-500' : 'bg-surface-2',
                     )}
                   >
                     <span
