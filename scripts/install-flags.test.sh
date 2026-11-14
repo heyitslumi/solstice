@@ -20,6 +20,9 @@ t_err "--proxy empty rejected" "unknown proxy" bash install.sh --proxy
 t "--proxy nginx accepted (help exits 0)" bash install.sh --proxy nginx --help
 t "--no-caddy alias still accepted" bash install.sh --no-caddy --help
 t "--tunnel-token accepted" bash install.sh --tunnel-token eyJabc --help
+t "--tunnel-login accepted" bash install.sh --tunnel-login --help
+t_err "--tunnel-login without a hostname dies before install" "pass --domain HOST" \
+  bash install.sh --tunnel-login --admin-email a@b.co --yes
 t_err "--tunnel-token without value rejected" "unknown tunnel token" bash install.sh --tunnel-token
 bash install.sh --help 2>&1 | grep -q -- '--proxy' \
   && echo "ok - help text mentions --proxy" || { echo "FAIL - help text mentions --proxy"; fails=$((fails + 1)); }

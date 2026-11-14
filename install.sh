@@ -11,8 +11,10 @@
 #   --domain HOST          public hostname (Caddy/nginx/Apache + automatic TLS)
 #   --proxy NAME           reverse proxy: caddy (default) | nginx | apache | none
 #   --tunnel               skip the proxy; expose via a Cloudflare quick tunnel
-#   --tunnel-token TOKEN   Cloudflare named tunnel token (your own domain; create
-#                          the tunnel in your CF dashboard pointing at localhost)
+#   --tunnel-login         your own domain; sign in to Cloudflare during the
+#                          install and the tunnel + DNS record are created for you
+#   --tunnel-token TOKEN   your own domain with a pre-made tunnel token (no
+#                          browser; for scripts and dashboards)
 #   --admin-email EMAIL    operator email; becomes admin on first registration
 #   --mail relay|smtp      email delivery (default: relay = Solstice Cloud Relay)
 #   --smtp-host HOST       SMTP server hostname (with --mail smtp)
@@ -263,8 +265,10 @@ Flags:
   --domain HOST          public hostname (Caddy/nginx/Apache + automatic TLS)
   --proxy NAME           reverse proxy: caddy (default) | nginx | apache | none
   --tunnel               skip the proxy; expose via a Cloudflare quick tunnel
-  --tunnel-token TOKEN   Cloudflare named tunnel token (own domain; create the
-                         tunnel in your CF dashboard pointing at localhost)
+  --tunnel-login         own domain; sign in to Cloudflare during the install,
+                         which creates the tunnel and its DNS record for you
+  --tunnel-token TOKEN   own domain with a pre-made tunnel token (no browser;
+                         create the tunnel in your CF dashboard)
   --admin-email EMAIL    operator email; becomes admin on first registration
   --mail relay|smtp      email delivery (default: ask, relay when non-interactive)
   --smtp-host HOST       SMTP server hostname (with --mail smtp)
@@ -288,6 +292,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --domain) DOMAIN="${2:-}"; shift 2 ;;
     --tunnel) TUNNEL=1; shift ;;
+    --tunnel-login) TUNNEL=1; TUNNEL_MODE="login"; shift;;
     --tunnel-token) [ $# -ge 2 ] || die "unknown tunnel token: missing value (--tunnel-token TOKEN)"; TUNNEL_TOKEN="$2"; TUNNEL=1; shift 2 ;;
     --proxy) [ $# -ge 2 ] || die "unknown proxy: missing value (--proxy caddy|nginx|apache|none)"; PROXY="$2"; PROXY_EXPLICIT=1; shift 2 ;;
     --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
@@ -400,10 +405,11 @@ uninstall() {
     rm -f /etc/apache2/sites-available/solstice.conf
     if command -v apache2ctl >/dev/null; then systemctl reload apache2 2>/dev/null || true; fi
   fi
-  # A token tunnel's cloudflared service is ours; quick tunnels don't use it.
-  if [ "${TUNNEL_MODE:-quick}" = "token" ]; then
+  # A named tunnel's cloudflared service is ours; quick tunnels don't use it.
+  if [ "${TUNNEL_MODE:-quick}" != "quick" ]; then
     systemctl disable --now cloudflared 2>/dev/null || true
     if command -v cloudflared >/dev/null; then cloudflared service uninstall >/dev/null 2>&1 || true; fi
+    rm -f /etc/cloudflared/config.yml
   fi
   systemctl daemon-reload
   if [ "$PURGE" -eq 1 ]; then
@@ -745,6 +751,83 @@ setup_apache() {
   certbot_issue apache
 }
 
+cf_wait_active() {
+  local i
+  for i in $(seq 1 30); do
+    systemctl is-active --quiet cloudflared && return 0
+    sleep 2
+  done
+  die "cloudflared did not come up (journalctl -u cloudflared)"
+}
+
+# Own domain without a pasted token: sign in with `cloudflared login`, then
+# create the tunnel, point the hostname at it and install the service.
+setup_tunnel_login() {
+  have_tty || die "--tunnel-login needs a terminal to sign in; use --tunnel-token in scripts"
+
+  # A re-run on a host that is already serving this hostname: nothing to do,
+  # and no second sign-in.
+  if systemctl is-active --quiet cloudflared \
+     && grep -q "hostname: $DOMAIN\$" /etc/cloudflared/config.yml 2>/dev/null; then
+    log "tunnel already configured for https://$DOMAIN"
+    TUNNEL_URL="https://$DOMAIN"
+    return 0
+  fi
+
+  local cf_dir=/root/.cloudflared name tid
+  install -d -m 700 "$cf_dir"
+  name="solstice-$(hostname -s | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-' | cut -c1-32)"
+  [ -n "$name" ] || name=solstice
+
+  if [ ! -f "$cf_dir/cert.pem" ]; then
+    # cloudflared prints a sign-in URL and waits for the browser. The spinner
+    # would overwrite that text, and the text has to reach the terminal, not
+    # this step's log.
+    ui_stop_spinner
+    printf '%s\n\n  Sign in to Cloudflare and pick the domain that owns %s.\n  Waiting for the browser…\n\n' \
+      "$(ui_step_line '')" "$DOMAIN" >&3
+    cloudflared login >&3 2>&1 </dev/tty \
+      || die "Cloudflare sign-in did not finish (no browser on this host? use --tunnel-token)"
+    printf '\n' >&3
+  fi
+  [ -f "$cf_dir/cert.pem" ] || die "no Cloudflare credentials after sign-in"
+
+  tid="$(cloudflared tunnel list 2>/dev/null | awk -v n="$name" '$2 == n { print $1; exit }')"
+  if [ -z "$tid" ]; then
+    cloudflared tunnel create "$name" >/dev/null || die "could not create tunnel $name"
+    tid="$(cloudflared tunnel list 2>/dev/null | awk -v n="$name" '$2 == n { print $1; exit }')"
+  fi
+  [ -n "$tid" ] || die "could not find the tunnel id for $name"
+
+  install -d -m 700 /etc/cloudflared
+  install -m 600 "$cf_dir/$tid.json" "/etc/cloudflared/$tid.json" \
+    || die "tunnel credentials not found at $cf_dir/$tid.json"
+  cat > /etc/cloudflared/config.yml <<EOF
+tunnel: $tid
+credentials-file: /etc/cloudflared/$tid.json
+ingress:
+  - hostname: $DOMAIN
+    service: http://127.0.0.1:$WEB_PORT
+  - service: http_status:404
+EOF
+  chmod 600 /etc/cloudflared/config.yml
+
+  # -f replaces a stale record for this name; the user asked for this hostname.
+  cloudflared tunnel route dns -f "$name" "$DOMAIN" >/dev/null \
+    || die "could not point $DOMAIN at the tunnel — is that domain on the account you signed in with?"
+
+  cloudflared service install
+  systemctl enable --now cloudflared
+  cf_wait_active
+
+  # cert.pem can edit DNS and every tunnel in the zone; the service only needs
+  # the tunnel's own credentials file.
+  shred -u "$cf_dir/cert.pem" 2>/dev/null || rm -f "$cf_dir/cert.pem"
+
+  log "tunnel $name → https://$DOMAIN"
+  TUNNEL_URL="https://$DOMAIN"
+}
+
 setup_tunnel() {
   if ! command -v cloudflared >/dev/null; then
     local arch; arch="$(dpkg --print-architecture)"
@@ -753,17 +836,17 @@ setup_tunnel() {
   fi
   systemctl enable --now solstice-web.service
 
+  if [ "$TUNNEL_MODE" = "login" ]; then
+    setup_tunnel_login
+    return 0
+  fi
+
   if [ "$TUNNEL_MODE" = "token" ]; then
     # Named tunnel: the token already carries the tunnel + ingress config the
     # user made in their dashboard (pointed at this panel's local port).
     cloudflared service install "$TUNNEL_TOKEN"
     systemctl enable --now cloudflared
-    local i
-    for i in $(seq 1 30); do
-      systemctl is-active --quiet cloudflared && break
-      sleep 2
-    done
-    systemctl is-active --quiet cloudflared || die "cloudflared did not come up (journalctl -u cloudflared)"
+    cf_wait_active
     log "tunnel registered for https://$DOMAIN"
     TUNNEL_URL="https://$DOMAIN"
     return 0
@@ -872,7 +955,7 @@ summary() {
   fi
   local proxy_line=""
   if [ "$TUNNEL" -eq 1 ]; then
-    if [ "$TUNNEL_MODE" = "token" ]; then
+    if [ "$TUNNEL_MODE" != "quick" ]; then
       proxy_line="Tunnel: Cloudflare (own domain)"
     else
       proxy_line="Tunnel: Cloudflare quick tunnel"
@@ -908,7 +991,7 @@ META=/etc/solstice/install.env
 case "${1:-status}" in
   status)
     if [ "${TUNNEL:-0}" = "1" ]; then
-      if [ "${TUNNEL_MODE:-quick}" = "token" ]; then echo "Panel:  https://${DOMAIN:-localhost} (Cloudflare tunnel)"; else echo "Panel:  quick tunnel (see journalctl -u solstice-tunnel)"; fi
+      if [ "${TUNNEL_MODE:-quick}" != "quick" ]; then echo "Panel:  https://${DOMAIN:-localhost} (Cloudflare tunnel)"; else echo "Panel:  quick tunnel (see journalctl -u solstice-tunnel)"; fi
     else echo "Panel:  https://${DOMAIN:-localhost}"; fi
     for u in solstice-api solstice-web solstice-tunnel caddy nginx apache2 cloudflared; do
       if systemctl list-unit-files "$u.service" >/dev/null 2>&1 && systemctl cat "$u.service" >/dev/null 2>&1; then
@@ -949,33 +1032,29 @@ prompt_config() {
      && have_tty && [ "$ASSUME_YES" -eq 0 ]; then
     if ui_confirm_no "Expose the panel through a Cloudflare Tunnel?"; then
       TUNNEL=1
-      if ui_confirm_no "Use your own domain? (needs a tunnel token, no open ports)"; then
-        TUNNEL_MODE="token"
-        while [ -z "$TUNNEL_TOKEN" ]; do
-          TUNNEL_TOKEN="$(ui_password "Cloudflare tunnel token")"
-          [ -n "$TUNNEL_TOKEN" ] || warn "a token is required for your own domain"
-        done
+      if ui_confirm_no "Use your own domain? (Cloudflare sign-in, no open ports)"; then
+        TUNNEL_MODE="login"
       else
         TUNNEL_MODE="quick"
       fi
     fi
   fi
 
-  # --tunnel-token (flag or answer above) means the user's own domain.
+  # --tunnel-token (flag) means the user's own domain without a browser.
   if [ -n "$TUNNEL_TOKEN" ]; then
     TUNNEL_MODE="token"
   fi
 
-  # Token tunnels are named for a specific hostname — the panel needs it for
-  # app_url / webauthn / mail, so ask (or require the flag) even in tunnel mode.
-  if [ -n "$TUNNEL_TOKEN" ] && [ -z "$DOMAIN" ]; then
+  # Named tunnels are bound to one hostname — the panel needs it for app_url,
+  # passkeys and mail, so ask (or require the flag) before signing in.
+  if [ "$TUNNEL_MODE" != "quick" ] && [ -z "$DOMAIN" ]; then
     if have_tty; then
       while [ -z "$DOMAIN" ]; do
         DOMAIN="$(ui_input "Public hostname (your tunnel's domain)" "panel.example.com")"
         [ -n "$DOMAIN" ] || warn "the tunnel's hostname is required"
       done
     else
-      die "pass --domain HOST with --tunnel-token (it names your own domain)"
+      die "pass --domain HOST with --tunnel-login or --tunnel-token"
     fi
   fi
 
@@ -1064,7 +1143,7 @@ banner() {
 config_summary() {
   local where
   if [ "$TUNNEL" -eq 1 ]; then
-    if [ "$TUNNEL_MODE" = "token" ]; then where="Cloudflare tunnel · $DOMAIN"
+    if [ "$TUNNEL_MODE" != "quick" ]; then where="Cloudflare tunnel · $DOMAIN"
     else where="Cloudflare quick tunnel"; fi
   elif [ "$PROXY" = "none" ]; then where="no proxy · bring your own"
   else where="$(printf '%s' "$PROXY") · $DOMAIN"; fi
@@ -1118,7 +1197,7 @@ main() {
   run_step "start api" start_api
 
   if [ "$TUNNEL" -eq 1 ]; then
-    run_step "quick tunnel" setup_tunnel
+    run_step "tunnel" setup_tunnel
   else
     case "$PROXY" in
       caddy) run_step "caddy" setup_caddy ;;

@@ -7,7 +7,7 @@ import { SiteShell } from '@/components/site-shell'
 import { useCopy } from '@/components/use-copy'
 
 type Proxy = 'caddy' | 'nginx' | 'apache' | 'none'
-type Tunnel = 'none' | 'quick' | 'token'
+type Tunnel = 'none' | 'quick' | 'login'
 
 const PROXIES: Array<{ id: Proxy; name: string; note: string }> = [
   { id: 'caddy', name: 'Caddy', note: 'Recommended. Automatic TLS, zero config.' },
@@ -19,14 +19,15 @@ const PROXIES: Array<{ id: Proxy; name: string; note: string }> = [
 const TUNNELS: Array<{ id: Tunnel; name: string; note: string }> = [
   { id: 'none', name: 'No tunnel', note: 'Direct connection on ports 80/443.' },
   { id: 'quick', name: 'Quick tunnel', note: 'Random trycloudflare.com URL. No account.' },
-  { id: 'token', name: 'Your domain', note: 'Cloudflare named tunnel, using a token.' },
+  { id: 'login', name: 'Your domain', note: 'Sign in to Cloudflare during install. No token.' },
 ]
 
 const FLAGS = [
   ['--domain HOST', 'Public hostname the panel answers on.'],
   ['--proxy NAME', 'caddy (default), nginx, apache, or none.'],
   ['--tunnel', 'Expose through a Cloudflare quick tunnel instead of a proxy.'],
-  ['--tunnel-token T', 'Cloudflare named tunnel token, for your own domain.'],
+  ['--tunnel-login', 'Your own domain: sign in to Cloudflare during the install.'],
+  ['--tunnel-token T', 'Pre-made tunnel token, for unattended installs.'],
   ['--admin-email E', 'The address that becomes administrator on first sign-up.'],
   ['--mail relay|smtp', 'Solstice Cloud Relay (default) or your own SMTP server.'],
   ['--db-url URL', 'Use an existing Postgres instead of installing one.'],
@@ -37,7 +38,6 @@ const FLAGS = [
 export function buildCommand(options: {
   proxy: Proxy
   tunnel: Tunnel
-  token?: string
   domain?: string
   email?: string
 }): string {
@@ -50,9 +50,7 @@ export function buildCommand(options: {
     flags.push('--proxy', options.proxy)
   }
   if (options.tunnel === 'quick') flags.push('--tunnel')
-  if (options.tunnel === 'token') {
-    flags.push('--tunnel-token', options.token?.trim() || '<TOKEN>')
-  }
+  if (options.tunnel === 'login') flags.push('--tunnel-login')
   // A quick tunnel already has a hostname; passing one would point the mail
   // relay at a domain that does not answer.
   if (domain && needsDomain(options)) flags.push('--domain', domain)
@@ -64,7 +62,7 @@ export function buildCommand(options: {
 }
 
 export function needsDomain(options: { tunnel: Tunnel; proxy: Proxy }): boolean {
-  return options.tunnel === 'token' || (options.tunnel === 'none' && options.proxy !== 'none')
+  return options.tunnel === 'login' || (options.tunnel === 'none' && options.proxy !== 'none')
 }
 
 function Choice({
@@ -132,13 +130,12 @@ function Field({
 export function InstallPage() {
   const [proxy, setProxy] = useState<Proxy>('caddy')
   const [tunnel, setTunnel] = useState<Tunnel>('none')
-  const [token, setToken] = useState('')
   const [domain, setDomain] = useState('')
   const [email, setEmail] = useState('')
 
   const command = useMemo(
-    () => buildCommand({ proxy, tunnel, token, domain, email }),
-    [proxy, tunnel, token, domain, email],
+    () => buildCommand({ proxy, tunnel, domain, email }),
+    [proxy, tunnel, domain, email],
   )
   const { copied, copy } = useCopy(command)
   const missingDomain = needsDomain({ tunnel, proxy }) && !domain.trim()
@@ -196,15 +193,6 @@ export function InstallPage() {
               </fieldset>
 
               <div className="mt-7 grid gap-4 sm:grid-cols-2">
-                {tunnel === 'token' ? (
-                  <Field
-                    id="tunnel-token"
-                    label="Cloudflare tunnel token"
-                    value={token}
-                    onChange={setToken}
-                    placeholder="eyJhIjoi…"
-                  />
-                ) : null}
                 {needsDomain({ tunnel, proxy }) ? (
                   <Field
                     id="domain"

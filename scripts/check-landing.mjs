@@ -80,7 +80,7 @@ const body = (route) => {
 const EXPECT = {
   '/features/': ['Incus', 'snapshots', 'console', 'port forwards', 'mail', 'passkeys'],
   '/architecture/': ['browser', 'Caddy', 'Incus', 'LXD', 'KVM', 'relay'],
-  '/install/': ['--proxy', '--tunnel-token', '--domain'],
+  '/install/': ['--proxy', '--tunnel-login', '--tunnel-token', '--domain'],
 }
 for (const [route, needles] of Object.entries(EXPECT)) {
   const html = body(route)
@@ -93,7 +93,7 @@ for (const [route, needles] of Object.entries(EXPECT)) {
 }
 
 // The install command builder: a tunnel replaces the proxy, so the two must
-// never appear together, and token mode always needs a hostname.
+// never appear together, and own-domain mode always needs a hostname.
 const installModule = join(LANDING, 'dist-ssr/install.js')
 if (existsSync(installModule)) {
   const { buildCommand, needsDomain } = await import(pathToFileURL(installModule).href)
@@ -105,10 +105,10 @@ if (existsSync(installModule)) {
     // A quick tunnel supplies its own hostname; a stale field must not leak in.
     ['quick tunnel ignores hostname', { proxy: 'caddy', tunnel: 'quick', domain: 'p.example.com' }, ['--tunnel'], ['--domain']],
     [
-      'token tunnel drops proxy',
-      { proxy: 'apache', tunnel: 'token', token: 'abc', domain: 'p.example.com' },
-      ['--tunnel-token abc', '--domain p.example.com'],
-      ['--proxy', '--tunnel '],
+      'own-domain tunnel drops proxy',
+      { proxy: 'apache', tunnel: 'login', domain: 'p.example.com' },
+      ['--tunnel-login', '--domain p.example.com'],
+      ['--proxy', '--tunnel-token'],
     ],
     [
       'flags appended',
@@ -134,7 +134,7 @@ if (existsSync(installModule)) {
     }
   }
   for (const [name, options, want] of [
-    ['token needs domain', { tunnel: 'token', proxy: 'caddy' }, true],
+    ['sign-in tunnel needs domain', { tunnel: 'login', proxy: 'caddy' }, true],
     ['quick needs none', { tunnel: 'quick', proxy: 'caddy' }, false],
     ['own proxy needs none', { tunnel: 'none', proxy: 'none' }, false],
     ['direct needs domain', { tunnel: 'none', proxy: 'caddy' }, true],
