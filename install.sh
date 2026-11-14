@@ -947,7 +947,15 @@ verify() { # $1=public (default 1) also proves the HTTPS front door
 summary() {
   local url
   if [ "$TUNNEL" -eq 1 ]; then
-    url="${TUNNEL_URL:-quick tunnel}"
+    # TUNNEL_URL is only known during an install; on upgrade recover it from meta or the service log.
+    if [ -n "${TUNNEL_URL:-}" ]; then
+      url="$TUNNEL_URL"
+    elif [ "$TUNNEL_MODE" != "quick" ] && [ -n "$DOMAIN" ]; then
+      url="https://$DOMAIN"
+    else
+      url="$(journalctl -u solstice-tunnel.service --no-pager -n 80 2>/dev/null | grep -aoE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1 || true)"
+      [ -n "$url" ] || url="the panel"
+    fi
   elif [ "$CERTBOT_OK" = "0" ]; then
     url="http://${DOMAIN:-your domain}"
   else
@@ -968,15 +976,23 @@ summary() {
   local elapsed
   elapsed=" in $(ui_duration $((SECONDS - INSTALL_STARTED)))"
 
+  local verb="installed" next
+  if [ "$UPGRADE" -eq 1 ]; then
+    verb="upgraded"
+    next="Next: open ${url} and sign in."
+  else
+    next="Next: open ${url} and register with ${ADMIN_EMAIL}."
+  fi
+
   printf '\n' >&3
-  printf '  %sSolstice is installed%s%s.\n\n' "$C_BOLD" "$C_RESET" "$elapsed" >&3
+  printf '  %sSolstice is %s%s%s.\n\n' "$C_BOLD" "$verb" "$C_RESET" "$elapsed" >&3
   printf '  %-8s %s\n' "Panel" "$url" >&3
   printf '  %-8s %s\n' "Admin" "$ADMIN_EMAIL" >&3
   printf '  %-8s %s\n' "Mail" "$([ "$MAIL_MODE" = relay ] && echo 'Solstice Cloud Relay' || echo "SMTP $SMTP_HOST")" >&3
   printf '  %-8s %s\n' "Proxy" "${proxy_line#*:  }" >&3
   printf '  %-8s %s\n' "Logs" "$LOG_LINK, journalctl -u solstice-api" >&3
   printf '  %-8s %s\n' "CLI" "solstice status" >&3
-  printf '\n  Next: open %s and register with %s.\n\n' "$url" "$ADMIN_EMAIL" >&3
+  printf '\n  %s\n\n' "$next" >&3
 }
 
 install_cli() {
