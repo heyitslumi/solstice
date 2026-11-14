@@ -1,12 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect x="4" y="4" width="56" height="56" rx="14" fill="#151a24"/>
-  <rect x="4" y="4" width="56" height="56" rx="14" fill="none" stroke="#2b3345" stroke-width="2"/>
-  <g fill="none" stroke="#c7d0e0" stroke-width="3" stroke-linecap="round">
-    <rect x="17" y="15" width="30" height="9" rx="2.5"/>
-    <rect x="17" y="28" width="30" height="9" rx="2.5"/>
-    <rect x="17" y="41" width="30" height="9" rx="2.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd05e" />
+      <stop offset="55%" stop-color="#fd9d1e" />
+      <stop offset="100%" stop-color="#fe5c36" />
+    </linearGradient>
+  </defs>
+  <circle cx="16" cy="16" r="7" fill="url(#sun)" />
+  <g stroke="url(#sun)" stroke-width="2.2" stroke-linecap="round">
+    <path d="M16 2v4M16 26v4M2 16h4M26 16h4" />
+    <path d="M6.2 6.2l2.8 2.8M23 23l2.8 2.8M25.8 6.2L23 9M9 23l-2.8 2.8" opacity="0.75" />
   </g>
-  <circle cx="23" cy="19.5" r="1.8" fill="#5eeaa8"/>
-  <circle cx="23" cy="32.5" r="1.8" fill="#5eeaa8"/>
-  <circle cx="23" cy="45.5" r="1.8" fill="#f5b04c"/>
 </svg>
