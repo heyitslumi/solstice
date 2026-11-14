@@ -57,4 +57,18 @@ describe('incus instance endpoints', () => {
     )
     assert.equal(rows[0]?.direct_ssh, true)
   })
+
+  it('reports direct SSH unavailable when the default node disables it', async () => {
+    const before = await app.request('/api/config')
+    assert.equal((await before.json() as any).directSsh, true)
+
+    await query(`UPDATE nodes SET direct_ssh = false WHERE name = 'local-incus'`)
+    try {
+      const res = await app.request('/api/config')
+      assert.equal(res.status, 200)
+      assert.equal((await res.json() as any).directSsh, false)
+    } finally {
+      await query(`UPDATE nodes SET direct_ssh = true WHERE name = 'local-incus'`)
+    }
+  })
 })

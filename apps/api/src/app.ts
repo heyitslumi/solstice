@@ -2910,6 +2910,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     return row?.id ?? null
   }
 
+  /* A node with direct SSH off (NAT'ed hypervisor) must not hand out SSH forwards. */
+  async function nodeAllowsDirectSsh(nodeId: string | null | undefined): Promise<boolean> {
+    if (!nodeId) return true
+    const row = await queryOne<{ direct_ssh: boolean }>('SELECT direct_ssh FROM nodes WHERE id = $1', [nodeId])
+    return row?.direct_ssh !== false
+  }
+
   app.post('/api/instances', async (c) => {
     const session = await authIdentity(c)
     if (!session) return c.json({ message: 'Not signed in.' }, 401)
@@ -3056,10 +3063,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       )
 
       // Password fallback: no SSH keys selected -> generate a root password
-      // (returned once, never stored) and enable direct SSH.
+      // (returned once, never stored) and enable direct SSH when the node allows it.
       let rootPassword: string | null = null
       let sshHostPort: number | null = null
-      if (sshPublicKeys.length === 0 || directSsh) {
+      const directSshAllowed = await nodeAllowsDirectSsh(nodeId)
+      if (directSshAllowed && (sshPublicKeys.length === 0 || directSsh)) {
         try {
           let containerIp: string | null = null
           for (let attempt = 0; attempt < 15 && !containerIp; attempt++) {
@@ -3251,7 +3259,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
       let rootPassword: string | null = null
       let sshHostPort: number | null = null
-      if (sshPublicKeys.length === 0 || directSsh) {
+      const directSshAllowed = await nodeAllowsDirectSsh(instance.node_id)
+      if (directSshAllowed && (sshPublicKeys.length === 0 || directSsh)) {
         try {
           let containerIp: string | null = null
           for (let attempt = 0; attempt < 15 && !containerIp; attempt++) {
@@ -3477,7 +3486,8 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
       let rootPassword: string | null = null
       let sshHostPort: number | null = null
-      if (sshPublicKeys.length === 0 || directSsh) {
+      const directSshAllowed = await nodeAllowsDirectSsh(instance.node_id)
+      if (directSshAllowed && (sshPublicKeys.length === 0 || directSsh)) {
         try {
           let containerIp: string | null = null
           for (let attempt = 0; attempt < 15 && !containerIp; attempt++) {
@@ -4024,12 +4034,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     const instance = await resolveInstance(c, session.user_id)
     if (!instance) return c.json({ message: 'Instance not found.' }, 404)
 
+    const available = await nodeAllowsDirectSsh(instance.node_id)
     const forward = await queryOne<{ host_port: number; container_port: number }>(
       `SELECT host_port, container_port FROM port_forwards
         WHERE instance_id = $1 AND kind = 'ssh'`,
       [instance.id],
     )
-    if (!forward) return c.json({ forward: null })
+    if (!forward) return c.json({ forward: null, available })
     await healInstanceForwards(instance.id, instance.name).catch((e: any) =>
       console.warn('Forward heal warning:', e?.message),
     )
@@ -4040,6 +4051,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
         containerPort: forward.container_port,
         username: 'root',
       },
+      available,
     })
   })
 
@@ -4048,6 +4060,13 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     if (!session) return c.json({ message: 'Not signed in.' }, 401)
     const instance = await resolveInstance(c, session.user_id)
     if (!instance) return c.json({ message: 'Instance not found.' }, 404)
+
+    if (!(await nodeAllowsDirectSsh(instance.node_id))) {
+      return c.json(
+        { message: 'Direct SSH is disabled on this node. Use the browser console instead.' },
+        409,
+      )
+    }
 
     let live: IncusInstance | null = null
     try {
@@ -9083,6 +9102,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
       themeCustomCss: config['theme_custom_css'] || '',
       themeDefaultMode: config['theme_default_mode'] || 'dark',
       demoMode: process.env.DEMO_MODE === 'true' || config['app_demo_mode'] === 'true',
+      directSsh: await nodeAllowsDirectSsh(await defaultNodeId()),
       legalTermsUrl: config['legal_terms_url'] || '',
       legalPrivacyUrl: config['legal_privacy_url'] || '',
       legalAupUrl: config['legal_aup_url'] || '',
