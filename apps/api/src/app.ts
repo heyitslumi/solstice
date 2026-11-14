@@ -4079,7 +4079,7 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
     }
 
     const existing = await queryOne<{ host_port: number }>(
-      'SELECT host_port FROM port_forwards WHERE instance_id = $1',
+      `SELECT host_port FROM port_forwards WHERE instance_id = $1 AND kind = 'ssh'`,
       [instance.id],
     )
     if (existing) {
