@@ -10,6 +10,7 @@ import { AppShell } from '@/components/app-shell'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { api, type ApiSshKey } from '@/lib/api'
+import { useAppConfig } from '@/lib/config'
 import { useDirtyForm } from '@/components/unsaved-changes-provider'
 
 interface OsOption {
@@ -211,6 +212,7 @@ export function ServerSetupPage({
   const [dns1, setDns1] = useState(0)
   const [dns2, setDns2] = useState(0)
   const [directSsh, setDirectSsh] = useState(true)
+  const { config } = useAppConfig()
   const [advOpen, setAdvOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [phase, setPhase] = useState<'form' | 'progress'>('form')
@@ -722,6 +724,7 @@ export function ServerSetupPage({
           </div>
           <div className="grid transition-[grid-template-rows] duration-300 ease-out" style={{ gridTemplateRows: advOpen ? '1fr' : '0fr' }}>
             <div style={{ overflow: advOpen ? 'visible' : 'hidden' }}>
+          {config.directSsh !== false && (
           <div className="mt-3 rounded-panel border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -733,6 +736,7 @@ export function ServerSetupPage({
               </button>
             </div>
           </div>
+          )}
           <h2 className="mt-6 text-[15px] font-semibold">IPv4 Public DNS Resolvers</h2>
           <p className="text-[12px] text-fg-subtle">A server requires two DNS resolvers. You may swap the system defaults for a preferred set of public resolvers.</p>
           <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">

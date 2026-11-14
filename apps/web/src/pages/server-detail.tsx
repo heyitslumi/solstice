@@ -233,7 +233,10 @@ export function ServerDetailPage() {
       if (forwardsRes.data.quota) setForwardQuota(forwardsRes.data.quota)
     }
     const fwdRes = await api.getSshForward(id)
-    if (fwdRes.ok) setSshForward(fwdRes.data.forward)
+    if (fwdRes.ok) {
+      setSshForward(fwdRes.data.forward)
+      setSshAvailable(fwdRes.data.available)
+    }
     if (tplRes.ok) {
     }
     setLoading(false)
@@ -277,6 +280,7 @@ export function ServerDetailPage() {
     username: string
   } | null>(null)
   const [sshForwardWorking, setSshForwardWorking] = useState(false)
+  const [sshAvailable, setSshAvailable] = useState(true)
   // One-time password lives apart from the polled forward state so the
   // 10s refresh can never wipe it mid-read. Cleared only when dismissed.
   const [pwWorking, setPwWorking] = useState(false)
@@ -1546,6 +1550,11 @@ export function ServerDetailPage() {
           <div className="mt-5 border-b border-border pb-5">
             <p className="text-[12px] font-semibold text-fg">Direct SSH (port forward)</p>
             {!sshForward ? (
+              !sshAvailable ? (
+                <p className="mt-2 text-[12px] text-fg-subtle">
+                  Direct SSH is disabled on this node — use the browser console below.
+                </p>
+              ) : (
               <div className="mt-2 flex flex-col gap-3">
                 <p className="text-[12px] text-fg-subtle">
                   Picks a random free host port and proxies it to this server's SSH port
@@ -1562,6 +1571,7 @@ export function ServerDetailPage() {
                   </Button>
                 </div>
               </div>
+              )
             ) : (
               <div className="mt-2 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between gap-2 rounded-control border border-border bg-surface-2/50 px-3 py-2.5 font-mono text-[12px]">

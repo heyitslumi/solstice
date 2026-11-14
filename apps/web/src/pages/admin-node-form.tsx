@@ -53,6 +53,7 @@ export function AdminNodeFormPage() {
   const [locationId, setLocationId] = useState('')
   const [isPublic, setIsPublic] = useState(true)
   const [maintenance, setMaintenance] = useState(false)
+  const [directSsh, setDirectSsh] = useState(true)
   const [cpuCores, setCpuCores] = useState(4)
   const [memoryLimitMb, setMemoryLimitMb] = useState(5894)
   const [serverLimit, setServerLimit] = useState(0)
@@ -326,11 +327,12 @@ export function AdminNodeFormPage() {
     }
   }, [id, nodeNetwork, nodeStorage, activeTab, statRange])
 
-  async function handleToggleSystem(key: 'maintenance' | 'isPublic', nextVal: boolean) {
+  async function handleToggleSystem(key: 'maintenance' | 'isPublic' | 'directSsh', nextVal: boolean) {
     if (!id) return
     setUpdatingSystem(true)
     if (key === 'maintenance') setMaintenance(nextVal)
     if (key === 'isPublic') setIsPublic(nextVal)
+    if (key === 'directSsh') setDirectSsh(nextVal)
     const res = await api.adminUpdateNode(id, { [key]: nextVal } as any)
     if (!res.ok) {
       setNetError(res.error.message || 'Failed to update system state.')
@@ -447,6 +449,7 @@ export function AdminNodeFormPage() {
             setLocationId(found.locationId || '')
             setIsPublic(found.isPublic !== false)
             setMaintenance(found.maintenance === true)
+            setDirectSsh(found.directSsh !== false)
             setCpuCores(found.cpuCores || 4)
             setMemoryLimitMb(found.memoryLimitMb || found.memoryMb || 5894)
             setServerLimit(found.serverLimit || 0)
@@ -490,6 +493,7 @@ export function AdminNodeFormPage() {
       locationId: locationId || null,
       isPublic,
       maintenance,
+      directSsh,
       cpuCores: Number(cpuCores),
       memoryLimitMb: Number(memoryLimitMb),
       serverLimit: Number(serverLimit),
@@ -814,6 +818,31 @@ export function AdminNodeFormPage() {
                       className={cn(
                         'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
                         !isPublic ? 'translate-x-4' : 'translate-x-0',
+                      )}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span
+                    className="text-[12px] font-medium text-fg"
+                    title="Off for NAT'ed nodes without a public IPv4"
+                  >
+                    Direct SSH
+                  </span>
+                  <button
+                    type="button"
+                    disabled={updatingSystem}
+                    onClick={() => handleToggleSystem('directSsh', !directSsh)}
+                    className={cn(
+                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                      directSsh ? 'bg-emerald-500' : 'bg-rose-500',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none inline-block size-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out',
+                        directSsh ? 'translate-x-4' : 'translate-x-0',
                       )}
                     />
                   </button>

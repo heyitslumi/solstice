@@ -235,6 +235,7 @@ export interface PublicConfig {
   themeCustomCss?: string
   themeDefaultMode?: string
   demoMode?: boolean
+  directSsh?: boolean
 }
 
 export interface AdminThemeSettings {
@@ -361,6 +362,7 @@ export interface ApiNode {
   locationId?: string | null
   isPublic?: boolean
   maintenance?: boolean
+  directSsh?: boolean
   memoryLimitMb?: number
   memoryMb?: number
   diskLimitGb?: number
@@ -971,7 +973,7 @@ export const api = {
   },
 
   getSshForward(id: string) {
-    return request<{ forward: { host: string; hostPort: number; containerPort: number; username: string } | null }>(`/api/instances/${encodeURIComponent(id)}/ssh-forward`)
+    return request<{ forward: { host: string; hostPort: number; containerPort: number; username: string } | null; available: boolean }>(`/api/instances/${encodeURIComponent(id)}/ssh-forward`)
   },
 
   enableSshForward(id: string) {

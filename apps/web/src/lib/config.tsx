@@ -20,6 +20,7 @@ const DEFAULT_CONFIG: PublicConfig = {
   legalTermsUrl: '',
   legalPrivacyUrl: '',
   legalAupUrl: '',
+  directSsh: true,
 }
 
 interface ConfigContextValue {
