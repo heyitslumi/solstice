@@ -32,10 +32,11 @@ after(async () => {
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
 
-const VERIFY_SUBJECT = 'Confirm your VPS Panel email'
-const CODE_SUBJECT = 'Confirm your new VPS Panel address'
-const NOTICE_SUBJECT = 'Your VPS Panel sign-in address is being changed'
-const DONE_SUBJECT = 'Your VPS Panel sign-in address has changed'
+const VERIFY_SUBJECT = 'Confirm your Solstice email'
+const AUTH_SUBJECT = 'Authorize moving your Solstice account'
+const CODE_SUBJECT = 'Confirm your new Solstice address'
+const NOTICE_SUBJECT = 'Your Solstice sign-in address is being changed'
+const DONE_SUBJECT = 'Your Solstice sign-in address has changed'
 
 type App = ReturnType<typeof createApp>
 
@@ -110,15 +111,29 @@ async function signIn(app: App, email: string) {
   const started = await post(app, '/api/auth/login', { email })
   assert.equal(started.status, 200)
 
-  const code = codeFrom((await mailTo(app, email, 'Sign in to VPS Panel')).text)
+  const code = codeFrom((await mailTo(app, email, 'Sign in to Solstice')).text)
   const verified = await post(app, '/api/auth/login/verify', { email, code })
   assert.equal(verified.status, 200)
   return sessionCookie(verified)
 }
 
-async function startChange(app: App, cookie: string, newEmail: string) {
+async function startChange(app: App, cookie: string, oldEmail: string, newEmail: string) {
   const response = await post(app, '/api/auth/change-email', { email: newEmail }, authed(cookie))
   assert.equal(response.status, 200)
+
+  // Step 1: Code sent to current (old) email to authorize
+  const mailbox = await app.request('/api/dev/mailbox?limit=200')
+  const { messages } = (await mailbox.json()) as { messages: Mail[] }
+  const authMsg = messages
+    .filter((entry) => entry.to === oldEmail && entry.subject.startsWith('Authorize moving your'))[0]
+  assert.ok(authMsg, `expected an authorization email to ${oldEmail}`)
+  const authCode = codeFrom(authMsg.text)
+
+  // Authorize with the old email's code
+  const authRes = await post(app, '/api/auth/change-email/authorize', { code: authCode }, authed(cookie))
+  assert.equal(authRes.status, 200)
+
+  // Step 2: Verification code is now dispatched to the new email
   return codeFrom((await mailTo(app, newEmail, CODE_SUBJECT)).text)
 }
 
@@ -133,7 +148,7 @@ async function cancelTokenFromNotice(app: App, to: string, index = 0) {
   const { messages } = (await response.json()) as { messages: Mail[] }
 
   // Newest-first, so index 0 is the most recent change to this address.
-  const notices = messages.filter((entry) => entry.to === to && entry.subject === NOTICE_SUBJECT)
+  const notices = messages.filter((entry) => entry.to === to && entry.subject.startsWith('Authorize moving your'))
   const notice = notices[index]
   assert.ok(notice, `expected at least ${index + 1} notices to ${to}`)
 
@@ -146,7 +161,7 @@ async function cancelTokenFromNotice(app: App, to: string, index = 0) {
 }
 
 describe('change email: requesting', () => {
-  it('emails a code to the new address and a warning to the old one', async () => {
+  it('emails an authorization code to the old address with a cancel link', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'req-old@example.com')
 
@@ -158,21 +173,24 @@ describe('change email: requesting', () => {
     )
 
     assert.equal(response.status, 200)
-    const body = (await response.json()) as { pending: { email: string; expiresAt: string } }
+    const body = (await response.json()) as { pending: { email: string; stage: string; expiresAt: string } }
     assert.equal(body.pending.email, 'req-new@example.com')
+    assert.equal(body.pending.stage, 'awaiting_current')
     assert.match(body.pending.expiresAt, /^\d{4}-/)
 
-    assert.match((await mailTo(app, 'req-new@example.com', CODE_SUBJECT)).text, /^\s*\d{6}\s*$/m)
+    // Step 1 email sent to OLD address
+    const authMsg = await mailTo(app, 'req-old@example.com', 'Authorize moving your Solstice account to req-new@example.com')
+    assert.match(authMsg.text, /^\s*\d{6}\s*$/m)
+    assert.match(authMsg.text, /cancel-email-change\?token=/)
 
-    const notice = await mailTo(app, 'req-old@example.com', NOTICE_SUBJECT)
-    assert.match(notice.text, /req-new@example\.com/)
-    assert.match(notice.text, /cancel-email-change\?token=/)
+    // No code sent to new address yet
+    assert.equal(await mailCountTo(app, 'req-new@example.com', CODE_SUBJECT), 0)
   })
 
   it('leaves the account signing in with the old address until the code is confirmed', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'pending-old@example.com')
-    await startChange(app, cookie, 'pending-new@example.com')
+    await startChange(app, cookie, 'pending-old@example.com', 'pending-new@example.com')
 
     const stillOld = await signIn(app, 'pending-old@example.com')
     assert.match(stillOld, /^solstice_session=/)
@@ -247,8 +265,8 @@ describe('change email: requesting', () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'supersede@example.com')
 
-    const first = await startChange(app, cookie, 'supersede-first@example.com')
-    const second = await startChange(app, cookie, 'supersede-second@example.com')
+    const first = await startChange(app, cookie, 'supersede@example.com', 'supersede-first@example.com')
+    const second = await startChange(app, cookie, 'supersede@example.com', 'supersede-second@example.com')
 
     const stale = await post(app, '/api/auth/change-email/verify', { code: first }, authed(cookie))
     assert.equal(stale.status, 400, 'the superseded code must not still work')
@@ -262,7 +280,7 @@ describe('change email: confirming', () => {
   it('switches the address, marks it verified, and moves the sign-in over', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'confirm-old@example.com')
-    const code = await startChange(app, cookie, 'confirm-new@example.com')
+    const code = await startChange(app, cookie, 'confirm-old@example.com', 'confirm-new@example.com')
 
     const response = await post(app, '/api/auth/change-email/verify', { code }, authed(cookie))
 
@@ -282,7 +300,7 @@ describe('change email: confirming', () => {
     const { messages } = (await mailbox.json()) as { messages: { to: string; subject: string }[] }
     const signInsTo = (address: string) =>
       messages.filter(
-        (entry) => entry.to === address && entry.subject === 'Sign in to VPS Panel',
+        (entry) => entry.to === address && entry.subject === 'Sign in to Solstice',
       ).length
 
     assert.equal(signInsTo('confirm-old@example.com'), 0, 'the old address must be gone')
@@ -296,7 +314,7 @@ describe('change email: confirming', () => {
     const first = await registerAndVerify(app, 'sessions-old@example.com')
     const second = await signIn(app, 'sessions-old@example.com')
 
-    const code = await startChange(app, first, 'sessions-new@example.com')
+    const code = await startChange(app, first, 'sessions-old@example.com', 'sessions-new@example.com')
     const response = await post(app, '/api/auth/change-email/verify', { code }, authed(first))
     assert.equal(response.status, 200)
 
@@ -310,7 +328,7 @@ describe('change email: confirming', () => {
   it('rejects a wrong code and spends an attempt', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'wrong-old@example.com')
-    const code = await startChange(app, cookie, 'wrong-new@example.com')
+    const code = await startChange(app, cookie, 'wrong-old@example.com', 'wrong-new@example.com')
 
     const response = await post(
       app,
@@ -330,7 +348,7 @@ describe('change email: confirming', () => {
   it('rejects a malformed code without spending an attempt', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'shape-old@example.com')
-    await startChange(app, cookie, 'shape-new@example.com')
+    await startChange(app, cookie, 'shape-old@example.com', 'shape-new@example.com')
 
     const response = await post(app, '/api/auth/change-email/verify', { code: '12' }, authed(cookie))
     assert.equal(response.status, 422)
@@ -339,7 +357,7 @@ describe('change email: confirming', () => {
   it('stops accepting codes once the attempt cap is reached', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'cap-old@example.com')
-    const code = await startChange(app, cookie, 'cap-new@example.com')
+    const code = await startChange(app, cookie, 'cap-old@example.com', 'cap-new@example.com')
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await post(app, '/api/auth/change-email/verify', { code: wrongCode(code) }, authed(cookie))
@@ -352,7 +370,7 @@ describe('change email: confirming', () => {
   it('rejects an expired code', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'expired-old@example.com')
-    const code = await startChange(app, cookie, 'expired-new@example.com')
+    const code = await startChange(app, cookie, 'expired-old@example.com', 'expired-new@example.com')
 
     const id = await userIdFor('expired-old@example.com')
     await queryOne(
@@ -375,7 +393,7 @@ describe('change email: confirming', () => {
   it('does not accept the same code twice', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'replay-old@example.com')
-    const code = await startChange(app, cookie, 'replay-new@example.com')
+    const code = await startChange(app, cookie, 'replay-old@example.com', 'replay-new@example.com')
 
     const first = await post(app, '/api/auth/change-email/verify', { code }, authed(cookie))
     assert.equal(first.status, 200)
@@ -394,7 +412,7 @@ describe('change email: confirming', () => {
   it('refuses an address taken while the change was pending', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'race-old@example.com')
-    const code = await startChange(app, cookie, 'race-new@example.com')
+    const code = await startChange(app, cookie, 'race-old@example.com', 'race-new@example.com')
 
     await registerAndVerify(app, 'race-new@example.com')
 
@@ -407,7 +425,7 @@ describe('change email: cancelling', () => {
   it('reports a pending change and lets the owner drop it', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'cancel-old@example.com')
-    await startChange(app, cookie, 'cancel-new@example.com')
+    await startChange(app, cookie, 'cancel-old@example.com', 'cancel-new@example.com')
 
     const pending = await app.request('/api/auth/change-email', { headers: authed(cookie) })
     const pendingBody = (await pending.json()) as { pending: { email: string } | null }
@@ -424,7 +442,7 @@ describe('change email: cancelling', () => {
   it('drops a change through the token mailed to the abandoned address, with no session', async () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'link-old@example.com')
-    const code = await startChange(app, cookie, 'link-new@example.com')
+    const code = await startChange(app, cookie, 'link-old@example.com', 'link-new@example.com')
 
     const token = await cancelTokenFromNotice(app, 'link-old@example.com')
 
@@ -446,8 +464,8 @@ describe('change email: cancelling', () => {
     const app = freshApp()
     const cookie = await registerAndVerify(app, 'retire-old@example.com')
 
-    await startChange(app, cookie, 'retire-first@example.com')
-    await startChange(app, cookie, 'retire-second@example.com')
+    await startChange(app, cookie, 'retire-old@example.com', 'retire-first@example.com')
+    await startChange(app, cookie, 'retire-old@example.com', 'retire-second@example.com')
 
     const firstToken = await cancelTokenFromNotice(app, 'retire-old@example.com', 1)
 

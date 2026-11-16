@@ -522,6 +522,7 @@ export interface ApiSession {
 /** A move to a new address that is waiting on a code sent to that address. */
 export interface PendingEmailChange {
   email: string
+  stage: 'awaiting_current' | 'awaiting_new'
   expiresAt: string
 }
 
@@ -675,6 +676,10 @@ export const api = {
 
   changeEmail(input: { email: string }) {
     return post<{ pending: PendingEmailChange }>('/api/auth/change-email', input)
+  },
+
+  changeEmailAuthorize(input: { code: string }) {
+    return post<{ pending: PendingEmailChange }>('/api/auth/change-email/authorize', input)
   },
 
   changeEmailVerify(input: { code: string }) {

@@ -234,7 +234,7 @@ export function AccountPage() {
   // Email change
   const [pendingChange, setPendingChange] = useState<PendingEmailChange | null>(null)
   const [changeOpen, setChangeOpen] = useState(false)
-  const [changeStep, setChangeStep] = useState<'request' | 'verify'>('request')
+  const [changeStep, setChangeStep] = useState<'request' | 'authorize' | 'verify'>('request')
   const [changeEmail, setChangeEmail] = useState('')
   const [changeErrors, setChangeErrors] = useState<Record<string, string>>({})
   const [changeFormError, setChangeFormError] = useState<string | null>(null)
@@ -731,6 +731,34 @@ export function AccountPage() {
     if (!result.ok) {
       setChangeErrors(result.error.fieldErrors ?? {})
       setChangeFormError(result.error.message ?? null)
+      return
+    }
+
+    setPendingChange(result.data.pending)
+    setChangeStep('authorize')
+    setChangeCode('')
+    setChangeCodeError(undefined)
+  }
+
+  async function handleChangeAuthorize(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (changeSaving) return
+
+    if (changeCode.length !== CHANGE_CODE_LENGTH) {
+      setChangeCodeError(`Enter the ${CHANGE_CODE_LENGTH}-digit code from your email.`)
+      return
+    }
+
+    setChangeCodeError(undefined)
+    setChangeFormError(null)
+    setChangeSaving(true)
+    const result = await api.changeEmailAuthorize({ code: changeCode })
+    setChangeSaving(false)
+
+    if (!result.ok) {
+      setChangeCodeError(
+        result.error.fieldErrors?.code ?? result.error.message ?? 'That code is not correct.',
+      )
       return
     }
 
@@ -2247,8 +2275,7 @@ export function AccountPage() {
               <>
                 <DialogTitle>Change email address</DialogTitle>
                 <DialogDescription>
-                  We will send a code to the new address. Until that code is entered, your account
-                  keeps signing in with the current one.
+                  We will send a code to your current address to confirm it's you, then verify your new address.
                 </DialogDescription>
 
                 <form
@@ -2281,30 +2308,31 @@ export function AccountPage() {
                       </Button>
                     </DialogClose>
                     <Button type="submit" size="sm" disabled={changeSaving}>
-                      {changeSaving ? 'Sending…' : 'Send code'}
+                      {changeSaving ? 'Sending…' : 'Continue'}
                     </Button>
                   </div>
                 </form>
               </>
-            ) : (
+            ) : changeStep === 'authorize' ? (
               <>
-                <DialogTitle>Enter the code</DialogTitle>
+                <DialogTitle>Authorize the change</DialogTitle>
                 <DialogDescription>
-                  We sent a {CHANGE_CODE_LENGTH}-digit code to{' '}
-                  {pendingChange?.email ?? changeEmail}. Enter it to finish the change.
+                  Enter the {CHANGE_CODE_LENGTH}-digit code sent to your current address (
+                  {user?.email}) to authorize moving to{' '}
+                  <span className="font-semibold text-fg">{pendingChange?.email ?? changeEmail}</span>.
                 </DialogDescription>
 
                 <form
-                  onSubmit={handleChangeVerify}
+                  onSubmit={handleChangeAuthorize}
                   className="mt-5 flex flex-col gap-4"
                   noValidate
                 >
                   {changeFormError ? <Alert tone="danger">{changeFormError}</Alert> : null}
 
                   <TextField
-                    id="change-email-code"
+                    id="change-email-auth-code"
                     name="code"
-                    label="Confirmation code"
+                    label="Authorization code from current email"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={CHANGE_CODE_LENGTH}
@@ -2329,6 +2357,58 @@ export function AccountPage() {
                       size="sm"
                       disabled={changeSaving}
                       onClick={() => setChangeStep('request')}
+                    >
+                      Back
+                    </Button>
+                    <Button type="submit" size="sm" disabled={changeSaving}>
+                      {changeSaving ? 'Authorizing…' : 'Authorize & send code to new email'}
+                    </Button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              <>
+                <DialogTitle>Verify your new address</DialogTitle>
+                <DialogDescription>
+                  We sent a {CHANGE_CODE_LENGTH}-digit code to{' '}
+                  <span className="font-semibold text-fg">{pendingChange?.email ?? changeEmail}</span>.
+                  Enter it to complete the change.
+                </DialogDescription>
+
+                <form
+                  onSubmit={handleChangeVerify}
+                  className="mt-5 flex flex-col gap-4"
+                  noValidate
+                >
+                  {changeFormError ? <Alert tone="danger">{changeFormError}</Alert> : null}
+
+                  <TextField
+                    id="change-email-code"
+                    name="code"
+                    label="Confirmation code from new email"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={CHANGE_CODE_LENGTH}
+                    autoFocus
+                    placeholder={'0'.repeat(CHANGE_CODE_LENGTH)}
+                    value={changeCode}
+                    onChange={(event) => {
+                      const next = event.target.value.replace(/\D/g, '').slice(0, CHANGE_CODE_LENGTH)
+                      setChangeCode(next)
+                      setChangeCodeError(undefined)
+                    }}
+                    error={changeCodeError}
+                    disabled={changeSaving}
+                    className="h-12 pl-[0.35em] text-center font-mono text-[1.25rem] tracking-[0.35em]"
+                  />
+
+                  <div className="flex justify-between gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={changeSaving}
+                      onClick={() => setChangeStep('authorize')}
                     >
                       Back
                     </Button>

@@ -17,6 +17,7 @@ import { incus, incusRequest, type IncusInstance, type IncusInstanceState } from
 import {
   CHANGE_CODE_LENGTH,
   CHANGE_CODE_TTL_MS,
+  authorizeEmailChange,
   cancelEmailChange,
   cancelEmailChangeByToken,
   claimEmailChange,
@@ -826,6 +827,31 @@ async function sendLoginEmail(user: UserRow, link: string, code: string, appName
 }
 
 const CHANGE_TTL_MINUTES = Math.round(CHANGE_CODE_TTL_MS / 60_000)
+
+function emailChangeCurrentAuthorizeEmail(code: string, newEmail: string, cancelLink: string, appName = 'Solstice') {
+  return {
+    subject: `Authorize moving your ${appName} account to ${newEmail}`,
+    text: [
+      `A request was made to change the sign-in address on your ${appName} account to ${newEmail}.`,
+      '',
+      'To authorize this request, enter this code in the panel:',
+      '',
+      code,
+      '',
+      `This code expires in ${CHANGE_TTL_MINUTES} minutes.`,
+      '',
+      'If you did not make this request, stop it immediately using this link:',
+      cancelLink,
+    ].join('\n'),
+    html: [
+      `<p>A request was made to change the sign-in address on your ${appName} account to <strong>${newEmail}</strong>.</p>`,
+      '<p>To authorize this request, enter this code in the panel:</p>',
+      `<p style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:26px;letter-spacing:0.18em"><strong>${code}</strong></p>`,
+      `<p>This code expires in ${CHANGE_TTL_MINUTES} minutes.</p>`,
+      `<p>If you did not make this request, <a href="${cancelLink}">stop it immediately</a>.</p>`,
+    ].join('\n'),
+  }
+}
 
 function emailChangeCodeEmail(code: string, newEmail: string, appName = 'Solstice') {
   return {
@@ -2142,6 +2168,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
   })
 
   app.post('/api/auth/change-email', async (c) => {
+    const sysConfig = await getSystemSettings()
+    if (process.env.DEMO_MODE === 'true' || sysConfig['app_demo_mode'] === 'true') {
+      return c.json({ message: 'Email change is disabled in demo mode.' }, 403)
+    }
+
     const limit = await store.hit(`change-email:${clientKey(c)}`, 5, 15 * 60 * 1000)
     if (!limit.allowed) {
       return c.json({ message: 'Too many attempts. Try again shortly.' }, 429)
@@ -2171,39 +2202,110 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
 
     const change = await createEmailChange(user.id, newEmail)
     const cancelLink = `${publicOrigin()}/cancel-email-change?token=${encodeURIComponent(change.cancelToken)}`
-    const mailConfig = await getSystemSettings()
+    const mailConfig = sysConfig
 
-    // On the critical path, unlike the warning below: the caller is sitting at a
-    // prompt waiting for this message, so it fails the request rather than logging.
+    // Step 1: Send authorization code and warning link to the CURRENT address.
     try {
-      const codeMsg = { to: newEmail, ...emailChangeCodeEmail(change.code, newEmail, mailConfig['app_name'] || 'Solstice') }
+      const codeMsg = {
+        to: user.email,
+        ...emailChangeCurrentAuthorizeEmail(
+          change.currentCode,
+          newEmail,
+          cancelLink,
+          mailConfig['app_name'] || 'Solstice',
+        ),
+      }
       const sent = await sendMail(codeMsg, mailConfig)
-      await logEmail(newEmail, codeMsg.subject, codeMsg.text, user.id)
+      await logEmail(user.email, codeMsg.subject, codeMsg.text, user.id)
       console.log(
         sent.filePath
-          ? `[change email] ${newEmail} -> ${sent.filePath}`
-          : `[change email] emailed ${newEmail}`,
+          ? `[change email] authorize ${user.email} -> ${sent.filePath}`
+          : `[change email] emailed authorization code to ${user.email}`,
       )
     } catch (error) {
       console.error('[change email] could not send mail', error)
       return c.json({ message: 'Could not send the confirmation email. Try again shortly.' }, 503)
     }
 
-    try {
-      const warnMsg = {
-        to: user.email,
-        ...emailChangeNoticeEmail(user.email, newEmail, cancelLink, mailConfig['app_name'] || 'Solstice'),
-      }
-      await sendMail(warnMsg, mailConfig)
-      await logEmail(user.email, warnMsg.subject, warnMsg.text, user.id)
-    } catch (error) {
-      console.error('[change email] could not warn the old address', error)
+    return c.json({
+      pending: {
+        email: newEmail,
+        stage: 'awaiting_current',
+        expiresAt: change.expiresAt,
+      },
+    })
+  })
+
+  app.post('/api/auth/change-email/authorize', async (c) => {
+    const sysConfig = await getSystemSettings()
+    if (process.env.DEMO_MODE === 'true' || sysConfig['app_demo_mode'] === 'true') {
+      return c.json({ message: 'Email change is disabled in demo mode.' }, 403)
     }
 
-    return c.json({ pending: { email: newEmail, expiresAt: change.expiresAt } })
+    const limit = await store.hit(`change-email-auth:${clientKey(c)}`, 10, 15 * 60 * 1000)
+    if (!limit.allowed) {
+      return c.json({ message: 'Too many attempts. Try again shortly.' }, 429)
+    }
+
+    const user = await requireCurrentUser(c)
+    if (!user) return c.json({ message: 'Not signed in.' }, 401)
+
+    const body = await readJson(c)
+    const code = str(body.code).trim()
+
+    if (!isChangeCodeShape(code)) {
+      return c.json({ message: `Enter the ${CHANGE_CODE_LENGTH}-digit code from your email.` }, 422)
+    }
+
+    const pending = await loadEmailChange(user.id)
+    if (!pending) {
+      return c.json({ message: 'No address change is waiting. Start again.' }, 400)
+    }
+
+    const result = await authorizeEmailChange(user.id, code)
+    if (result.outcome === 'too_many') {
+      return c.json({ message: 'Too many attempts. Start the change again.' }, 429)
+    }
+    if (result.outcome === 'expired') {
+      return c.json({ message: 'That code has expired. Start the change again.' }, 400)
+    }
+    if (result.outcome !== 'ok' || !result.newCode) {
+      return c.json({ message: 'That code is not correct.' }, 400)
+    }
+
+    // Step 2: Code entered from old email is valid. Send verification code to the NEW email.
+    try {
+      const codeMsg = {
+        to: pending.email,
+        ...emailChangeCodeEmail(result.newCode, pending.email, sysConfig['app_name'] || 'Solstice'),
+      }
+      const sent = await sendMail(codeMsg, sysConfig)
+      await logEmail(pending.email, codeMsg.subject, codeMsg.text, user.id)
+      console.log(
+        sent.filePath
+          ? `[change email] verify ${pending.email} -> ${sent.filePath}`
+          : `[change email] emailed verification code to ${pending.email}`,
+      )
+    } catch (error) {
+      console.error('[change email] could not send verification mail to new address', error)
+      return c.json({ message: 'Could not send the verification email to the new address.' }, 503)
+    }
+
+    return c.json({
+      pending: {
+        email: pending.email,
+        stage: 'awaiting_new',
+        expiresAt: pending.expiresAt,
+      },
+    })
   })
 
   app.post('/api/auth/change-email/verify', async (c) => {
+    const sysConfig = await getSystemSettings()
+    if (process.env.DEMO_MODE === 'true' || sysConfig['app_demo_mode'] === 'true') {
+      return c.json({ message: 'Email change is disabled in demo mode.' }, 403)
+    }
+
     const limit = await store.hit(`change-email-verify:${clientKey(c)}`, 10, 15 * 60 * 1000)
     if (!limit.allowed) {
       return c.json({ message: 'Too many attempts. Try again shortly.' }, 429)
@@ -2443,6 +2545,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
   })
 
   app.post('/api/auth/delete-account/request', async (c) => {
+    const sysConfig = await getSystemSettings()
+    if (process.env.DEMO_MODE === 'true' || sysConfig['app_demo_mode'] === 'true') {
+      return c.json({ message: 'Account deletion is disabled in demo mode.' }, 403)
+    }
+
     const limit = await store.hit(`delete-req:${clientKey(c)}`, 5, 15 * 60 * 1000)
     if (!limit.allowed) {
       return c.json({ message: 'Too many attempts. Try again shortly.' }, 429)
@@ -2487,6 +2594,11 @@ export function createApp(options: { rateLimitStore?: RateLimitStore } = {}) {
   })
 
   app.delete('/api/auth/account', async (c) => {
+    const sysConfig = await getSystemSettings()
+    if (process.env.DEMO_MODE === 'true' || sysConfig['app_demo_mode'] === 'true') {
+      return c.json({ message: 'Account deletion is disabled in demo mode.' }, 403)
+    }
+
     const limit = await store.hit(`delete-account:${clientKey(c)}`, 10, 60 * 60 * 1000)
     if (!limit.allowed) {
       return c.json({ message: 'Too many attempts. Try again shortly.' }, 429)

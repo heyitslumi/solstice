@@ -80,13 +80,18 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS email_changes (
     user_id     uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     new_email   text NOT NULL,
-    code_hash   text NOT NULL,
     cancel_hash text NOT NULL,
     attempts    integer NOT NULL DEFAULT 0,
     created_at  timestamptz NOT NULL DEFAULT now(),
     expires_at  timestamptz NOT NULL
   );
   CREATE INDEX IF NOT EXISTS email_changes_cancel_idx ON email_changes (cancel_hash);
+
+  /* Two-step email change */
+  ALTER TABLE email_changes ADD COLUMN IF NOT EXISTS current_code_hash text;
+  ALTER TABLE email_changes ADD COLUMN IF NOT EXISTS new_code_hash text;
+  ALTER TABLE email_changes ADD COLUMN IF NOT EXISTS stage text NOT NULL DEFAULT 'awaiting_current';
+  ALTER TABLE email_changes ADD COLUMN IF NOT EXISTS code_hash text;
 
   /* Stored as base64url text because that is the form the WebAuthn API hands over
      and takes back, so there is no conversion layer to get wrong. counter is BIGINT
