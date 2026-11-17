@@ -92,6 +92,8 @@ const SCHEMA = `
   ALTER TABLE email_changes ADD COLUMN IF NOT EXISTS new_code_hash text;
   ALTER TABLE email_changes ADD COLUMN IF NOT EXISTS stage text NOT NULL DEFAULT 'awaiting_current';
   ALTER TABLE email_changes ADD COLUMN IF NOT EXISTS code_hash text;
+  /* Pre-existing rows carry code_hash NOT NULL; ADD COLUMN IF NOT EXISTS cannot relax it. */
+  ALTER TABLE email_changes ALTER COLUMN code_hash DROP NOT NULL;
 
   /* Stored as base64url text because that is the form the WebAuthn API hands over
      and takes back, so there is no conversion layer to get wrong. counter is BIGINT
