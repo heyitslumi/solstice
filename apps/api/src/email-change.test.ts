@@ -19,7 +19,7 @@ delete process.env.SMTP_URL
 const testDb = await useTestDatabase()
 
 const { createApp } = await import('./app.ts')
-const { closePool, migrate, queryOne } = await import('./db.ts')
+const { closePool, migrate, query, queryOne } = await import('./db.ts')
 const { createMemoryStore } = await import('./rate-limit.ts')
 
 await migrate()
@@ -475,5 +475,19 @@ describe('change email: cancelling', () => {
     const pending = await app.request('/api/auth/change-email', { headers: authed(cookie) })
     const body = (await pending.json()) as { pending: { email: string } | null }
     assert.equal(body.pending?.email, 'retire-second@example.com', 'the newer change must survive')
+  })
+})
+
+describe('migrate', () => {
+  it('relaxes the legacy code_hash NOT NULL constraint', async () => {
+    await query('DELETE FROM email_changes')
+    await query('ALTER TABLE email_changes ALTER COLUMN code_hash SET NOT NULL')
+    await migrate()
+
+    const column = await queryOne<{ is_nullable: string }>(
+      `SELECT is_nullable FROM information_schema.columns
+        WHERE table_name = 'email_changes' AND column_name = 'code_hash'`,
+    )
+    assert.equal(column?.is_nullable, 'YES')
   })
 })
