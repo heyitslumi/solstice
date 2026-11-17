@@ -23,6 +23,8 @@ const PAGES = {
   },
   install: { chunk: 'install.js', export: 'InstallPage', file: join(DIST, 'install/index.html') },
   docs: { chunk: 'docs.js', export: 'DocsPage', file: join(DIST, 'docs/index.html') },
+  privacy: { chunk: 'privacy.js', export: 'PrivacyPage', file: join(DIST, 'privacy/index.html') },
+  terms: { chunk: 'terms.js', export: 'TermsPage', file: join(DIST, 'terms/index.html') },
 }
 
 const failures = []

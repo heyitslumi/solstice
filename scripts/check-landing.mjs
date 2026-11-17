@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const LANDING = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'apps/landing')
 const DIST = join(LANDING, 'dist')
 const ORIGIN = 'https://solstice.host'
-const ROUTES = ['/', '/features/', '/architecture/', '/install/', '/docs/']
+const ROUTES = ['/', '/features/', '/architecture/', '/install/', '/docs/', '/privacy/', '/terms/']
 
 // Paths the Worker serves itself, so they are not files in dist.
 const WORKER_PATHS = new Set(['/install.sh', '/_headers', '/_redirects'])

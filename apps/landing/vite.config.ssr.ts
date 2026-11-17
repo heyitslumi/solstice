@@ -21,6 +21,8 @@ export default defineConfig({
         architecture: 'src/pages/architecture.tsx',
         install: 'src/pages/install.tsx',
         docs: 'src/pages/docs.tsx',
+        privacy: 'src/pages/privacy.tsx',
+        terms: 'src/pages/terms.tsx',
       },
     },
   },

@@ -18,6 +18,8 @@ export default defineConfig({
         architecture: 'architecture/index.html',
         install: 'install/index.html',
         docs: 'docs/index.html',
+        privacy: 'privacy/index.html',
+        terms: 'terms/index.html',
       },
     },
   },

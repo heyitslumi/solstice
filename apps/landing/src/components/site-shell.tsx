@@ -124,6 +124,12 @@ function Footer() {
           <a href="https://demo.solstice.host" className="hover:text-white">
             Live demo
           </a>
+          <a href="/privacy/" className="hover:text-white">
+            Privacy
+          </a>
+          <a href="/terms/" className="hover:text-white">
+            Terms
+          </a>
           <a
             href="https://github.com/heyitslumi/solstice/blob/main/LICENSE"
             className="font-mono text-[11.5px] text-white/25 hover:text-white/50"
