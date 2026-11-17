@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Self-hosted VPS panel (Incus: LXC + KVM), an installer, and a marketing site in one
-npm-workspace repo. MIT licensed.
+npm-workspace repo. AGPL-3.0 licensed.
 
 ## Layout
 

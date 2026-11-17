@@ -134,7 +134,7 @@ function Footer() {
             href="https://github.com/heyitslumi/solstice/blob/main/LICENSE"
             className="font-mono text-[11.5px] text-white/25 hover:text-white/50"
           >
-            MIT licensed · no telemetry
+            AGPL-3.0 licensed · no telemetry
           </a>
         </nav>
       </div>

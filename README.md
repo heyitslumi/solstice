@@ -123,10 +123,15 @@ sudo ./install.sh --tunnel --admin-email admin@example.com
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+AGPL-3.0-only — see [LICENSE](LICENSE). Copyright (c) 2026 Solstice contributors.
 
-Self-host it, fork it, run it for customers, ship it inside your own product. The only
-condition is that the copyright notice and permission text travel with the copy.
+Self-host it, fork it, run it for customers, ship it inside your own product. The
+catch is the network clause: if you run a modified Solstice as a service other people
+use over a network, you have to offer them the source of your modified version. Running
+it unmodified, or privately, carries no such obligation.
+
+Releases published before 2026-11-17 were MIT licensed and stay MIT licensed; that grant
+cannot be withdrawn. Everything from this commit on is AGPL-3.0-only.
 
 The Solstice name and logo are not part of the grant: a fork is welcome, but it has to
 carry its own name.

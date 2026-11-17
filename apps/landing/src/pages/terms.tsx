@@ -24,9 +24,20 @@ export function TermsPage() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  MIT License
-                </a>
-                . You are free to inspect, run, modify, fork, and distribute the software in accordance with the terms of that license.
+                  GNU Affero General Public License v3.0
+                </a>{' '}
+                (AGPL-3.0-only). You are free to inspect, run, modify, fork, and redistribute the
+                software under those terms.
+              </p>
+              <p className="mt-3">
+                The AGPL adds one obligation on top of the usual copyleft rules: if you run a
+                modified version of Solstice as a service other people use over a network, you must
+                offer those users the source of your modified version. Running Solstice unmodified,
+                or privately, carries no such obligation.
+              </p>
+              <p className="mt-3">
+                Releases published before 17 November 2026 were MIT licensed and remain available
+                under that license; that grant cannot be withdrawn.
               </p>
             </div>
           </Reveal>
