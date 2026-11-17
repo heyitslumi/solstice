@@ -215,9 +215,9 @@ export function AdminAnnouncementsPage() {
         )}
 
         {/* Header Bar */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-1">
-            <h1 className="text-[28px] font-bold tracking-tight text-fg">
+            <h1 className="text-[22px] font-bold tracking-tight text-fg sm:text-[28px]">
               {mode === 'list'
                 ? 'Announcements'
                 : mode === 'create'
@@ -233,8 +233,8 @@ export function AdminAnnouncementsPage() {
           </div>
 
           {mode === 'list' ? (
-            <div className="flex items-center gap-3">
-              <div className="relative">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+              <div className="relative min-w-[160px] flex-1 sm:flex-none">
                 <MagnifyingGlass
                   size={15}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle"
@@ -244,7 +244,7 @@ export function AdminAnnouncementsPage() {
                   placeholder="Search..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-9 w-60 rounded-control border border-border bg-surface-2/40 pl-9 pr-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-sun-500 focus:outline-none"
+                  className="h-9 w-full rounded-control border border-border bg-surface-2/40 pl-9 pr-3 text-[13px] text-fg placeholder:text-fg-subtle focus:border-sun-500 focus:outline-none sm:w-60"
                 />
               </div>
 
